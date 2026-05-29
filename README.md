@@ -37,6 +37,8 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/fixed-assets/add` - separate page for adding a fixed asset
 * `/fixed-assets/id/{fixed_asset_id}` - fixed asset details page
 * `/fixed-assets/id/{fixed_asset_id}/edit` - fixed asset edit page
+* `/fixed-asset-categories` - fixed asset category management page
+* `/fixed-asset-categories/{category_id}/edit` - fixed asset category edit page
 * `/logout` - clear the active session
 
 Fixed assets page supports paging query parameters:
@@ -64,6 +66,7 @@ The app creates `app.db` automatically on startup and stores:
 * sessions
 * password reset tokens
 * fixed assets
+* fixed asset categories
 
 ## FixedAsset entity
 
@@ -71,12 +74,12 @@ The project now includes `FixedAsset` with these properties:
 
 * `Id` - GUID
 * `Name` - Text (max 100)
-* `Category` - Text (max 100)
+* `CategoryId` - GUID (linked to `FixedAssetCategory.Id`)
 * `InitialValue` - Number
 * `ResponsiblePerson` - Text (max 100)
 * `RegistrationDate` - Date (`YYYY-MM-DD`)
 
-`FixedAsset.Category` is linked to a separate `FixedAssetCategory` data entity.
+`FixedAsset` create/edit forms use category dropdowns populated from `FixedAssetCategory`.
 
 ## FixedAssetCategory entity
 

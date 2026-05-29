@@ -80,19 +80,63 @@ def initialize_database() -> None:
         )
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS fixed_asset_categories (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE CHECK (length(name) <= 100)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fixed_asset_categories_name ON fixed_asset_categories(name)"
+        )
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS fixed_assets (
                 id TEXT PRIMARY KEY,
+                category_id TEXT NOT NULL,
                 name TEXT NOT NULL CHECK (length(name) <= 100),
                 category TEXT NOT NULL CHECK (length(category) <= 100),
                 initial_value REAL NOT NULL,
                 responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100),
-                registration_date TEXT NOT NULL
+                registration_date TEXT NOT NULL,
+                FOREIGN KEY (category_id) REFERENCES fixed_asset_categories(id)
             )
             """
         )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_fixed_assets_name ON fixed_assets(name)"
         )
+
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(fixed_assets)").fetchall()
+        }
+        if "category_id" not in columns:
+            connection.execute("ALTER TABLE fixed_assets ADD COLUMN category_id TEXT")
+
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fixed_assets_category_id ON fixed_assets(category_id)"
+        )
+
+        distinct_categories = connection.execute(
+            """
+            SELECT DISTINCT category
+            FROM fixed_assets
+            WHERE category IS NOT NULL AND trim(category) <> ''
+            """
+        ).fetchall()
+        for row in distinct_categories:
+            category_name = row["category"]
+            category_id = _get_or_create_fixed_asset_category_id(connection, category_name)
+            connection.execute(
+                """
+                UPDATE fixed_assets
+                SET category_id = ?
+                WHERE (category_id IS NULL OR trim(category_id) = '')
+                  AND lower(category) = lower(?)
+                """,
+                (category_id, category_name),
+            )
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -286,30 +330,147 @@ def mark_password_reset_token_used(token: str) -> None:
         )
 
 
+def _get_or_create_fixed_asset_category_id(connection: sqlite3.Connection, category_name: str) -> str:
+    normalized_name = category_name.strip()
+    cursor = connection.execute(
+        "SELECT id FROM fixed_asset_categories WHERE lower(name) = lower(?)",
+        (normalized_name,),
+    )
+    row = cursor.fetchone()
+    if row is not None:
+        return row["id"]
+
+    category_id = str(uuid.uuid4())
+    connection.execute(
+        "INSERT INTO fixed_asset_categories (id, name) VALUES (?, ?)",
+        (category_id, normalized_name),
+    )
+    return category_id
+
+
+def list_fixed_asset_categories() -> list[sqlite3.Row]:
+    with db_session() as connection:
+        cursor = connection.execute(
+            "SELECT id, name FROM fixed_asset_categories ORDER BY name ASC"
+        )
+        return cursor.fetchall()
+
+
+def list_fixed_asset_categories_with_usage() -> list[sqlite3.Row]:
+    with db_session() as connection:
+        cursor = connection.execute(
+            """
+            SELECT
+                fixed_asset_categories.id,
+                fixed_asset_categories.name,
+                COUNT(fixed_assets.id) AS assets_count
+            FROM fixed_asset_categories
+            LEFT JOIN fixed_assets ON fixed_assets.category_id = fixed_asset_categories.id
+            GROUP BY fixed_asset_categories.id, fixed_asset_categories.name
+            ORDER BY fixed_asset_categories.name ASC
+            """
+        )
+        return cursor.fetchall()
+
+
+def get_fixed_asset_category_by_id(category_id: str) -> sqlite3.Row | None:
+    with db_session() as connection:
+        cursor = connection.execute(
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            (category_id,),
+        )
+        return cursor.fetchone()
+
+
+def create_fixed_asset_category(name: str) -> sqlite3.Row:
+    normalized_name = name.strip()
+    with db_session() as connection:
+        category_id = _get_or_create_fixed_asset_category_id(connection, normalized_name)
+        cursor = connection.execute(
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            (category_id,),
+        )
+        return cursor.fetchone()
+
+
+def update_fixed_asset_category(category_id: str, name: str) -> sqlite3.Row | None:
+    normalized_name = name.strip()
+    with db_session() as connection:
+        existing = connection.execute(
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            (category_id,),
+        ).fetchone()
+        if existing is None:
+            return None
+
+        conflict = connection.execute(
+            "SELECT id FROM fixed_asset_categories WHERE lower(name) = lower(?) AND id <> ?",
+            (normalized_name, category_id),
+        ).fetchone()
+        if conflict is not None:
+            raise ValueError("Category name already exists.")
+
+        connection.execute(
+            "UPDATE fixed_asset_categories SET name = ? WHERE id = ?",
+            (normalized_name, category_id),
+        )
+        connection.execute(
+            "UPDATE fixed_assets SET category = ? WHERE category_id = ?",
+            (normalized_name, category_id),
+        )
+        cursor = connection.execute(
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            (category_id,),
+        )
+        return cursor.fetchone()
+
+
+def delete_fixed_asset_category(category_id: str) -> bool:
+    with db_session() as connection:
+        usage = connection.execute(
+            "SELECT COUNT(1) AS total FROM fixed_assets WHERE category_id = ?",
+            (category_id,),
+        ).fetchone()
+        if usage and int(usage["total"]) > 0:
+            return False
+
+        connection.execute("DELETE FROM fixed_asset_categories WHERE id = ?", (category_id,))
+        return True
+
+
 def create_fixed_asset(
     name: str,
-    category: str,
+    category_id: str,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
 ) -> sqlite3.Row:
     fixed_asset_id = str(uuid.uuid4())
     with db_session() as connection:
+        category = connection.execute(
+            "SELECT name FROM fixed_asset_categories WHERE id = ?",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            raise ValueError("Category not found.")
+
         connection.execute(
             """
             INSERT INTO fixed_assets (
                 id,
+                category_id,
                 name,
                 category,
                 initial_value,
                 responsible_person,
                 registration_date
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 fixed_asset_id,
+                category_id,
                 name,
-                category,
+                category["name"],
                 initial_value,
                 responsible_person,
                 registration_date,
@@ -317,9 +478,17 @@ def create_fixed_asset(
         )
         cursor = connection.execute(
             """
-            SELECT id, name, category, initial_value, responsible_person, registration_date
+            SELECT
+                fixed_assets.id,
+                fixed_assets.name,
+                COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.initial_value,
+                fixed_assets.responsible_person,
+                fixed_assets.registration_date,
+                fixed_assets.category_id
             FROM fixed_assets
-            WHERE id = ?
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            WHERE fixed_assets.id = ?
             """,
             (fixed_asset_id,),
         )
@@ -330,9 +499,17 @@ def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
     with db_session() as connection:
         cursor = connection.execute(
             """
-            SELECT id, name, category, initial_value, responsible_person, registration_date
+            SELECT
+                fixed_assets.id,
+                fixed_assets.name,
+                COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.initial_value,
+                fixed_assets.responsible_person,
+                fixed_assets.registration_date,
+                fixed_assets.category_id
             FROM fixed_assets
-            WHERE id = ?
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            WHERE fixed_assets.id = ?
             """,
             (fixed_asset_id,),
         )
@@ -342,17 +519,25 @@ def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
 def update_fixed_asset(
     fixed_asset_id: str,
     name: str,
-    category: str,
+    category_id: str,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
 ) -> sqlite3.Row | None:
     with db_session() as connection:
+        category = connection.execute(
+            "SELECT name FROM fixed_asset_categories WHERE id = ?",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            raise ValueError("Category not found.")
+
         connection.execute(
             """
             UPDATE fixed_assets
             SET
                 name = ?,
+                category_id = ?,
                 category = ?,
                 initial_value = ?,
                 responsible_person = ?,
@@ -361,7 +546,8 @@ def update_fixed_asset(
             """,
             (
                 name,
-                category,
+                category_id,
+                category["name"],
                 initial_value,
                 responsible_person,
                 registration_date,
@@ -370,9 +556,17 @@ def update_fixed_asset(
         )
         cursor = connection.execute(
             """
-            SELECT id, name, category, initial_value, responsible_person, registration_date
+            SELECT
+                fixed_assets.id,
+                fixed_assets.name,
+                COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.initial_value,
+                fixed_assets.responsible_person,
+                fixed_assets.registration_date,
+                fixed_assets.category_id
             FROM fixed_assets
-            WHERE id = ?
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            WHERE fixed_assets.id = ?
             """,
             (fixed_asset_id,),
         )
@@ -387,27 +581,27 @@ def _fixed_assets_filter_clause(filters: dict[str, str] | None = None) -> tuple[
     params: list[Any] = []
 
     if filters.get("name"):
-        conditions.append("lower(name) LIKE lower(?)")
+        conditions.append("lower(fixed_assets.name) LIKE lower(?)")
         params.append(f"%{filters['name']}%")
 
     if filters.get("category"):
-        conditions.append("lower(category) LIKE lower(?)")
+        conditions.append("lower(COALESCE(fixed_asset_categories.name, fixed_assets.category)) LIKE lower(?)")
         params.append(f"%{filters['category']}%")
 
     if filters.get("responsible_person"):
-        conditions.append("lower(responsible_person) LIKE lower(?)")
+        conditions.append("lower(fixed_assets.responsible_person) LIKE lower(?)")
         params.append(f"%{filters['responsible_person']}%")
 
     if filters.get("initial_value"):
-        conditions.append("abs(initial_value - ?) < 0.000001")
+        conditions.append("abs(fixed_assets.initial_value - ?) < 0.000001")
         params.append(float(filters["initial_value"]))
 
     if filters.get("registration_date_from"):
-        conditions.append("registration_date >= ?")
+        conditions.append("fixed_assets.registration_date >= ?")
         params.append(filters["registration_date_from"])
 
     if filters.get("registration_date_to"):
-        conditions.append("registration_date <= ?")
+        conditions.append("fixed_assets.registration_date <= ?")
         params.append(filters["registration_date_to"])
 
     if not conditions:
@@ -420,7 +614,12 @@ def count_fixed_assets(filters: dict[str, str] | None = None) -> int:
     where_clause, params = _fixed_assets_filter_clause(filters)
     with db_session() as connection:
         cursor = connection.execute(
-            f"SELECT COUNT(1) AS total FROM fixed_assets{where_clause}",
+            f"""
+            SELECT COUNT(1) AS total
+            FROM fixed_assets
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            {where_clause}
+            """,
             params,
         )
         row = cursor.fetchone()
@@ -437,10 +636,18 @@ def list_fixed_assets(
         if page is None or page_size is None:
             cursor = connection.execute(
                 f"""
-                SELECT id, name, category, initial_value, responsible_person, registration_date
+                SELECT
+                    fixed_assets.id,
+                    fixed_assets.name,
+                    COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                    fixed_assets.initial_value,
+                    fixed_assets.responsible_person,
+                    fixed_assets.registration_date,
+                    fixed_assets.category_id
                 FROM fixed_assets
+                LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
                 {where_clause}
-                ORDER BY registration_date DESC, name ASC
+                ORDER BY fixed_assets.registration_date DESC, fixed_assets.name ASC
                 """,
                 params,
             )
@@ -450,10 +657,18 @@ def list_fixed_assets(
         paged_params = [*params, page_size, offset]
         cursor = connection.execute(
             f"""
-            SELECT id, name, category, initial_value, responsible_person, registration_date
+            SELECT
+                fixed_assets.id,
+                fixed_assets.name,
+                COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.initial_value,
+                fixed_assets.responsible_person,
+                fixed_assets.registration_date,
+                fixed_assets.category_id
             FROM fixed_assets
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             {where_clause}
-            ORDER BY registration_date DESC, name ASC
+            ORDER BY fixed_assets.registration_date DESC, fixed_assets.name ASC
             LIMIT ? OFFSET ?
             """,
             paged_params,

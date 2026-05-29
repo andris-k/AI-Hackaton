@@ -76,6 +76,15 @@ The project now includes `FixedAsset` with these properties:
 * `ResponsiblePerson` - Text (max 100)
 * `RegistrationDate` - Date (`YYYY-MM-DD`)
 
+`FixedAsset.Category` is linked to a separate `FixedAssetCategory` data entity.
+
+## FixedAssetCategory entity
+
+The project includes `FixedAssetCategory` with these properties:
+
+* `Id` - GUID
+* `Category name` - Text (max 100)
+
 Default login credentials are created automatically for local testing:
 
 * Email: `admin@example.com`

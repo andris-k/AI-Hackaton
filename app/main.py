@@ -8,12 +8,15 @@ from fastapi.responses import HTMLResponse
 from app.db import (
     count_fixed_assets,
     create_fixed_asset,
+    create_fixed_asset_category,
     create_password_reset_token,
     create_session,
     create_user,
+    delete_fixed_asset_category,
     delete_session,
     delete_sessions_for_user,
     ensure_default_user,
+    get_fixed_asset_category_by_id,
     get_fixed_asset_by_id,
     get_password_reset_token,
     get_session,
@@ -21,9 +24,12 @@ from app.db import (
     get_user_by_id,
     get_user_by_session_token,
     initialize_database,
+    list_fixed_asset_categories,
+    list_fixed_asset_categories_with_usage,
     list_fixed_assets,
     list_users,
     mark_password_reset_token_used,
+    update_fixed_asset_category,
     update_fixed_asset,
     update_user_password,
     verify_password,
@@ -141,7 +147,7 @@ def render_page(
 
                 .field {{ margin-bottom: 18px; }}
 
-                input {{
+                input, select {{
                     width: 100%;
                     border: 1px solid var(--border);
                     border-radius: 14px;
@@ -151,7 +157,7 @@ def render_page(
                     transition: border-color 0.2s ease, box-shadow 0.2s ease;
                 }}
 
-                input:focus {{
+                input:focus, select:focus {{
                     border-color: var(--accent);
                     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
                 }}
@@ -386,6 +392,7 @@ def render_dashboard_page(
             <h2>Account actions</h2>
             <div class="links" style="margin-top: 0; flex-direction: column; align-items: flex-start;">
                 <a href="/fixed-assets">Manage fixed assets</a>
+                <a href="/fixed-asset-categories">Manage fixed asset categories</a>
                 <a href="/users">View registered users</a>
                 <a href="/logout">Log out</a>
                 <a href="/forgot-password">Reset password</a>
@@ -809,6 +816,20 @@ def render_edit_fixed_asset_page(
     safe_initial_value = escape("{:.2f}".format(float(fixed_asset["initial_value"])))
     safe_responsible_person = escape(fixed_asset["responsible_person"])
     safe_registration_date = escape(fixed_asset["registration_date"])
+    categories = list_fixed_asset_categories()
+    selected_category_id = (
+        str(fixed_asset["category_id"])
+        if "category_id" in fixed_asset.keys() and fixed_asset["category_id"]
+        else ""
+    )
+    category_options = "".join(
+        (
+            f'<option value="{escape(category["id"])}" selected>{escape(category["name"])}</option>'
+            if category["id"] == selected_category_id
+            else f'<option value="{escape(category["id"])}">{escape(category["name"])}</option>'
+        )
+        for category in categories
+    )
 
     safe_name_filter = escape(filters.get("name", ""))
     safe_category_filter = escape(filters.get("category", ""))
@@ -865,7 +886,9 @@ def render_edit_fixed_asset_page(
                     </div>
                     <div>
                         <label for="category">Category</label>
-                        <input id="category" name="category" type="text" maxlength="100" value="{safe_category}" required />
+                        <select id="category_id" name="category_id" required>
+                            {category_options}
+                        </select>
                     </div>
                 </div>
                 <div class="asset-form-row">
@@ -909,11 +932,14 @@ def render_add_fixed_asset_page(
     *,
     page: int,
     page_size: int,
+    categories: list[object],
+    form_data: dict[str, str] | None = None,
     filters: dict[str, str],
     message: str | None = None,
     message_kind: str = "info",
 ) -> HTMLResponse:
     safe_current_email = escape(current_email)
+    form_data = form_data or {}
 
     safe_name = escape(filters.get("name", ""))
     safe_category = escape(filters.get("category", ""))
@@ -921,6 +947,20 @@ def render_add_fixed_asset_page(
     safe_responsible_person = escape(filters.get("responsible_person", ""))
     safe_registration_date_from = escape(filters.get("registration_date_from", ""))
     safe_registration_date_to = escape(filters.get("registration_date_to", ""))
+
+    safe_name_value = escape(form_data.get("name", ""))
+    safe_initial_value_value = escape(form_data.get("initial_value", ""))
+    safe_responsible_person_value = escape(form_data.get("responsible_person", ""))
+    safe_registration_date_value = escape(form_data.get("registration_date", ""))
+    selected_category_id = form_data.get("category_id", "")
+    category_options = "".join(
+        (
+            f'<option value="{escape(category["id"])}" selected>{escape(category["name"])}</option>'
+            if category["id"] == selected_category_id
+            else f'<option value="{escape(category["id"])}">{escape(category["name"])}</option>'
+        )
+        for category in categories
+    )
 
     back_query = {
         "page": str(page),
@@ -966,27 +1006,30 @@ def render_add_fixed_asset_page(
                 <div class="asset-form-row">
                     <div>
                         <label for="name">Name</label>
-                        <input id="name" name="name" type="text" maxlength="100" required />
+                        <input id="name" name="name" type="text" maxlength="100" value="{safe_name_value}" required />
                     </div>
                     <div>
                         <label for="category">Category</label>
-                        <input id="category" name="category" type="text" maxlength="100" required />
+                        <select id="category_id" name="category_id" required>
+                            <option value="">Select category</option>
+                            {category_options}
+                        </select>
                     </div>
                 </div>
                 <div class="asset-form-row">
                     <div>
                         <label for="initial_value">Initial value</label>
-                        <input id="initial_value" name="initial_value" type="number" step="0.01" min="0" required />
+                        <input id="initial_value" name="initial_value" type="number" step="0.01" min="0" value="{safe_initial_value_value}" required />
                     </div>
                     <div>
                         <label for="responsible_person">Responsible person</label>
-                        <input id="responsible_person" name="responsible_person" type="text" maxlength="100" required />
+                        <input id="responsible_person" name="responsible_person" type="text" maxlength="100" value="{safe_responsible_person_value}" required />
                     </div>
                 </div>
                 <div class="asset-form-row">
                     <div>
                         <label for="registration_date">Registration date</label>
-                        <input id="registration_date" name="registration_date" type="date" required />
+                        <input id="registration_date" name="registration_date" type="date" value="{safe_registration_date_value}" required />
                     </div>
                 </div>
                 <button type="submit">Save fixed asset</button>
@@ -1003,6 +1046,112 @@ def render_add_fixed_asset_page(
         "AI Hackaton Add Fixed Asset",
         "Add Fixed Asset",
         "Create a new fixed asset in the system.",
+        content,
+        width="760px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_fixed_asset_categories_page(
+    current_email: str,
+    categories: list[object],
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    safe_current_email = escape(current_email)
+    rows = "".join(
+        "<tr>"
+        f"<td>{escape(category['id'])}</td>"
+        f"<td>{escape(category['name'])}</td>"
+        f"<td>{escape(str(category['assets_count']))}</td>"
+        f"<td><a href=\"/fixed-asset-categories/{escape(category['id'])}/edit\">Edit</a></td>"
+        f"<td><form method=\"post\" action=\"/fixed-asset-categories/{escape(category['id'])}/delete\" onsubmit=\"return confirm('Delete this category?');\"><button type=\"submit\">Delete</button></form></td>"
+        "</tr>"
+        for category in categories
+    )
+
+    content = f"""
+    <div class="stack">
+        <section class="panel">
+            <h2>Add category</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <form method="post" action="/fixed-asset-categories">
+                <div class="field">
+                    <label for="category_name">Category name</label>
+                    <input id="category_name" name="name" type="text" maxlength="100" required />
+                </div>
+                <button type="submit">Create category</button>
+            </form>
+            <div class="links">
+                <a href="/dashboard">Back to dashboard</a>
+                <a href="/fixed-assets">Back to fixed assets</a>
+            </div>
+        </section>
+        <section class="panel">
+            <h2>Existing categories</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 10px;">Id</th>
+                        <th style="text-align: left; padding: 10px;">Category name</th>
+                        <th style="text-align: left; padding: 10px;">Assets count</th>
+                        <th style="text-align: left; padding: 10px;">Edit</th>
+                        <th style="text-align: left; padding: 10px;">Delete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows}
+                </tbody>
+            </table>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Fixed Asset Categories",
+        "Fixed Asset Categories",
+        "Create and manage fixed asset categories.",
+        content,
+        width="980px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_edit_fixed_asset_category_page(
+    current_email: str,
+    category: object,
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    safe_current_email = escape(current_email)
+    safe_id = escape(category["id"])
+    safe_name = escape(category["name"])
+    content = f"""
+    <div class="stack">
+        <section class="panel">
+            <h2>Edit category</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <form method="post" action="/fixed-asset-categories/{safe_id}/edit">
+                <div class="field">
+                    <label for="category_name">Category name</label>
+                    <input id="category_name" name="name" type="text" maxlength="100" value="{safe_name}" required />
+                </div>
+                <button type="submit">Save category</button>
+            </form>
+            <div class="links">
+                <a href="/fixed-asset-categories">Back to categories</a>
+                <a href="/fixed-assets">Back to fixed assets</a>
+            </div>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Edit Fixed Asset Category",
+        "Edit Fixed Asset Category",
+        "Update fixed asset category name.",
         content,
         width="760px",
         message=message,
@@ -1232,6 +1381,16 @@ def edit_fixed_asset_page(
             message_kind="error",
         )
 
+    if not list_fixed_asset_categories():
+        return render_page(
+            "AI Hackaton Edit Fixed Asset",
+            "No Categories Available",
+            "Create at least one category before editing fixed assets.",
+            '<div class="links"><a href="/fixed-asset-categories">Manage categories</a><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="No categories found.",
+            message_kind="error",
+        )
+
     filters = {
         "name": name.strip(),
         "category": category.strip(),
@@ -1254,7 +1413,7 @@ def edit_fixed_asset_route(
     fixed_asset_id: str,
     session_token: str | None = Cookie(default=None),
     name: str = Form(...),
-    category: str = Form(...),
+    category_id: str = Form(...),
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
@@ -1283,6 +1442,16 @@ def edit_fixed_asset_route(
             message_kind="error",
         )
 
+    if not list_fixed_asset_categories():
+        return render_page(
+            "AI Hackaton Edit Fixed Asset",
+            "No Categories Available",
+            "Create at least one category before editing fixed assets.",
+            '<div class="links"><a href="/fixed-asset-categories">Manage categories</a><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="No categories found.",
+            message_kind="error",
+        )
+
     filters = {
         "name": name_filter.strip(),
         "category": category_filter.strip(),
@@ -1295,14 +1464,25 @@ def edit_fixed_asset_route(
     safe_page_size = max(1, min(page_size, 100))
     safe_page = max(1, page)
 
-    if len(name) > 100 or len(category) > 100 or len(responsible_person) > 100:
+    if len(name) > 100 or len(responsible_person) > 100:
         return render_edit_fixed_asset_page(
             user["email"],
             fixed_asset,
             page=safe_page,
             page_size=safe_page_size,
             filters=filters,
-            message="Name, Category, and ResponsiblePerson must be 100 characters or less.",
+            message="Name and ResponsiblePerson must be 100 characters or less.",
+            message_kind="error",
+        )
+
+    if not category_id.strip():
+        return render_edit_fixed_asset_page(
+            user["email"],
+            fixed_asset,
+            page=safe_page,
+            page_size=safe_page_size,
+            filters=filters,
+            message="Category is required.",
             message_kind="error",
         )
 
@@ -1319,14 +1499,25 @@ def edit_fixed_asset_route(
             message_kind="error",
         )
 
-    updated = update_fixed_asset(
-        fixed_asset_id=fixed_asset_id,
-        name=name.strip(),
-        category=category.strip(),
-        initial_value=initial_value,
-        responsible_person=responsible_person.strip(),
-        registration_date=registration_date,
-    )
+    try:
+        updated = update_fixed_asset(
+            fixed_asset_id=fixed_asset_id,
+            name=name.strip(),
+            category_id=category_id.strip(),
+            initial_value=initial_value,
+            responsible_person=responsible_person.strip(),
+            registration_date=registration_date,
+        )
+    except ValueError:
+        return render_edit_fixed_asset_page(
+            user["email"],
+            fixed_asset,
+            page=safe_page,
+            page_size=safe_page_size,
+            filters=filters,
+            message="Selected category does not exist.",
+            message_kind="error",
+        )
     if updated is None:
         return render_page(
             "AI Hackaton Edit Fixed Asset",
@@ -1373,10 +1564,22 @@ def add_fixed_asset_page(
         "registration_date_from": registration_date_from.strip(),
         "registration_date_to": registration_date_to.strip(),
     }
+    categories = list_fixed_asset_categories()
+    if not categories:
+        return render_page(
+            "AI Hackaton Add Fixed Asset",
+            "No Categories Available",
+            "Create at least one category before adding fixed assets.",
+            '<div class="links"><a href="/fixed-asset-categories">Manage categories</a><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="No categories found.",
+            message_kind="error",
+        )
+
     return render_add_fixed_asset_page(
         user["email"],
         page=page,
         page_size=page_size,
+        categories=categories,
         filters=filters,
     )
 
@@ -1385,7 +1588,7 @@ def add_fixed_asset_page(
 def create_fixed_asset_route(
     session_token: str | None = Cookie(default=None),
     name: str = Form(...),
-    category: str = Form(...),
+    category_id: str = Form(...),
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
@@ -1412,19 +1615,46 @@ def create_fixed_asset_route(
         "registration_date_from": registration_date_from_filter.strip(),
         "registration_date_to": registration_date_to_filter.strip(),
     }
+    categories = list_fixed_asset_categories()
 
     safe_page_size = max(1, min(page_size, 100))
     total_assets = count_fixed_assets(filters)
     total_pages = max((total_assets + safe_page_size - 1) // safe_page_size, 1)
     current_page = min(max(page, 1), total_pages)
 
-    if len(name) > 100 or len(category) > 100 or len(responsible_person) > 100:
+    if len(name) > 100 or len(responsible_person) > 100:
         return render_add_fixed_asset_page(
             user["email"],
             page=current_page,
             page_size=safe_page_size,
+            categories=categories,
+            form_data={
+                "name": name,
+                "category_id": category_id,
+                "initial_value": str(initial_value),
+                "responsible_person": responsible_person,
+                "registration_date": registration_date,
+            },
             filters=filters,
-            message="Name, Category, and ResponsiblePerson must be 100 characters or less.",
+            message="Name and ResponsiblePerson must be 100 characters or less.",
+            message_kind="error",
+        )
+
+    if not category_id.strip():
+        return render_add_fixed_asset_page(
+            user["email"],
+            page=current_page,
+            page_size=safe_page_size,
+            categories=categories,
+            form_data={
+                "name": name,
+                "category_id": category_id,
+                "initial_value": str(initial_value),
+                "responsible_person": responsible_person,
+                "registration_date": registration_date,
+            },
+            filters=filters,
+            message="Category is required.",
             message_kind="error",
         )
 
@@ -1435,18 +1665,44 @@ def create_fixed_asset_route(
             user["email"],
             page=current_page,
             page_size=safe_page_size,
+            categories=categories,
+            form_data={
+                "name": name,
+                "category_id": category_id,
+                "initial_value": str(initial_value),
+                "responsible_person": responsible_person,
+                "registration_date": registration_date,
+            },
             filters=filters,
             message="RegistrationDate must be a valid date in YYYY-MM-DD format.",
             message_kind="error",
         )
 
-    create_fixed_asset(
-        name=name.strip(),
-        category=category.strip(),
-        initial_value=initial_value,
-        responsible_person=responsible_person.strip(),
-        registration_date=registration_date,
-    )
+    try:
+        create_fixed_asset(
+            name=name.strip(),
+            category_id=category_id.strip(),
+            initial_value=initial_value,
+            responsible_person=responsible_person.strip(),
+            registration_date=registration_date,
+        )
+    except ValueError:
+        return render_add_fixed_asset_page(
+            user["email"],
+            page=current_page,
+            page_size=safe_page_size,
+            categories=categories,
+            form_data={
+                "name": name,
+                "category_id": category_id,
+                "initial_value": str(initial_value),
+                "responsible_person": responsible_person,
+                "registration_date": registration_date,
+            },
+            filters=filters,
+            message="Selected category does not exist.",
+            message_kind="error",
+        )
     updated_total_assets = count_fixed_assets(filters)
     updated_total_pages = max((updated_total_assets + safe_page_size - 1) // safe_page_size, 1)
     target_page = updated_total_pages
@@ -1458,6 +1714,162 @@ def create_fixed_asset_route(
         total_assets=updated_total_assets,
         filters=filters,
         message="Fixed asset created successfully.",
+        message_kind="success",
+    )
+
+
+@app.get("/fixed-asset-categories", response_class=HTMLResponse)
+def fixed_asset_categories_page(session_token: str | None = Cookie(default=None)) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed asset categories.")
+
+    _, user = authenticated
+    categories = list_fixed_asset_categories_with_usage()
+    return render_fixed_asset_categories_page(user["email"], categories)
+
+
+@app.post("/fixed-asset-categories", response_class=HTMLResponse)
+def create_fixed_asset_category_route(
+    session_token: str | None = Cookie(default=None),
+    name: str = Form(...),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed asset categories.")
+
+    _, user = authenticated
+    if not name.strip() or len(name.strip()) > 100:
+        return render_fixed_asset_categories_page(
+            user["email"],
+            list_fixed_asset_categories_with_usage(),
+            message="Category name is required and must be 100 characters or less.",
+            message_kind="error",
+        )
+
+    try:
+        create_fixed_asset_category(name.strip())
+    except Exception:
+        return render_fixed_asset_categories_page(
+            user["email"],
+            list_fixed_asset_categories_with_usage(),
+            message="Unable to create category. It may already exist.",
+            message_kind="error",
+        )
+
+    return render_fixed_asset_categories_page(
+        user["email"],
+        list_fixed_asset_categories_with_usage(),
+        message="Category created successfully.",
+        message_kind="success",
+    )
+
+
+@app.get("/fixed-asset-categories/{category_id}/edit", response_class=HTMLResponse)
+def edit_fixed_asset_category_page(
+    category_id: str,
+    session_token: str | None = Cookie(default=None),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed asset categories.")
+
+    _, user = authenticated
+    category = get_fixed_asset_category_by_id(category_id)
+    if category is None:
+        return render_page(
+            "AI Hackaton Edit Fixed Asset Category",
+            "Category Not Found",
+            "The requested category does not exist.",
+            '<div class="links"><a href="/fixed-asset-categories">Back to categories</a></div>',
+            message="Category not found.",
+            message_kind="error",
+        )
+
+    return render_edit_fixed_asset_category_page(user["email"], category)
+
+
+@app.post("/fixed-asset-categories/{category_id}/edit", response_class=HTMLResponse)
+def edit_fixed_asset_category_route(
+    category_id: str,
+    session_token: str | None = Cookie(default=None),
+    name: str = Form(...),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed asset categories.")
+
+    _, user = authenticated
+    category = get_fixed_asset_category_by_id(category_id)
+    if category is None:
+        return render_page(
+            "AI Hackaton Edit Fixed Asset Category",
+            "Category Not Found",
+            "The requested category does not exist.",
+            '<div class="links"><a href="/fixed-asset-categories">Back to categories</a></div>',
+            message="Category not found.",
+            message_kind="error",
+        )
+
+    if not name.strip() or len(name.strip()) > 100:
+        return render_edit_fixed_asset_category_page(
+            user["email"],
+            category,
+            message="Category name is required and must be 100 characters or less.",
+            message_kind="error",
+        )
+
+    try:
+        updated = update_fixed_asset_category(category_id, name.strip())
+    except ValueError:
+        return render_edit_fixed_asset_category_page(
+            user["email"],
+            category,
+            message="Category name already exists.",
+            message_kind="error",
+        )
+
+    if updated is None:
+        return render_page(
+            "AI Hackaton Edit Fixed Asset Category",
+            "Category Not Found",
+            "The requested category does not exist.",
+            '<div class="links"><a href="/fixed-asset-categories">Back to categories</a></div>',
+            message="Category not found.",
+            message_kind="error",
+        )
+
+    return render_edit_fixed_asset_category_page(
+        user["email"],
+        updated,
+        message="Category updated successfully.",
+        message_kind="success",
+    )
+
+
+@app.post("/fixed-asset-categories/{category_id}/delete", response_class=HTMLResponse)
+def delete_fixed_asset_category_route(
+    category_id: str,
+    session_token: str | None = Cookie(default=None),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed asset categories.")
+
+    _, user = authenticated
+    deleted = delete_fixed_asset_category(category_id)
+    if not deleted:
+        return render_fixed_asset_categories_page(
+            user["email"],
+            list_fixed_asset_categories_with_usage(),
+            message="Cannot delete category while it is used by fixed assets.",
+            message_kind="error",
+        )
+
+    return render_fixed_asset_categories_page(
+        user["email"],
+        list_fixed_asset_categories_with_usage(),
+        message="Category deleted successfully.",
         message_kind="success",
     )
 

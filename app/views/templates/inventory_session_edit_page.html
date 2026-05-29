@@ -1,181 +1,611 @@
 <style>
+    .page-header {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .page-context {
+        margin: 4px 0 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.85rem;
+    }
+    .page-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .top-link-action {
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+        font-size: 0.88rem;
+    }
+
+    .edit-shell {
+        display: grid;
+        gap: 14px;
+    }
+    .status-header {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: linear-gradient(135deg, #faf6ef 0%, #f6efe4 100%);
+        padding: 12px;
+    }
+    .status-header-top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.84rem;
+        font-weight: 700;
+    }
+    .status-new { background: #cfe2ff; color: #0a3678; }
+    .status-active { background: #d1fae5; color: #064e3b; }
+    .status-completed { background: #e0e7ff; color: #3730a3; }
+    .status-cancelled { background: #fee2e2; color: #7f1d1d; }
+    .dirty-pill {
+        display: none;
+        border-radius: 999px;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+    .header-meta {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .header-meta-item {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px;
+    }
+    .header-meta-item p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.8rem;
+    }
+    .header-meta-item strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.92rem;
+    }
+    .status-quick-actions {
+        margin-top: 10px;
+        border-top: 1px dashed var(--border, #d6cfc7);
+        padding-top: 10px;
+        display: grid;
+        gap: 6px;
+    }
+    .status-quick-actions p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.8rem;
+    }
+
+    .edit-layout {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr;
+    }
     .session-form {
         display: grid;
         gap: 12px;
+    }
+    .section-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+    }
+    .section-title {
+        margin: 0 0 10px;
+        font-weight: 700;
+        font-size: 0.95rem;
     }
     .session-form-row {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
     }
-    @media (max-width: 760px) {
-        .session-form-row { grid-template-columns: 1fr; }
+    .current-status-box {
+        margin: 0;
+        padding: 10px 11px;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: var(--surface-alt, #faf7f1);
+        font-weight: 700;
+    }
+
+    .workflow-grid {
+        display: grid;
+        gap: 8px;
+    }
+    .workflow-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .workflow-buttons button {
+        width: auto;
+        white-space: nowrap;
+    }
+    .workflow-note {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .workflow-primary {
+        background: #16685d;
+        border-color: #16685d;
+        color: #fff;
+    }
+    .workflow-danger {
+        background: #b91c1c;
+        border-color: #b91c1c;
+        color: #fff;
+    }
+    .workflow-neutral {
+        background: #26476d;
+        border-color: #26476d;
+        color: #fff;
+    }
+
+    .reason-helper {
+        margin: 4px 0 0;
+        font-size: 0.8rem;
+        color: #92400e;
+        display: none;
+    }
+
+    .linked-assets-wrap {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+    }
+    .linked-assets-head,
+    .linked-asset-row {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 120px 130px 110px;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+    }
+    .linked-assets-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--table-head-bg, #f5eee2);
+        border-bottom: 1px solid var(--border, #d6cfc7);
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #334155;
     }
     .linked-assets-grid {
         display: grid;
-        gap: 8px;
+        gap: 0;
+        counter-reset: linked-asset-row;
     }
     .linked-asset-row {
-        display: grid;
-        grid-template-columns: 1fr 120px auto;
-        gap: 8px;
-        align-items: end;
+        border-bottom: 1px solid var(--border, #d6cfc7);
+        counter-increment: linked-asset-row;
+        transition: background 0.15s ease;
     }
-    @media (max-width: 760px) {
-        .linked-asset-row { grid-template-columns: 1fr; }
+    .linked-asset-row:hover {
+        background: #fcfaf6;
+    }
+    .linked-asset-row:last-child {
+        border-bottom: 0;
+    }
+    .asset-cell {
+        display: grid;
+        gap: 4px;
+    }
+    .asset-search {
+        font-size: 0.83rem;
+        padding: 6px 8px;
+    }
+    .help-text {
+        margin: 2px 0 0;
+        font-size: 0.78rem;
+        color: var(--muted, #6b6055);
+    }
+    .asset-cell::before {
+        content: "Row " counter(linked-asset-row);
+        font-size: 0.72rem;
+        color: var(--muted, #6b6055);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+    .duplicate-warning {
+        margin: 2px 0 0;
+        font-size: 0.78rem;
+        color: #b91c1c;
+        display: none;
+    }
+    .quantity-cell input {
+        text-align: right;
+    }
+    .value-cell {
+        text-align: right;
+    }
+    .line-value {
+        font-weight: 700;
+        font-size: 0.86rem;
+        color: #334155;
+    }
+    .empty-linked-assets {
+        margin: 0;
+        padding: 12px;
+        color: var(--muted, #6b6055);
+        font-size: 0.86rem;
+    }
+
+    .totals-sticky {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        border-top: 1px solid var(--border, #d6cfc7);
+        background: #fff;
+        padding: 10px;
     }
     .totals-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
     }
-    @media (max-width: 760px) {
-        .totals-grid { grid-template-columns: 1fr; }
-    }
-    .totals-grid .panel-lite {
+    .totals-item {
         border: 1px solid var(--border, #d6cfc7);
         border-radius: 8px;
         background: var(--table-row-alt, #fcfaf6);
         padding: 8px;
     }
-    .help-text {
-        margin: 2px 0 0;
-        font-size: 0.82rem;
+    .totals-item p {
+        margin: 0;
         color: var(--muted, #6b6055);
+        font-size: 0.8rem;
+    }
+    .totals-item strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.95rem;
+    }
+
+    .record-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .record-actions a {
+        text-decoration: none;
+    }
+    .record-actions button {
+        width: auto;
+    }
+
+    .sidebar {
+        display: grid;
+        gap: 10px;
+        align-content: start;
+    }
+    .sidebar .section-card {
+        position: sticky;
+        top: 12px;
+    }
+    .summary-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+    }
+    .summary-list li {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 8px;
+        padding: 8px;
+        background: var(--table-row-alt, #fcfaf6);
+    }
+    .summary-list p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.78rem;
+    }
+    .summary-list strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.9rem;
+    }
+    details.audit-details {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 8px;
+        padding: 8px;
+        background: #fff;
+    }
+    details.audit-details summary {
+        cursor: pointer;
+        font-weight: 700;
+    }
+    .audit-list {
+        margin: 8px 0 0;
+        padding: 0 0 0 16px;
+        color: #334155;
+        font-size: 0.84rem;
+        display: grid;
+        gap: 5px;
+    }
+
+    .sticky-action-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 4;
+        margin-top: 8px;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px;
+        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.06);
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .sticky-action-bar button {
+        width: auto;
+    }
+
+    @media (min-width: 1024px) {
+        .edit-layout {
+            grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr);
+        }
+    }
+    @media (max-width: 980px) {
+        .header-meta {
+            grid-template-columns: 1fr;
+        }
+        .linked-assets-head,
+        .linked-asset-row {
+            grid-template-columns: 1fr;
+            align-items: stretch;
+        }
+        .totals-grid {
+            grid-template-columns: 1fr;
+        }
+        .workflow-buttons button {
+            width: 100%;
+        }
     }
 </style>
+
 <div class="stack">
     <section class="panel">
-        <h2>Edit Inventory Session</h2>
-        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <div class="page-header">
+            <div>
+                <h2>Edit Inventory Session</h2>
+                <p class="page-context">Session #{{ inv_session.id }}. Signed in as <strong>{{ current_email }}</strong>.</p>
+            </div>
+            <div class="page-actions">
+                <a href="/inventory-sessions" class="top-link-action">&larr; Back to inventories list</a>
+            </div>
+        </div>
         {% if is_read_only %}
         <p style="color: var(--muted, #6b6055); margin: 0;">This session is terminal and read-only.</p>
         {% endif %}
 
-        <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/edit" class="session-form">
-            {% if is_admin_user %}
-            <div>
-                <label>
-                    <input type="checkbox" name="admin_override" value="1" {% if prefill and prefill.admin_override %}checked{% endif %} {% if is_read_only %}disabled{% endif %} />
-                    Admin override (allow reverse lifecycle transition)
-                </label>
-            </div>
-            {% endif %}
-            <div class="session-form-row">
-                <div>
-                    <label for="date_from">Date From</label>
-                    <input id="date_from" name="date_from" type="date"
-                           value="{{ prefill.date_from if prefill else inv_session.date_from }}" {% if is_read_only %}disabled{% endif %} required />
+        <div class="edit-shell">
+            <section class="status-header">
+                <div class="status-header-top">
+                    <div>
+                        <span class="status-badge status-{{ (prefill.status if prefill else inv_session.status) | lower }}">
+                            {{ prefill.status if prefill else inv_session.status }}
+                        </span>
+                    </div>
+                    <span id="dirty-pill" class="dirty-pill">Unsaved changes</span>
                 </div>
-                <div>
-                    <label for="date_to">Date To</label>
-                    <input id="date_to" name="date_to" type="date"
-                           value="{{ prefill.date_to if prefill else inv_session.date_to }}" {% if is_read_only %}disabled{% endif %} required />
+                <div class="header-meta">
+                    <article class="header-meta-item">
+                        <p>Date Window</p>
+                        <strong>{{ prefill.date_from if prefill else inv_session.date_from }} to {{ prefill.date_to if prefill else inv_session.date_to }}</strong>
+                    </article>
+                    <article class="header-meta-item">
+                        <p>Responsible Person</p>
+                        <strong>{{ prefill.responsible_person if prefill else inv_session.responsible_person }}</strong>
+                    </article>
+                    <article class="header-meta-item">
+                        <p>Session ID</p>
+                        <strong>{{ inv_session.id }}</strong>
+                    </article>
                 </div>
-            </div>
-            <div class="session-form-row">
-                <div>
-                    <label for="status">Status</label>
-                    <select id="status" name="status" {% if is_read_only %}disabled{% endif %} required>
-                        {% for s in statuses %}
-                        <option value="{{ s }}"
-                            {% if (prefill and prefill.status == s) or (not prefill and inv_session.status == s) %}
-                            selected
-                            {% endif %}>{{ s }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label for="responsible_person">Responsible Person</label>
-                    <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
-                           value="{{ prefill.responsible_person if prefill else inv_session.responsible_person }}"
-                           {% if is_read_only %}disabled{% endif %} required />
-                </div>
-            </div>
-            <div>
-                <label for="notes">Session Notes (optional)</label>
-                <textarea id="notes" name="notes" rows="3" maxlength="1500" style="width:100%; border: 1px solid var(--border, #d6cfc7); border-radius: 10px; padding: 10px 11px;" {% if is_read_only %}disabled{% endif %}>{{ prefill.notes if prefill else (inv_session.notes or '') }}</textarea>
-            </div>
-            <div class="session-form-row">
-                <div>
-                    <label for="completion_reason">Completion Reason (optional)</label>
-                    <input id="completion_reason" name="completion_reason" type="text" maxlength="500" value="{{ prefill.completion_reason if prefill else (inv_session.completion_reason or '') }}" {% if is_read_only %}disabled{% endif %} />
-                </div>
-                <div>
-                    <label for="cancellation_reason">Cancellation Reason (optional)</label>
-                    <input id="cancellation_reason" name="cancellation_reason" type="text" maxlength="500" value="{{ prefill.cancellation_reason if prefill else (inv_session.cancellation_reason or '') }}" {% if is_read_only %}disabled{% endif %} />
-                </div>
-            </div>
-            <div>
-                <label>Linked Fixed Assets</label>
-                <div class="linked-assets-grid" id="linked-assets-grid">
-                    {% for row in linked_asset_rows %}
-                    <div class="linked-asset-row">
-                        <div>
-                            <label>Fixed Asset</label>
-                            <input type="text" class="asset-search" placeholder="Search by asset name or category" {% if is_read_only %}disabled{% endif %} />
-                            <select name="fixed_asset_ids" {% if is_read_only %}disabled{% endif %}>
-                                <option value="">-- Select fixed asset --</option>
-                                {% for asset in fixed_assets %}
-                                <option value="{{ asset.id }}" {% if asset.id == row.fixed_asset_id %}selected{% endif %}>
-                                    {{ asset.name }} ({{ asset.category }})
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <p class="help-text">Duplicates are blocked at form level.</p>
-                        </div>
-                        <div>
-                            <label>Quantity</label>
-                            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
-                        </div>
-                        {% if not is_read_only %}
-                        <button type="button" class="remove-linked-asset">Remove</button>
+                {% if not is_read_only %}
+                <div class="status-quick-actions">
+                    <p>Quick lifecycle actions</p>
+                    <div class="workflow-buttons">
+                        <button type="submit" form="edit-session-form" class="status-action-button workflow-neutral" data-target-status="{{ prefill.status if prefill else inv_session.status }}">Save Draft</button>
+                        {% if inv_session.status == "New" %}
+                        <button type="submit" form="edit-session-form" class="status-action-button workflow-primary" data-target-status="Active">Start Session</button>
+                        {% endif %}
+                        {% if inv_session.status == "Active" %}
+                        <button type="submit" form="edit-session-form" class="status-action-button workflow-primary" data-target-status="Completed">Complete Session</button>
+                        {% endif %}
+                        {% if inv_session.status in ["New", "Active"] %}
+                        <button type="submit" form="edit-session-form" class="status-action-button workflow-danger" data-target-status="Cancelled">Cancel Session</button>
                         {% endif %}
                     </div>
-                    {% endfor %}
                 </div>
-                {% if not is_read_only %}
-                <button type="button" id="add-linked-asset">+ Add asset</button>
                 {% endif %}
-            </div>
-            <div class="totals-grid">
-                <div class="panel-lite">
-                    <label>Distinct Assets</label>
-                    <strong id="distinct-assets-total">0</strong>
+            </section>
+
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/edit" class="session-form" id="edit-session-form">
+                <input id="status-action" name="status" type="hidden" value="{{ prefill.status if prefill else inv_session.status }}" />
+
+                <div class="edit-layout">
+                    <div class="stack">
+                        <section class="section-card">
+                            <h3 class="section-title">Session Info</h3>
+                            {% if is_admin_user %}
+                            <div style="margin-bottom: 10px;">
+                                <label>
+                                    <input type="checkbox" name="admin_override" value="1" {% if prefill and prefill.admin_override %}checked{% endif %} {% if is_read_only %}disabled{% endif %} />
+                                    Admin override (allow reverse lifecycle transition)
+                                </label>
+                            </div>
+                            {% endif %}
+                            <div class="session-form-row">
+                                <div>
+                                    <label for="date_from">Date From</label>
+                                    <input id="date_from" name="date_from" type="date"
+                                           value="{{ prefill.date_from if prefill else inv_session.date_from }}" {% if is_read_only %}disabled{% endif %} required />
+                                </div>
+                                <div>
+                                    <label for="date_to">Date To</label>
+                                    <input id="date_to" name="date_to" type="date"
+                                           value="{{ prefill.date_to if prefill else inv_session.date_to }}" {% if is_read_only %}disabled{% endif %} required />
+                                </div>
+                            </div>
+                            <div class="session-form-row">
+                                <div>
+                                    <label>Current Status</label>
+                                    <p class="current-status-box">{{ prefill.status if prefill else inv_session.status }}</p>
+                                </div>
+                                <div>
+                                    <label for="responsible_person">Responsible Person</label>
+                                    <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
+                                           value="{{ prefill.responsible_person if prefill else inv_session.responsible_person }}"
+                                           {% if is_read_only %}disabled{% endif %} required />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="section-card">
+                            <h3 class="section-title">Notes and Reasons</h3>
+                            <div>
+                                <label for="notes">Session Notes (optional)</label>
+                                <textarea id="notes" name="notes" rows="3" maxlength="1500" style="width:100%; border: 1px solid var(--border, #d6cfc7); border-radius: 10px; padding: 10px 11px;" {% if is_read_only %}disabled{% endif %}>{{ prefill.notes if prefill else (inv_session.notes or '') }}</textarea>
+                            </div>
+                            <div class="session-form-row">
+                                <div>
+                                    <label for="completion_reason">Completion Reason</label>
+                                    <input id="completion_reason" name="completion_reason" type="text" maxlength="500" value="{{ prefill.completion_reason if prefill else (inv_session.completion_reason or '') }}" {% if is_read_only %}disabled{% endif %} />
+                                    <p id="completion-helper" class="reason-helper">Required when you use Complete Session.</p>
+                                </div>
+                                <div>
+                                    <label for="cancellation_reason">Cancellation Reason</label>
+                                    <input id="cancellation_reason" name="cancellation_reason" type="text" maxlength="500" value="{{ prefill.cancellation_reason if prefill else (inv_session.cancellation_reason or '') }}" {% if is_read_only %}disabled{% endif %} />
+                                    <p id="cancellation-helper" class="reason-helper">Required when you use Cancel Session.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="section-card">
+                            <h3 class="section-title">Linked Assets</h3>
+                            <div class="linked-assets-wrap">
+                                <div class="linked-assets-head">
+                                    <div>Search and Asset</div>
+                                    <div>Quantity</div>
+                                    <div>Line Value</div>
+                                    <div>Action</div>
+                                </div>
+                                <p id="linked-assets-empty" class="empty-linked-assets" {% if linked_asset_rows %}style="display:none;"{% endif %}>No linked assets yet. Use + Add asset to start.</p>
+                                <div class="linked-assets-grid" id="linked-assets-grid">
+                                    {% for row in linked_asset_rows %}
+                                    <div class="linked-asset-row">
+                                        <div class="asset-cell">
+                                            <input type="text" class="asset-search" placeholder="Search by asset name or category" {% if is_read_only %}disabled{% endif %} />
+                                            <select name="fixed_asset_ids" {% if is_read_only %}disabled{% endif %}>
+                                                <option value="">-- Select fixed asset --</option>
+                                                {% for asset in fixed_assets %}
+                                                <option value="{{ asset.id }}" {% if asset.id == row.fixed_asset_id %}selected{% endif %}>
+                                                    {{ asset.name }} ({{ asset.category }})
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                            <p class="help-text">Asset can be selected only once.</p>
+                                            <p class="duplicate-warning">This asset is already selected in another row.</p>
+                                        </div>
+                                        <div class="quantity-cell">
+                                            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
+                                        </div>
+                                        <div class="value-cell">
+                                            <span class="line-value">0.00</span>
+                                        </div>
+                                        <div>
+                                            {% if not is_read_only %}
+                                            <button type="button" class="remove-linked-asset workflow-danger">Remove</button>
+                                            {% else %}
+                                            <span style="color: var(--muted, #6b6055);">Read-only</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="totals-sticky">
+                                    <div class="totals-grid">
+                                        <article class="totals-item">
+                                            <p>Distinct Assets</p>
+                                            <strong id="distinct-assets-total">0</strong>
+                                        </article>
+                                        <article class="totals-item">
+                                            <p>Total Quantity</p>
+                                            <strong id="quantity-total">0</strong>
+                                        </article>
+                                        <article class="totals-item">
+                                            <p>Total Initial Value</p>
+                                            <strong id="initial-value-total">0.00</strong>
+                                        </article>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if not is_read_only %}
+                            <div style="margin-top: 10px; display:flex; gap:8px; flex-wrap: wrap;">
+                                <button type="button" id="add-linked-asset">+ Add asset</button>
+                                <button type="button" id="clear-linked-assets" class="workflow-neutral">Clear all rows</button>
+                            </div>
+                            {% endif %}
+                        </section>
+
+                        <section class="section-card">
+                            <h3 class="section-title">Workflow</h3>
+                            <div class="workflow-grid">
+                                {% if not is_read_only and is_admin_user and inv_session.status in ["Completed", "Cancelled"] %}
+                                <div class="workflow-buttons">
+                                    <button type="submit" class="status-action-button workflow-neutral" data-target-status="Active">Reopen (Admin)</button>
+                                </div>
+                                <p class="workflow-note">Primary lifecycle actions are available in the status header. Completion and cancellation require reasons.</p>
+                                {% else %}
+                                <p class="workflow-note">Primary lifecycle actions are available in the status header.</p>
+                                {% endif %}
+                            </div>
+                        </section>
+
+                    </div>
+
                 </div>
-                <div class="panel-lite">
-                    <label>Total Quantity</label>
-                    <strong id="quantity-total">0</strong>
-                </div>
-                <div class="panel-lite">
-                    <label>Total Initial Value</label>
-                    <strong id="initial-value-total">0.00</strong>
-                </div>
-            </div>
-            <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
-                {% if not is_read_only %}
-                <button type="submit">Save</button>
-                {% endif %}
-                {% if inv_session.status == "Active" %}
-                <button type="submit" formaction="/inventory-sessions/id/{{ inv_session.id }}/complete" formmethod="post">Complete</button>
-                {% endif %}
-                <a href="/inventory-sessions/id/{{ inv_session.id }}">
-                    <button type="button">Cancel</button>
-                </a>
-                {% if not is_read_only %}
-                <button type="submit" formaction="/inventory-sessions/id/{{ inv_session.id }}/delete" formmethod="post"
-                        onclick="return confirm('Delete this inventory session? This cannot be undone.')"
-                        style="background: #b91c1c; color: #fff; border-color: #b91c1c;">Delete</button>
-                {% endif %}
-            </div>
-        </form>
+            </form>
+        </div>
     </section>
 </div>
-{% if not is_read_only %}
+
 <template id="linked-asset-row-template">
     <div class="linked-asset-row">
-        <div>
-            <label>Fixed Asset</label>
+        <div class="asset-cell">
             <input type="text" class="asset-search" placeholder="Search by asset name or category" />
             <select name="fixed_asset_ids">
                 <option value="">-- Select fixed asset --</option>
@@ -183,57 +613,76 @@
                 <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>
-            <p class="help-text">Duplicates are blocked at form level.</p>
+            <p class="help-text">Asset can be selected only once.</p>
+            <p class="duplicate-warning">This asset is already selected in another row.</p>
         </div>
-        <div>
-            <label>Quantity</label>
+        <div class="quantity-cell">
             <input name="fixed_asset_quantities" type="number" min="1" step="1" value="1" />
         </div>
-        <button type="button" class="remove-linked-asset">Remove</button>
+        <div class="value-cell">
+            <span class="line-value">0.00</span>
+        </div>
+        <div>
+            <button type="button" class="remove-linked-asset workflow-danger">Remove</button>
+        </div>
     </div>
 </template>
+
 <script>
     (function () {
+        const form = document.getElementById("edit-session-form");
+        const statusActionInput = document.getElementById("status-action");
+        const completionReasonInput = document.getElementById("completion_reason");
+        const cancellationReasonInput = document.getElementById("cancellation_reason");
+        const completionHelper = document.getElementById("completion-helper");
+        const cancellationHelper = document.getElementById("cancellation-helper");
+        const dirtyPill = document.getElementById("dirty-pill");
+        const statusActionButtons = Array.from(document.querySelectorAll(".status-action-button"));
+
         const grid = document.getElementById("linked-assets-grid");
         const addButton = document.getElementById("add-linked-asset");
+        const clearButton = document.getElementById("clear-linked-assets");
         const template = document.getElementById("linked-asset-row-template");
+        const emptyState = document.getElementById("linked-assets-empty");
+
         const distinctAssetsTotal = document.getElementById("distinct-assets-total");
         const quantityTotal = document.getElementById("quantity-total");
         const initialValueTotal = document.getElementById("initial-value-total");
+
         const assetValueById = {
             {% for asset in fixed_assets %}
             "{{ asset.id }}": {{ asset.initial_value }},
             {% endfor %}
         };
 
+        let isDirty = false;
+        let isSubmitting = false;
+
         function formatMoney(value) {
             return Number(value || 0).toFixed(2);
         }
 
-        function updateTotals() {
-            const rows = Array.from(grid.querySelectorAll(".linked-asset-row"));
-            const chosenAssetIds = new Set();
-            let qtySum = 0;
-            let valueSum = 0;
-            rows.forEach((row) => {
-                const select = row.querySelector('select[name="fixed_asset_ids"]');
-                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
-                if (!select || !qtyInput) return;
-                const assetId = (select.value || "").trim();
-                const quantity = Math.max(0, Number(qtyInput.value || 0));
-                if (!assetId || !quantity) return;
-                chosenAssetIds.add(assetId);
-                qtySum += quantity;
-                valueSum += (Number(assetValueById[assetId] || 0) * quantity);
-            });
+        function setDirty(value) {
+            isDirty = value;
+            if (dirtyPill) {
+                dirtyPill.style.display = value ? "inline-flex" : "none";
+            }
+        }
 
-            distinctAssetsTotal.textContent = String(chosenAssetIds.size);
-            quantityTotal.textContent = String(qtySum);
-            initialValueTotal.textContent = formatMoney(valueSum);
+        function markDirty() {
+            if (!isSubmitting) {
+                setDirty(true);
+            }
+        }
+
+        function toggleEmptyState() {
+            if (!emptyState || !grid) return;
+            emptyState.style.display = grid.children.length ? "none" : "block";
         }
 
         function selectedAssetIdsExcluding(currentSelect) {
             const ids = new Set();
+            if (!grid) return ids;
             grid.querySelectorAll('select[name="fixed_asset_ids"]').forEach((select) => {
                 if (select === currentSelect) return;
                 const value = (select.value || "").trim();
@@ -243,7 +692,12 @@
         }
 
         function updateDuplicateProtection() {
-            grid.querySelectorAll('select[name="fixed_asset_ids"]').forEach((select) => {
+            if (!grid) return;
+            grid.querySelectorAll('.linked-asset-row').forEach((row) => {
+                const select = row.querySelector('select[name="fixed_asset_ids"]');
+                const warning = row.querySelector('.duplicate-warning');
+                if (!select) return;
+
                 const usedByOtherRows = selectedAssetIdsExcluding(select);
                 Array.from(select.options).forEach((option) => {
                     if (!option.value) {
@@ -252,12 +706,46 @@
                     }
                     option.disabled = usedByOtherRows.has(option.value) && option.value !== select.value;
                 });
-                if (select.value && usedByOtherRows.has(select.value)) {
-                    select.setCustomValidity("This fixed asset is already selected in another row.");
-                } else {
-                    select.setCustomValidity("");
+
+                const duplicated = !!(select.value && usedByOtherRows.has(select.value));
+                select.setCustomValidity(duplicated ? "This fixed asset is already selected in another row." : "");
+                if (warning) {
+                    warning.style.display = duplicated ? "block" : "none";
                 }
             });
+        }
+
+        function updateTotals() {
+            if (!grid) return;
+
+            const rows = Array.from(grid.querySelectorAll(".linked-asset-row"));
+            const chosenAssetIds = new Set();
+            let qtySum = 0;
+            let valueSum = 0;
+
+            rows.forEach((row) => {
+                const select = row.querySelector('select[name="fixed_asset_ids"]');
+                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
+                const lineValue = row.querySelector('.line-value');
+                if (!select || !qtyInput) return;
+
+                const assetId = (select.value || "").trim();
+                const quantity = Math.max(0, Number(qtyInput.value || 0));
+                const unitValue = Number(assetValueById[assetId] || 0);
+                const rowValue = assetId && quantity ? (unitValue * quantity) : 0;
+
+                if (lineValue) {
+                    lineValue.textContent = formatMoney(rowValue);
+                }
+                if (!assetId || !quantity) return;
+                chosenAssetIds.add(assetId);
+                qtySum += quantity;
+                valueSum += rowValue;
+            });
+
+            if (distinctAssetsTotal) distinctAssetsTotal.textContent = String(chosenAssetIds.size);
+            if (quantityTotal) quantityTotal.textContent = String(qtySum);
+            if (initialValueTotal) initialValueTotal.textContent = formatMoney(valueSum);
         }
 
         function wireSearch(row) {
@@ -277,56 +765,157 @@
             });
         }
 
-        function wireRemoveButtons() {
-            grid.querySelectorAll(".remove-linked-asset").forEach((button) => {
-                button.onclick = function () {
-                    const row = button.closest(".linked-asset-row");
-                    if (!row) return;
-                    if (grid.children.length === 1) {
-                        row.querySelector('select[name="fixed_asset_ids"]').value = "";
-                        row.querySelector('input[name="fixed_asset_quantities"]').value = "1";
-                        row.querySelector('.asset-search').value = "";
-                        updateDuplicateProtection();
-                        updateTotals();
-                        return;
-                    }
-                    row.remove();
+        function wireRowEvents(row) {
+            const select = row.querySelector('select[name="fixed_asset_ids"]');
+            const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
+
+            if (select) {
+                select.addEventListener("change", function () {
                     updateDuplicateProtection();
                     updateTotals();
-                };
+                    markDirty();
+                });
+            }
+            if (qtyInput) {
+                qtyInput.addEventListener("input", function () {
+                    updateTotals();
+                    markDirty();
+                });
+            }
+            wireSearch(row);
+        }
+
+        function wireAllRows() {
+            if (!grid) return;
+            grid.querySelectorAll('.linked-asset-row').forEach(wireRowEvents);
+        }
+
+        function updateReasonHelpers(targetStatus) {
+            if (completionHelper) {
+                completionHelper.style.display = targetStatus === "Completed" ? "block" : "none";
+            }
+            if (cancellationHelper) {
+                cancellationHelper.style.display = targetStatus === "Cancelled" ? "block" : "none";
+            }
+        }
+
+        function setStatusAction(event) {
+            const button = event.currentTarget;
+            const targetStatus = (button.dataset.targetStatus || "").trim();
+            if (!targetStatus) return;
+
+            updateReasonHelpers(targetStatus);
+
+            if (targetStatus === "Completed") {
+                const reason = (completionReasonInput?.value || "").trim();
+                if (!reason) {
+                    event.preventDefault();
+                    alert("Completion reason is required when completing a session.");
+                    completionReasonInput?.focus();
+                    return;
+                }
+                if (!confirm("Complete this inventory session?")) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+
+            if (targetStatus === "Cancelled") {
+                const reason = (cancellationReasonInput?.value || "").trim();
+                if (!reason) {
+                    event.preventDefault();
+                    alert("Cancellation reason is required when cancelling a session.");
+                    cancellationReasonInput?.focus();
+                    return;
+                }
+                if (!confirm("Cancel this inventory session? This changes it to a terminal state.")) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+
+            if (statusActionInput) {
+                statusActionInput.value = targetStatus;
+            }
+        }
+
+        function handleFormSubmit() {
+            isSubmitting = true;
+            setDirty(false);
+            if (!form) return;
+            Array.from(form.querySelectorAll('button[type="submit"]')).forEach((button) => {
+                button.disabled = true;
+                if (!button.dataset.originalText) {
+                    button.dataset.originalText = button.textContent || "";
+                }
+                button.textContent = "Saving...";
             });
         }
 
-        function wireChangeEvents() {
-            grid.querySelectorAll('.linked-asset-row').forEach((row) => {
-                const select = row.querySelector('select[name="fixed_asset_ids"]');
-                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
-                if (select) {
-                    select.onchange = function () {
-                        updateDuplicateProtection();
-                        updateTotals();
-                    };
-                }
-                if (qtyInput) {
-                    qtyInput.oninput = updateTotals;
-                }
-                wireSearch(row);
-            });
-        }
-
-        addButton.addEventListener("click", function () {
-            const node = template.content.cloneNode(true);
-            grid.appendChild(node);
-            wireChangeEvents();
-            wireRemoveButtons();
-            updateDuplicateProtection();
-            updateTotals();
+        window.addEventListener("beforeunload", function (event) {
+            if (!isDirty || isSubmitting) {
+                return;
+            }
+            event.preventDefault();
+            event.returnValue = "";
         });
 
-        wireRemoveButtons();
-        wireChangeEvents();
+        if (addButton && template && grid) {
+            addButton.addEventListener("click", function () {
+                const node = template.content.cloneNode(true);
+                grid.appendChild(node);
+                const row = grid.lastElementChild;
+                if (row) {
+                    wireRowEvents(row);
+                }
+                toggleEmptyState();
+                updateDuplicateProtection();
+                updateTotals();
+                markDirty();
+            });
+        }
+
+        if (grid) {
+            grid.addEventListener("click", function (event) {
+                const button = event.target.closest(".remove-linked-asset");
+                if (!button) return;
+                event.preventDefault();
+                event.stopPropagation();
+
+                const row = button.closest(".linked-asset-row");
+                if (!row) return;
+                row.remove();
+                toggleEmptyState();
+                updateDuplicateProtection();
+                updateTotals();
+                markDirty();
+            });
+        }
+
+        if (clearButton && grid) {
+            clearButton.addEventListener("click", function () {
+                grid.innerHTML = "";
+                toggleEmptyState();
+                updateDuplicateProtection();
+                updateTotals();
+                markDirty();
+            });
+        }
+
+        if (form) {
+            form.addEventListener("input", markDirty);
+            form.addEventListener("change", markDirty);
+            form.addEventListener("submit", handleFormSubmit);
+        }
+
+        statusActionButtons.forEach((button) => {
+            button.addEventListener("click", setStatusAction);
+        });
+
+        wireAllRows();
+        toggleEmptyState();
         updateDuplicateProtection();
         updateTotals();
+        updateReasonHelpers(statusActionInput ? statusActionInput.value : "");
     })();
 </script>
-{% endif %}

@@ -1,4 +1,62 @@
 <style>
+    .page-header {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .page-context {
+        margin: 4px 0 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.85rem;
+    }
+    .page-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .top-link-action {
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+        font-size: 0.88rem;
+    }
+    .session-form-panel {
+        display: grid;
+        gap: 12px;
+    }
+    .section-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+    }
+    .section-title {
+        margin: 0 0 10px;
+        font-size: 1rem;
+    }
+    .summary-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
+        padding: 12px;
+    }
+    .summary-card p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .summary-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.1rem;
+    }
     .session-form {
         display: grid;
         gap: 12px;
@@ -11,275 +69,83 @@
     @media (max-width: 760px) {
         .session-form-row { grid-template-columns: 1fr; }
     }
-    .linked-assets-grid {
-        display: grid;
-        gap: 8px;
-    }
-    .linked-asset-row {
-        display: grid;
-        grid-template-columns: 1fr 120px auto;
-        gap: 8px;
-        align-items: end;
-    }
-    @media (max-width: 760px) {
-        .linked-asset-row { grid-template-columns: 1fr; }
-    }
-    .totals-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-    }
-    @media (max-width: 760px) {
-        .totals-grid { grid-template-columns: 1fr; }
-    }
-    .totals-grid .panel-lite {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 8px;
-        background: var(--table-row-alt, #fcfaf6);
-        padding: 8px;
-    }
-    .help-text {
-        margin: 2px 0 0;
-        font-size: 0.82rem;
-        color: var(--muted, #6b6055);
+    .actions-bar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
     }
 </style>
 <div class="stack">
     <section class="panel">
-        <h2>New Inventory Session</h2>
-        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <div class="page-header">
+            <div>
+                <h2 style="margin: 0;">New Inventory Session</h2>
+                <p style="margin: 4px 0 0; color: var(--muted, #6b6055); font-size: 0.85rem;">Signed in as <strong>{{ current_email }}</strong>. New sessions start in <strong>New</strong> status.</p>
+            </div>
+            <div class="page-actions">
+                <a href="/inventory-sessions" class="top-link-action">&larr; Back to inventories list</a>
+            </div>
+        </div>
         {% if error %}
         <p class="error">{{ error }}</p>
         {% endif %}
 
         <form method="post" action="/inventory-sessions/add" class="session-form">
-            <p style="color: var(--muted, #6b6055); font-size: 0.92em;">
-                New sessions are created with status <strong>New</strong>.
-            </p>
-            <div class="session-form-row">
-                <div>
-                    <label for="date_from">Date From</label>
-                    <input id="date_from" name="date_from" type="date"
-                           value="{{ prefill.date_from if prefill else '' }}" required />
-                </div>
-                <div>
-                    <label for="date_to">Date To</label>
-                    <input id="date_to" name="date_to" type="date"
-                           value="{{ prefill.date_to if prefill else '' }}" required />
-                </div>
-            </div>
-            <div>
-                <label for="responsible_person">Responsible Person</label>
-                <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
-                       value="{{ prefill.responsible_person if prefill else '' }}" required />
-            </div>
-            <div>
-                <label for="notes">Session Notes (optional)</label>
-                <textarea id="notes" name="notes" rows="3" maxlength="1500" style="width:100%; border: 1px solid var(--border, #d6cfc7); border-radius: 10px; padding: 10px 11px;">{{ prefill.notes if prefill else '' }}</textarea>
-            </div>
-            <div>
-                <label>Linked Fixed Assets</label>
-                <div class="linked-assets-grid" id="linked-assets-grid">
-                    {% for row in linked_asset_rows %}
-                    <div class="linked-asset-row">
-                        <div>
-                            <label>Fixed Asset</label>
-                            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
-                            <select name="fixed_asset_ids">
-                                <option value="">-- Select fixed asset --</option>
-                                {% for asset in fixed_assets %}
-                                <option value="{{ asset.id }}" {% if asset.id == row.fixed_asset_id %}selected{% endif %}>
-                                    {{ asset.name }} ({{ asset.category }})
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <p class="help-text">Duplicates are blocked at form level.</p>
-                        </div>
-                        <div>
-                            <label>Quantity</label>
-                            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" />
-                        </div>
-                        <button type="button" class="remove-linked-asset">Remove</button>
+            <section class="summary-card">
+                <p>Session status</p>
+                <strong>New</strong>
+                <p>Create the session setup first. Linked assets are added later once the session moves forward.</p>
+            </section>
+
+            <section class="section-card">
+                <p style="color: var(--muted, #6b6055); font-size: 0.92em; margin-top: 0;">
+                    New sessions are created with status <strong>New</strong>.
+                </p>
+                <div class="session-form-row">
+                    <div>
+                        <label for="date_from">Date From</label>
+                        <input id="date_from" name="date_from" type="date"
+                               value="{{ prefill.date_from if prefill else '' }}" required />
                     </div>
-                    {% endfor %}
+                    <div>
+                        <label for="date_to">Date To</label>
+                        <input id="date_to" name="date_to" type="date"
+                               value="{{ prefill.date_to if prefill else '' }}" required />
+                    </div>
                 </div>
-                <button type="button" id="add-linked-asset">+ Add asset</button>
+                <div>
+                    <label for="responsible_person">Responsible Person</label>
+                    <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
+                           value="{{ prefill.responsible_person if prefill else '' }}" required />
+                </div>
+            </section>
+
+            <section class="section-card">
+                <h3 class="section-title">Notes</h3>
+                <p style="margin: 0 0 8px; color: var(--muted, #6b6055); font-size: 0.85rem;">Optional context for the upcoming inventory session.</p>
+                <div>
+                    <label for="notes">Session Notes (optional)</label>
+                    <textarea id="notes" name="notes" rows="3" maxlength="1500" style="width:100%; border: 1px solid var(--border, #d6cfc7); border-radius: 10px; padding: 10px 11px;">{{ prefill.notes if prefill else '' }}</textarea>
+                </div>
+            </section>
+
+            <div class="session-form-row">
+                <div class="summary-card">
+                    <p>Linked assets</p>
+                    <strong>Not shown for New</strong>
+                    <p>This session begins without linked assets and they will be added after the session progresses.</p>
+                </div>
+                <div class="summary-card">
+                    <p>Next step</p>
+                    <strong>Create session</strong>
+                    <p>Use Create to save the new session and return to the inventory list.</p>
+                </div>
             </div>
-            <div class="totals-grid">
-                <div class="panel-lite">
-                    <label>Distinct Assets</label>
-                    <strong id="distinct-assets-total">0</strong>
-                </div>
-                <div class="panel-lite">
-                    <label>Total Quantity</label>
-                    <strong id="quantity-total">0</strong>
-                </div>
-                <div class="panel-lite">
-                    <label>Total Initial Value</label>
-                    <strong id="initial-value-total">0.00</strong>
-                </div>
-            </div>
-            <div style="display:flex; gap:10px;">
+
+            <div class="actions-bar">
                 <button type="submit">Create</button>
-                <a href="/inventory-sessions"><button type="button">Cancel</button></a>
             </div>
         </form>
     </section>
 </div>
-<template id="linked-asset-row-template">
-    <div class="linked-asset-row">
-        <div>
-            <label>Fixed Asset</label>
-            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
-            <select name="fixed_asset_ids">
-                <option value="">-- Select fixed asset --</option>
-                {% for asset in fixed_assets %}
-                <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
-                {% endfor %}
-            </select>
-            <p class="help-text">Duplicates are blocked at form level.</p>
-        </div>
-        <div>
-            <label>Quantity</label>
-            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="" />
-        </div>
-        <button type="button" class="remove-linked-asset">Remove</button>
-    </div>
-</template>
-<script>
-    (function () {
-        const grid = document.getElementById("linked-assets-grid");
-        const addButton = document.getElementById("add-linked-asset");
-        const template = document.getElementById("linked-asset-row-template");
-        const distinctAssetsTotal = document.getElementById("distinct-assets-total");
-        const quantityTotal = document.getElementById("quantity-total");
-        const initialValueTotal = document.getElementById("initial-value-total");
-        const assetValueById = {
-            {% for asset in fixed_assets %}
-            "{{ asset.id }}": {{ asset.initial_value }},
-            {% endfor %}
-        };
-
-        function formatMoney(value) {
-            return Number(value || 0).toFixed(2);
-        }
-
-        function updateTotals() {
-            const rows = Array.from(grid.querySelectorAll(".linked-asset-row"));
-            const chosenAssetIds = new Set();
-            let qtySum = 0;
-            let valueSum = 0;
-            rows.forEach((row) => {
-                const select = row.querySelector('select[name="fixed_asset_ids"]');
-                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
-                if (!select || !qtyInput) return;
-                const assetId = (select.value || "").trim();
-                const quantity = Math.max(0, Number(qtyInput.value || 0));
-                if (!assetId || !quantity) return;
-                chosenAssetIds.add(assetId);
-                qtySum += quantity;
-                valueSum += (Number(assetValueById[assetId] || 0) * quantity);
-            });
-
-            distinctAssetsTotal.textContent = String(chosenAssetIds.size);
-            quantityTotal.textContent = String(qtySum);
-            initialValueTotal.textContent = formatMoney(valueSum);
-        }
-
-        function selectedAssetIdsExcluding(currentSelect) {
-            const ids = new Set();
-            grid.querySelectorAll('select[name="fixed_asset_ids"]').forEach((select) => {
-                if (select === currentSelect) return;
-                const value = (select.value || "").trim();
-                if (value) ids.add(value);
-            });
-            return ids;
-        }
-
-        function updateDuplicateProtection() {
-            grid.querySelectorAll('select[name="fixed_asset_ids"]').forEach((select) => {
-                const usedByOtherRows = selectedAssetIdsExcluding(select);
-                Array.from(select.options).forEach((option) => {
-                    if (!option.value) {
-                        option.disabled = false;
-                        return;
-                    }
-                    option.disabled = usedByOtherRows.has(option.value) && option.value !== select.value;
-                });
-                if (select.value && usedByOtherRows.has(select.value)) {
-                    select.setCustomValidity("This fixed asset is already selected in another row.");
-                } else {
-                    select.setCustomValidity("");
-                }
-            });
-        }
-
-        function wireSearch(row) {
-            const searchInput = row.querySelector(".asset-search");
-            const select = row.querySelector('select[name="fixed_asset_ids"]');
-            if (!searchInput || !select) return;
-
-            searchInput.addEventListener("input", function () {
-                const term = searchInput.value.trim().toLowerCase();
-                if (!term) return;
-                const options = Array.from(select.options).filter((opt) => opt.value);
-                const match = options.find((opt) => opt.text.toLowerCase().includes(term));
-                if (match) {
-                    select.value = match.value;
-                    select.dispatchEvent(new Event("change"));
-                }
-            });
-        }
-
-        function wireRemoveButtons() {
-            grid.querySelectorAll(".remove-linked-asset").forEach((button) => {
-                button.onclick = function () {
-                    const row = button.closest(".linked-asset-row");
-                    if (!row) return;
-                    if (grid.children.length === 1) {
-                        row.querySelector('select[name="fixed_asset_ids"]').value = "";
-                        row.querySelector('input[name="fixed_asset_quantities"]').value = "";
-                        row.querySelector('.asset-search').value = "";
-                        updateDuplicateProtection();
-                        updateTotals();
-                        return;
-                    }
-                    row.remove();
-                    updateDuplicateProtection();
-                    updateTotals();
-                };
-            });
-        }
-
-        function wireChangeEvents() {
-            grid.querySelectorAll('.linked-asset-row').forEach((row) => {
-                const select = row.querySelector('select[name="fixed_asset_ids"]');
-                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
-                if (select) {
-                    select.onchange = function () {
-                        updateDuplicateProtection();
-                        updateTotals();
-                    };
-                }
-                if (qtyInput) {
-                    qtyInput.oninput = updateTotals;
-                }
-                wireSearch(row);
-            });
-        }
-
-        addButton.addEventListener("click", function () {
-            const node = template.content.cloneNode(true);
-            grid.appendChild(node);
-            wireChangeEvents();
-            wireRemoveButtons();
-            updateDuplicateProtection();
-            updateTotals();
-        });
-
-        wireRemoveButtons();
-        wireChangeEvents();
-        updateDuplicateProtection();
-        updateTotals();
-    })();
-</script>

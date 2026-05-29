@@ -1,46 +1,195 @@
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .page-context {
+        margin: 4px 0 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.85rem;
+    }
+    .page-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .page-actions a {
+        text-decoration: none;
+    }
+    .page-actions button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+    .section-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+    }
+    .section-card h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+    }
+    .session-form {
+        display: grid;
+        gap: 12px;
+    }
+    .field {
+        display: grid;
+        gap: 6px;
+    }
+    .field label {
+        font-weight: 600;
+    }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 760px) {
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .summary-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
+        padding: 12px;
+    }
+    .summary-card p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .summary-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.15rem;
+    }
+    .table-wrap {
+        overflow: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    thead th {
+        background: var(--table-head-bg, #f5eee2);
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid var(--border, #d6cfc7);
+        white-space: nowrap;
+    }
+    tbody tr:nth-child(even) {
+        background: var(--table-row-alt, #fcfaf6);
+    }
+    tbody tr:hover {
+        background: #f7f2e9;
+    }
+    tbody td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border, #d6cfc7);
+        vertical-align: top;
+    }
+    .action-cell {
+        white-space: nowrap;
+    }
+    .button-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+    .button-row a {
+        text-decoration: none;
+    }
+    .button-row button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+</style>
 <div class="stack">
     <section class="panel">
-        <h2>Add category</h2>
-        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
-        <form method="post" action="/fixed-asset-categories">
-            <div class="field">
-                <label for="category_name">Category name</label>
-                <input id="category_name" name="name" type="text" maxlength="100" required />
+        <div class="page-header">
+            <div>
+                <h2>Fixed Asset Categories</h2>
+                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Manage category names and see how many assets use each one.</p>
             </div>
-            <button type="submit">Create category</button>
-        </form>
-        <div class="links">
-            <a href="/dashboard">Back to dashboard</a>
-            <a href="/fixed-assets">Back to fixed assets</a>
+            <div class="page-actions">
+                <a href="/fixed-assets"><button type="button">← Fixed Assets</button></a>
+                <a href="/dashboard"><button type="button">← Dashboard</button></a>
+            </div>
         </div>
-    </section>
-    <section class="panel">
-        <h2>Existing categories</h2>
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr>
-                    <th style="text-align: left; padding: 10px;">Id</th>
-                    <th style="text-align: left; padding: 10px;">Category name</th>
-                    <th style="text-align: left; padding: 10px;">Assets count</th>
-                    <th style="text-align: left; padding: 10px;">Edit</th>
-                    <th style="text-align: left; padding: 10px;">Delete</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for category in categories %}
-                <tr>
-                    <td>{{ category.id }}</td>
-                    <td>{{ category.name }}</td>
-                    <td>{{ category.assets_count }}</td>
-                    <td><a href="/fixed-asset-categories/{{ category.id }}/edit">Edit</a></td>
-                    <td>
-                        <form method="post" action="/fixed-asset-categories/{{ category.id }}/delete" onsubmit="return confirm('Delete this category?');">
-                            <button type="submit">Delete</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+
+        <div class="summary-grid">
+            <article class="summary-card">
+                <p>Total categories</p>
+                <strong>{{ categories | length }}</strong>
+            </article>
+            <article class="summary-card">
+                <p>Usage focus</p>
+                <strong>Assets by category</strong>
+            </article>
+        </div>
+
+        <section class="section-card">
+            <h3>Add category</h3>
+            <form method="post" action="/fixed-asset-categories" class="session-form">
+                <div class="field">
+                    <label for="category_name">Category name</label>
+                    <input id="category_name" name="name" type="text" maxlength="100" required />
+                </div>
+                <div class="button-row">
+                    <button type="submit">Create category</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section-card">
+            <h3>Existing categories</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Id</th>
+                            <th>Category name</th>
+                            <th>Assets count</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                        <tr>
+                            <td>{{ category.id }}</td>
+                            <td>{{ category.name }}</td>
+                            <td>{{ category.assets_count }}</td>
+                            <td class="action-cell">
+                                <a href="/fixed-asset-categories/{{ category.id }}/edit">Edit</a>
+                                <form method="post" action="/fixed-asset-categories/{{ category.id }}/delete" style="display:inline; margin-left: 8px;" onsubmit="return confirm('Delete this category?');">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </section>
 </div>

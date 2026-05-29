@@ -287,7 +287,7 @@ def add_inventory_session_page(
     return render_add_inventory_session_page(
         current_email=user["email"],
         fixed_assets=fixed_assets,
-        linked_asset_rows=[{"fixed_asset_id": "", "quantity": ""}],
+        linked_asset_rows=[],
     )
 
 
@@ -322,7 +322,7 @@ def add_inventory_session(
             for index in range(min(len(fixed_asset_ids), len(fixed_asset_quantities)))
         ]
         if not linked_asset_rows:
-            linked_asset_rows = [{"fixed_asset_id": "", "quantity": ""}]
+            linked_asset_rows = []
         return render_add_inventory_session_page(
             current_email=user["email"],
             error=combined_error,
@@ -392,7 +392,7 @@ def edit_inventory_session_page(
         for fixed_asset_id, quantity in linked_assets
     ]
     if not linked_asset_rows:
-        linked_asset_rows = [{"fixed_asset_id": "", "quantity": "1"}]
+        linked_asset_rows = []
     return _render_edit_page(
         user_email=str(user["email"]),
         inv_session=inv_session,
@@ -407,7 +407,7 @@ def edit_inventory_session(
     session_token: str | None = Cookie(default=None),
     date_from: str = Form(...),
     date_to: str = Form(...),
-    status: str = Form(...),
+    status: str = Form(default=""),
     responsible_person: str = Form(...),
     notes: str = Form(default=""),
     completion_reason: str = Form(default=""),
@@ -424,6 +424,7 @@ def edit_inventory_session(
         return render_login_page("Inventory session not found.")
 
     current_status = str(inv_session["status"])
+    target_status = status or current_status
     is_admin_user = svc.is_admin_email(str(user["email"]))
     admin_override_requested = admin_override in {"1", "true", "on", "yes"}
     if svc.is_terminal_status(current_status) and not is_admin_user:
@@ -433,7 +434,7 @@ def edit_inventory_session(
             for fixed_asset_id, quantity in linked_assets
         ]
         if not linked_asset_rows:
-            linked_asset_rows = [{"fixed_asset_id": "", "quantity": "1"}]
+            linked_asset_rows = []
         return _render_edit_page(
             user_email=str(user["email"]),
             inv_session=inv_session,
@@ -445,7 +446,7 @@ def edit_inventory_session(
     error = svc.validate_session_form(
         date_from=date_from,
         date_to=date_to,
-        status=status,
+        status=target_status,
         responsible_person=responsible_person,
     )
     linked_assets, linked_assets_error = svc.parse_linked_assets(
@@ -454,17 +455,23 @@ def edit_inventory_session(
     )
     status_transition_error = svc.transition_error(
         current_status,
-        status,
+        target_status,
         allow_override=is_admin_user and admin_override_requested,
     )
-    combined_error = error or linked_assets_error or status_transition_error
+    terminal_reason_error: str | None = None
+    if current_status != target_status and target_status == "Completed" and not completion_reason.strip():
+        terminal_reason_error = "Completion reason is required when completing a session."
+    if current_status != target_status and target_status == "Cancelled" and not cancellation_reason.strip():
+        terminal_reason_error = "Cancellation reason is required when cancelling a session."
+
+    combined_error = error or linked_assets_error or status_transition_error or terminal_reason_error
     if combined_error:
         linked_asset_rows = [
             {"fixed_asset_id": fixed_asset_ids[index], "quantity": fixed_asset_quantities[index]}
             for index in range(min(len(fixed_asset_ids), len(fixed_asset_quantities)))
         ]
         if not linked_asset_rows:
-            linked_asset_rows = [{"fixed_asset_id": "", "quantity": "1"}]
+            linked_asset_rows = []
         return _render_edit_page(
             user_email=str(user["email"]),
             inv_session=inv_session,
@@ -472,7 +479,7 @@ def edit_inventory_session(
             prefill={
                 "date_from": date_from,
                 "date_to": date_to,
-                "status": status,
+                "status": target_status,
                 "responsible_person": responsible_person,
                 "notes": notes,
                 "completion_reason": completion_reason,
@@ -487,7 +494,7 @@ def edit_inventory_session(
         session_id=session_id,
         date_from=date_from,
         date_to=date_to,
-        status=status,
+        status=target_status,
         responsible_person=responsible_person,
         linked_assets=linked_assets,
         notes=notes,
@@ -567,6 +574,8 @@ def complete_inventory_session(
 
     current_status = str(inv_session["status"])
     transition_error = svc.transition_error(current_status, "Completed")
+    if not completion_reason.strip():
+        transition_error = transition_error or "Completion reason is required when completing a session."
     if transition_error:
         return _render_details_with_message(
             user_email=str(user["email"]),
@@ -613,6 +622,8 @@ def cancel_inventory_session(
 
     current_status = str(inv_session["status"])
     transition_error = svc.transition_error(current_status, "Cancelled")
+    if not cancellation_reason.strip():
+        transition_error = transition_error or "Cancellation reason is required when cancelling a session."
     if transition_error:
         return _render_details_with_message(
             user_email=str(user["email"]),

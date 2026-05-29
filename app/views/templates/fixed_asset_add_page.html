@@ -1,4 +1,71 @@
 <style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .page-context {
+        margin: 4px 0 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.85rem;
+    }
+    .page-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .page-actions a {
+        text-decoration: none;
+    }
+    .page-actions button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+    .section-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+    }
+    .section-card h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+    }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 760px) {
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .summary-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
+        padding: 12px;
+    }
+    .summary-card p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .summary-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.15rem;
+    }
     .asset-form {
         display: grid;
         gap: 12px;
@@ -16,8 +83,29 @@
 </style>
 <div class="stack">
     <section class="panel">
-        <h2>Add fixed asset</h2>
-        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <div class="page-header">
+            <div>
+                <h2>Add fixed asset</h2>
+                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Create a new fixed asset and keep the list filtered context.</p>
+            </div>
+            <div class="page-actions">
+                <a href="{{ back_href }}"><button type="button">← Back to fixed assets</button></a>
+                <a href="/dashboard"><button type="button">← Dashboard</button></a>
+            </div>
+        </div>
+
+        <div class="summary-grid">
+            <article class="summary-card">
+                <p>Current context</p>
+                <strong>New fixed asset</strong>
+            </article>
+            <article class="summary-card">
+                <p>Required fields</p>
+                <strong>Name, Category, Value</strong>
+            </article>
+        </div>
+
+        <section class="section-card">
         <form method="post" action="/fixed-assets/add" class="asset-form">
             <input type="hidden" name="page" value="{{ page }}" />
             <input type="hidden" name="page_size" value="{{ page_size }}" />
@@ -61,10 +149,6 @@
             </div>
             <button type="submit">Save fixed asset</button>
         </form>
-        <div class="links">
-            <a href="{{ back_href }}">Back to fixed assets</a>
-            <a href="/dashboard">Back to dashboard</a>
-            <a href="/logout">Log out</a>
-        </div>
+        </section>
     </section>
 </div>

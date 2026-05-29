@@ -1,17 +1,128 @@
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .page-context {
+        margin: 4px 0 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.85rem;
+    }
+    .page-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .page-actions a {
+        text-decoration: none;
+    }
+    .page-actions button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+    .section-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+    }
+    .section-card h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+    }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 760px) {
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .summary-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
+        padding: 12px;
+    }
+    .summary-card p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .summary-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.15rem;
+    }
+    .field {
+        display: grid;
+        gap: 6px;
+    }
+    .field label {
+        font-weight: 600;
+    }
+    .button-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+    .button-row a {
+        text-decoration: none;
+    }
+    .button-row button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+</style>
 <div class="stack">
     <section class="panel">
-        <h2>Edit category</h2>
-        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
-        <form method="post" action="/fixed-asset-categories/{{ category.id }}/edit">
-            <div class="field">
-                <label for="category_name">Category name</label>
-                <input id="category_name" name="name" type="text" maxlength="100" value="{{ category.name }}" required />
+        <div class="page-header">
+            <div>
+                <h2>Edit category</h2>
+                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Updating category details affects how assets are grouped.</p>
             </div>
-            <button type="submit">Save category</button>
-        </form>
-        <div class="links">
-            <a href="/fixed-asset-categories">Back to categories</a>
-            <a href="/fixed-assets">Back to fixed assets</a>
+            <div class="page-actions">
+                <a href="/fixed-asset-categories">← Back to categories</a>
+                <a href="/fixed-assets">← Fixed Assets</a>
+            </div>
         </div>
+
+        <div class="summary-grid">
+            <article class="summary-card">
+                <p>Category id</p>
+                <strong>{{ category.id }}</strong>
+            </article>
+            <article class="summary-card">
+                <p>Assets count</p>
+                <strong>{{ category.assets_count if category.assets_count is defined else '-' }}</strong>
+            </article>
+        </div>
+
+        <section class="section-card">
+            <h3>Edit category</h3>
+            <form method="post" action="/fixed-asset-categories/{{ category.id }}/edit">
+                <div class="field">
+                    <label for="category_name">Category name</label>
+                    <input id="category_name" name="name" type="text" maxlength="100" value="{{ category.name }}" required />
+                </div>
+                <div class="button-row">
+                    <button type="submit">Save category</button>
+                </div>
+            </form>
+        </section>
     </section>
 </div>

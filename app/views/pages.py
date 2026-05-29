@@ -40,23 +40,28 @@ def render_page(
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <title>{escape(page_title)}</title>
+            <link rel="preconnect" href="https://fonts.googleapis.com" />
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+            <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet" />
             <style>
                 :root {{
                     color-scheme: light;
-                    font-family: "IBM Plex Sans", "Source Sans 3", "Segoe UI", Arial, sans-serif;
-                    --bg: #f3f5f8;
+                    font-family: "Source Sans 3", "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+                    --bg: radial-gradient(1200px 640px at 15% -10%, #f8f2e7 0%, #f5efe4 58%, #ede7dd 100%);
                     --surface: #ffffff;
-                    --surface-alt: #f9fafb;
-                    --text: #111827;
-                    --muted: #4b5563;
-                    --accent: #0f4c81;
-                    --accent-hover: #0c3e68;
-                    --border: #d1d5db;
-                    --success: #0f766e;
-                    --error: #b91c1c;
-                    --info: #1d4ed8;
-                    --ring: rgba(15, 76, 129, 0.2);
-                    --shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+                    --surface-alt: #faf7f1;
+                    --text: #1f2933;
+                    --muted: #5d6672;
+                    --accent: #26476d;
+                    --accent-hover: #1f3c5d;
+                    --border: #d9cfbf;
+                    --success: #16685d;
+                    --error: #9f2f2a;
+                    --info: #2f4f7f;
+                    --ring: rgba(38, 71, 109, 0.2);
+                    --shadow: 0 14px 28px rgba(54, 39, 23, 0.1);
+                    --table-head-bg: #f5eee2;
+                    --table-row-alt: #fcfaf6;
                 }}
 
                 * {{ box-sizing: border-box; }}
@@ -67,7 +72,7 @@ def render_page(
                     display: block;
                     background: var(--bg);
                     color: var(--text);
-                    padding: 12px;
+                    padding: 16px;
                 }}
 
                 .card {{
@@ -75,61 +80,64 @@ def render_page(
                     margin: 0 auto;
                     background: var(--surface);
                     border: 1px solid var(--border);
-                    border-radius: 10px;
+                    border-radius: 14px;
                     box-shadow: var(--shadow);
-                    padding: 18px;
+                    padding: 22px;
                 }}
 
                 .eyebrow {{
-                    margin: 0 0 8px;
+                    margin: 0 0 9px;
                     color: var(--accent);
-                    font-size: 0.72rem;
+                    font-size: 0.7rem;
                     font-weight: 700;
-                    letter-spacing: 0.08em;
+                    letter-spacing: 0.14em;
                     text-transform: uppercase;
                 }}
 
                 h1 {{
                     margin: 0 0 6px;
-                    font-size: 1.35rem;
+                    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+                    font-size: 1.6rem;
                     line-height: 1.2;
+                    font-weight: 700;
                 }}
 
                 p.subtitle {{
-                    margin: 0 0 14px;
+                    margin: 0 0 16px;
                     color: var(--muted);
-                    line-height: 1.35;
-                    font-size: 0.92rem;
+                    line-height: 1.5;
+                    font-size: 0.97rem;
                 }}
 
                 .message {{
-                    margin: 0 0 10px;
-                    padding: 8px 10px;
-                    border-radius: 8px;
+                    margin: 0 0 12px;
+                    padding: 9px 12px;
+                    border-radius: 10px;
                     border: 1px solid transparent;
-                    font-size: 0.86rem;
+                    font-size: 0.88rem;
                 }}
 
-                .message.info {{ background: #eef5ff; color: var(--info); border-color: #bfdbfe; }}
-                .message.success {{ background: #ecfdf5; color: var(--success); border-color: #99f6e4; }}
-                .message.error {{ background: #fef2f2; color: var(--error); border-color: #fecaca; }}
+                .message.info {{ background: #eef2fb; color: var(--info); border-color: #ccd9f0; }}
+                .message.success {{ background: #edf8f4; color: var(--success); border-color: #b6ddd3; }}
+                .message.error {{ background: #fdf0ef; color: var(--error); border-color: #efc3c0; }}
 
                 label {{
                     display: block;
-                    margin: 0 0 4px;
-                    font-size: 0.78rem;
+                    margin: 0 0 5px;
+                    font-size: 0.8rem;
                     font-weight: 700;
-                    letter-spacing: 0.01em;
+                    letter-spacing: 0.015em;
+                    color: #334155;
                 }}
 
-                .field {{ margin-bottom: 10px; }}
+                .field {{ margin-bottom: 12px; }}
 
                 input, select {{
                     width: 100%;
                     border: 1px solid var(--border);
-                    border-radius: 8px;
-                    padding: 9px 10px;
-                    font-size: 0.88rem;
+                    border-radius: 10px;
+                    padding: 10px 11px;
+                    font-size: 0.9rem;
                     background: var(--surface-alt);
                     outline: none;
                     transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -143,11 +151,11 @@ def render_page(
                 button {{
                     width: 100%;
                     border: 1px solid var(--accent);
-                    border-radius: 8px;
-                    padding: 9px 12px;
+                    border-radius: 10px;
+                    padding: 10px 12px;
                     background: var(--accent);
                     color: white;
-                    font-size: 0.86rem;
+                    font-size: 0.88rem;
                     font-weight: 700;
                     cursor: pointer;
                     transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -161,13 +169,13 @@ def render_page(
                 .links {{
                     display: flex;
                     flex-wrap: wrap;
-                    gap: 8px;
-                    margin-top: 10px;
+                    gap: 10px;
+                    margin-top: 12px;
                 }}
 
                 .links a {{
                     color: var(--accent);
-                    font-size: 0.84rem;
+                    font-size: 0.87rem;
                     font-weight: 700;
                     text-decoration: none;
                 }}
@@ -180,32 +188,34 @@ def render_page(
                 .small {{
                     margin-top: 10px;
                     color: var(--muted);
-                    font-size: 0.78rem;
-                    line-height: 1.35;
+                    font-size: 0.81rem;
+                    line-height: 1.45;
                 }}
 
-                .stack {{ display: grid; gap: 10px; }}
+                .stack {{ display: grid; gap: 12px; }}
 
                 .panel {{
                     border: 1px solid var(--border);
-                    border-radius: 8px;
-                    padding: 12px;
+                    border-radius: 12px;
+                    padding: 14px;
                     background: var(--surface);
                 }}
 
                 .panel h2 {{
                     margin: 0 0 6px;
-                    font-size: 0.97rem;
+                    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+                    font-size: 1.08rem;
+                    font-weight: 600;
                 }}
 
                 code {{
                     display: block;
                     margin-top: 8px;
-                    padding: 8px 10px;
+                    padding: 9px 11px;
                     border: 1px solid var(--border);
-                    border-radius: 8px;
+                    border-radius: 10px;
                     background: var(--surface-alt);
-                    font-size: 0.78rem;
+                    font-size: 0.8rem;
                     overflow-wrap: anywhere;
                 }}
 
@@ -217,16 +227,16 @@ def render_page(
                 }}
 
                 th, td {{
-                    padding: 8px 8px;
+                    padding: 9px 9px;
                     text-align: left;
                     border-bottom: 1px solid var(--border);
-                    font-size: 0.83rem;
+                    font-size: 0.85rem;
                 }}
 
                 th {{
-                    background: #eef2f7;
+                    background: var(--table-head-bg);
                     font-weight: 700;
-                    color: #1f2937;
+                    color: #273548;
                 }}
 
                 tr:last-child td {{ border-bottom: 0; }}

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Hackaton Style Previews</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;700&family=Public+Sans:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@600;700&family=Space+Grotesk:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --page-bg: radial-gradient(1200px 700px at 20% -10%, #e8eef8 0%, #f4f6fa 55%, #eef2f7 100%);
+      --ink: #0f172a;
+      --muted: #475569;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Source Sans 3", sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .header {
+      max-width: 1280px;
+      margin: 0 auto 18px;
+      padding: 14px 16px;
+      border: 1px solid #cbd5e1;
+      background: #ffffffc4;
+      backdrop-filter: blur(6px);
+      border-radius: 14px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.4rem, 2.8vw, 2rem);
+      letter-spacing: 0.01em;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .theme {
+      border-radius: 16px;
+      border: 1px solid #cbd5e1;
+      overflow: hidden;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+      background: #fff;
+      animation: rise 420ms ease both;
+    }
+
+    .theme:nth-child(2) { animation-delay: 70ms; }
+    .theme:nth-child(3) { animation-delay: 140ms; }
+    .theme:nth-child(4) { animation-delay: 210ms; }
+    .theme:nth-child(5) { animation-delay: 280ms; }
+    .theme:nth-child(6) { animation-delay: 350ms; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .label {
+      padding: 10px 12px;
+      border-bottom: 1px solid;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .preview {
+      padding: 12px;
+      min-height: 265px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      border: 1px solid;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .field {
+      border: 1px solid;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+      opacity: 0.96;
+    }
+
+    .table {
+      border: 1px solid;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 0.8fr;
+      gap: 8px;
+      font-size: 0.79rem;
+      padding: 7px 8px;
+    }
+
+    .row + .row { border-top: 1px solid; }
+    .head { font-weight: 700; }
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      opacity: 0.9;
+    }
+
+    .pill {
+      border: 1px solid;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-weight: 600;
+      font-size: 0.72rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      background: transparent;
+    }
+
+    /* 1. Data-Dense Professional 2.0 */
+    .t1 { font-family: "IBM Plex Sans", sans-serif; color: #0f172a; background: #fbfcfe; }
+    .t1 .label { background: #ecf2fa; border-color: #ced8e5; color: #0b3d69; }
+    .t1 .badge, .t1 .field, .t1 .table, .t1 .row, .t1 .pill, .t1 .btn { border-color: #cfd8e3; }
+    .t1 .head { background: #eef3fa; }
+    .t1 .pill { color: #0b4f84; background: #edf6ff; }
+
+    /* 2. Editorial Business */
+    .t2 { font-family: "Source Sans 3", sans-serif; color: #1f2937; background: #fdfbf7; }
+    .t2 .title { font-family: "Source Serif 4", serif; font-size: 1.05rem; }
+    .t2 .label { background: #f7f2e9; border-color: #ded2c0; color: #293b5f; }
+    .t2 .badge, .t2 .field, .t2 .table, .t2 .row, .t2 .pill, .t2 .btn { border-color: #d8ccbb; }
+    .t2 .head { background: #f6efe4; }
+    .t2 .pill { color: #1d4f7a; background: #e8f1fb; }
+
+    /* 3. Ops Console */
+    .t3 { font-family: "IBM Plex Sans", sans-serif; color: #0b1220; background: #f5f8fc; }
+    .t3 .label { background: #d9e7f7; border-color: #9bb8d6; color: #063b71; }
+    .t3 .title { letter-spacing: 0.03em; text-transform: uppercase; font-size: 0.92rem; }
+    .t3 .field, .t3 .table, .t3 .row, .t3 .pill, .t3 .btn, .t3 .badge { border-color: #b7c7db; border-radius: 4px; }
+    .t3 .head { background: #e4eef9; }
+    .t3 .pill { font-family: "JetBrains Mono", monospace; background: #eaf4ff; color: #004f8a; }
+
+    /* 4. Modern Government */
+    .t4 { font-family: "Public Sans", sans-serif; color: #0f172a; background: #f8fafc; }
+    .t4 .label { background: #e8f0fa; border-color: #bcd0e8; color: #133b63; }
+    .t4 .badge, .t4 .field, .t4 .table, .t4 .row, .t4 .pill, .t4 .btn { border-color: #c8d4e1; }
+    .t4 .head { background: #edf3fa; }
+    .t4 .pill { background: #f0f7ff; color: #174b79; }
+
+    /* 5. Financial Terminal Light */
+    .t5 { font-family: "IBM Plex Sans", sans-serif; color: #111827; background: #fefefe; }
+    .t5 .label { background: #f1f5f9; border-color: #cfd8e3; color: #0f172a; }
+    .t5 .badge, .t5 .field, .t5 .table, .t5 .row, .t5 .pill, .t5 .btn { border-color: #d5dce6; border-radius: 2px; }
+    .t5 .row { font-family: "IBM Plex Mono", monospace; }
+    .t5 .head { background: #eef2f6; font-family: "IBM Plex Sans", sans-serif; }
+    .t5 .pill { color: #0f6a43; background: #ecfdf5; }
+
+    /* 6. Boutique Industrial */
+    .t6 {
+      font-family: "Space Grotesk", sans-serif;
+      color: #1e1b16;
+      background: linear-gradient(160deg, #f9f0df 0%, #f7f4ee 48%, #efe5d2 100%);
+    }
+    .t6 .label { background: #e7d3ad; border-color: #b3884e; color: #4c2c12; }
+    .t6 .badge, .t6 .field, .t6 .table, .t6 .row, .t6 .pill, .t6 .btn { border-color: #c79a5f; }
+    .t6 .row { font-family: "DM Mono", monospace; }
+    .t6 .head { background: #f0dfc2; font-family: "Space Grotesk", sans-serif; }
+    .t6 .pill { background: #3b2a1b; color: #f3e4cb; border-color: #3b2a1b; }
+
+    @media (max-width: 760px) {
+      body { padding: 14px; }
+      .filters { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <section class="header">
+    <h1>Style Preview Board</h1>
+    <p>Each card previews the same Fixed Assets module with a different visual language.</p>
+  </section>
+
+  <section class="grid">
+    <article class="theme t1">
+      <div class="label">Data-Dense Professional 2.0</div>
+      <div class="preview">
+        <div class="topbar"><h3 class="title">Fixed Assets</h3><span class="badge">20 rows</span></div>
+        <div class="filters"><div class="field">Category: Laptops, Machinery</div><div class="field">Value: 100 - 10000</div></div>
+        <div class="table">
+          <div class="row head"><div>Name</div><div>Category</div><div>Value</div></div>
+          <div class="row"><div>Workstation Pro</div><div>IT</div><div>2400.00</div></div>
+          <div class="row"><div>Forklift A2</div><div>Machinery</div><div>9800.00</div></div>
+        </div>
+        <div class="foot"><span class="pill">Operational</span><div class="actions"><button class="btn">Edit</button><button class="btn">Delete</button></div></div>
+      </div>
+    </article>
+
+    <article class="theme t2">
+      <div class="label">Editorial Business</div>
+      <div class="preview">
+        <div class="topbar"><h3 class="title">Fixed Assets Register</h3><span class="badge">Executive View</span></div>
+        <div class="filters"><div class="field">Search: office</div><div class="field">Range: 500 - 5000</div></div>
+        <div class="table">
+          <div class="row head"><div>Asset</div><div>Type</div><div>Value</div></div>
+          <div class="row"><div>Conference Suite</div><div>Office</div><div>4800.00</div></div>
+          <div class="row"><div>Lobby Display</div><div>IT</div><div>1200.00</div></div>
+        </div>
+        <div class="foot"><span class="pill">Narrative Friendly</span><div class="actions"><button class="btn">Review</button><button class="btn">Archive</button></div></div>
+      </div>
+    </article>
+
+    <article class="theme t3">
+      <div class="label">Ops Console</div>
+      <div class="preview">
+        <div class="topbar"><h3 class="title">Asset Console</h3><span class="badge">LIVE</span></div>
+        <div class="filters"><div class="field">CMD: cat=IT</div><div class="field">val>=1000 val<=9000</div></div>
+        <div class="table">
+          <div class="row head"><div>Node</div><div>Class</div><div>Cost</div></div>
+          <div class="row"><div>LT-0142</div><div>Laptop</div><div>1900.00</div></div>
+          <div class="row"><div>SW-0020</div><div>Server</div><div>8600.00</div></div>
+        </div>
+        <div class="foot"><span class="pill">Hot Path</span><div class="actions"><button class="btn">PATCH</button><button class="btn">DROP</button></div></div>
+      </div>
+    </article>
+
+    <article class="theme t4">
+      <div class="label">Modern Government</div>
+      <div class="preview">
+        <div class="topbar"><h3 class="title">Public Asset Ledger</h3><span class="badge">Compliant</span></div>
+        <div class="filters"><div class="field">Department: Transport</div><div class="field">Value band: 1000 - 20000</div></div>
+        <div class="table">
+          <div class="row head"><div>Asset Name</div><div>Group</div><div>Value</div></div>
+          <div class="row"><div>Service Van 12</div><div>Vehicles</div><div>15000.00</div></div>
+          <div class="row"><div>Records Scanner</div><div>Office</div><div>2100.00</div></div>
+        </div>
+        <div class="foot"><span class="pill">Accessible</span><div class="actions"><button class="btn">Inspect</button><button class="btn">Remove</button></div></div>
+      </div>
+    </article>
+
+    <article class="theme t5">
+      <div class="label">Financial Terminal Light</div>
+      <div class="preview">
+        <div class="topbar"><h3 class="title">Capital Assets</h3><span class="badge">Q2 Snapshot</span></div>
+        <div class="filters"><div class="field">Class: Infra</div><div class="field">Cost window: 10k - 100k</div></div>
+        <div class="table">
+          <div class="row head"><div>Instrument</div><div>Sector</div><div>Book Value</div></div>
+          <div class="row"><div>Backup Cluster</div><div>IT</div><div>42500.00</div></div>
+          <div class="row"><div>Tooling Rig</div><div>Ops</div><div>68300.00</div></div>
+        </div>
+        <div class="foot"><span class="pill">Numeric First</span><div class="actions"><button class="btn">Adjust</button><button class="btn">Write-Off</button></div></div>
+      </div>
+    </article>
+
+    <article class="theme t6">
+      <div class="label">Boutique Industrial</div>
+      <div class="preview">
+        <div class="topbar"><h3 class="title">Workshop Assets</h3><span class="badge">Field Team</span></div>
+        <div class="filters"><div class="field">Zone: Plant 3</div><div class="field">Value span: 800 - 12000</div></div>
+        <div class="table">
+          <div class="row head"><div>Unit</div><div>Type</div><div>Worth</div></div>
+          <div class="row"><div>Welding Bay</div><div>Machinery</div><div>11800.00</div></div>
+          <div class="row"><div>Portable Kit</div><div>Tools</div><div>1900.00</div></div>
+        </div>
+        <div class="foot"><span class="pill">Brand-Led</span><div class="actions"><button class="btn">Tune</button><button class="btn">Retire</button></div></div>
+      </div>
+    </article>
+  </section>
+</body>
+</html>

@@ -777,7 +777,7 @@ def render_edit_inventory_session_page(
         "Edit Inventory Session",
         "Update inventory session.",
         content,
-        width="760px",
+        width="1120px",
         message=error,
         message_kind="error" if error else "info",
     )

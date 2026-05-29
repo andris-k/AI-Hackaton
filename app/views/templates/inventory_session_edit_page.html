@@ -186,7 +186,7 @@
     .linked-assets-head,
     .linked-asset-row {
         display: grid;
-        grid-template-columns: minmax(260px, 1fr) 120px 130px 110px;
+        grid-template-columns: minmax(240px, 1fr) 96px 108px 96px 116px 110px;
         gap: 8px;
         align-items: center;
         padding: 8px 10px;
@@ -246,6 +246,25 @@
     .quantity-cell input {
         text-align: right;
     }
+    .expected-cell,
+    .difference-cell {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .expected-qty {
+        font-size: 0.86rem;
+        color: #334155;
+    }
+    .diff-value {
+        font-size: 0.86rem;
+        font-weight: 700;
+    }
+    .diff-zero { color: #334155; }
+    .diff-positive { color: #166534; }
+    .diff-negative { color: #b91c1c; }
+    .linked-asset-row.has-discrepancy {
+        background: #fffbeb;
+    }
     .value-cell {
         text-align: right;
     }
@@ -271,7 +290,7 @@
     }
     .totals-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 8px;
     }
     .totals-item {
@@ -370,6 +389,43 @@
     }
     .sticky-action-bar button {
         width: auto;
+    }
+    .linked-assets-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 10px 0;
+    }
+    .linked-assets-toolbar label {
+        margin: 0;
+        font-size: 0.83rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .undo-toast {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 20;
+        display: none;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+    }
+    .undo-toast p {
+        margin: 0;
+        font-size: 0.84rem;
+    }
+    .undo-toast button {
+        width: auto;
+        padding: 6px 10px;
     }
 
     @media (min-width: 1024px) {
@@ -519,16 +575,24 @@
                             <div class="linked-assets-wrap">
                                 <div class="linked-assets-head">
                                     <div>Search and Asset</div>
-                                    <div>Quantity</div>
+                                    <div>Expected</div>
+                                    <div>Counted</div>
+                                    <div>Difference</div>
                                     <div>Line Value</div>
                                     <div>Action</div>
+                                </div>
+                                <div class="linked-assets-toolbar">
+                                    <p class="help-text">Tip: Press Enter to move to next field. Press Ctrl+Enter to add a row.</p>
+                                    <label>
+                                        <input type="checkbox" id="show-discrepancies-only" />
+                                        Show only discrepancies
+                                    </label>
                                 </div>
                                 <p id="linked-assets-empty" class="empty-linked-assets" {% if linked_asset_rows %}style="display:none;"{% endif %}>No linked assets yet. Use + Add asset to start.</p>
                                 <div class="linked-assets-grid" id="linked-assets-grid">
                                     {% for row in linked_asset_rows %}
                                     <div class="linked-asset-row">
                                         <div class="asset-cell">
-                                            <input type="text" class="asset-search" placeholder="Search by asset name or category" {% if is_read_only %}disabled{% endif %} />
                                             <select name="fixed_asset_ids" {% if is_read_only %}disabled{% endif %}>
                                                 <option value="">-- Select fixed asset --</option>
                                                 {% for asset in fixed_assets %}
@@ -537,11 +601,18 @@
                                                 </option>
                                                 {% endfor %}
                                             </select>
+                                            <input type="text" class="asset-search" placeholder="Search by asset name or category" {% if is_read_only %}disabled{% endif %} />
                                             <p class="help-text">Asset can be selected only once.</p>
                                             <p class="duplicate-warning">This asset is already selected in another row.</p>
                                         </div>
+                                        <div class="expected-cell">
+                                            <span class="expected-qty" data-expected="{{ row.quantity }}">{{ row.quantity }}</span>
+                                        </div>
                                         <div class="quantity-cell">
                                             <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
+                                        </div>
+                                        <div class="difference-cell">
+                                            <span class="diff-value diff-zero">0</span>
                                         </div>
                                         <div class="value-cell">
                                             <span class="line-value">0.00</span>
@@ -569,6 +640,10 @@
                                         <article class="totals-item">
                                             <p>Total Initial Value</p>
                                             <strong id="initial-value-total">0.00</strong>
+                                        </article>
+                                        <article class="totals-item">
+                                            <p>Rows with discrepancy</p>
+                                            <strong id="discrepancy-rows-total">0</strong>
                                         </article>
                                     </div>
                                 </div>
@@ -603,21 +678,32 @@
     </section>
 </div>
 
+<div id="undo-toast" class="undo-toast" role="status" aria-live="polite">
+    <p>Linked asset row removed.</p>
+    <button type="button" id="undo-remove-row" class="workflow-neutral">Undo</button>
+</div>
+
 <template id="linked-asset-row-template">
     <div class="linked-asset-row">
         <div class="asset-cell">
-            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
             <select name="fixed_asset_ids">
                 <option value="">-- Select fixed asset --</option>
                 {% for asset in fixed_assets %}
                 <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>
+            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
             <p class="help-text">Asset can be selected only once.</p>
             <p class="duplicate-warning">This asset is already selected in another row.</p>
         </div>
+        <div class="expected-cell">
+            <span class="expected-qty" data-expected="0">0</span>
+        </div>
         <div class="quantity-cell">
             <input name="fixed_asset_quantities" type="number" min="1" step="1" value="1" />
+        </div>
+        <div class="difference-cell">
+            <span class="diff-value diff-positive">+1</span>
         </div>
         <div class="value-cell">
             <span class="line-value">0.00</span>
@@ -644,10 +730,14 @@
         const clearButton = document.getElementById("clear-linked-assets");
         const template = document.getElementById("linked-asset-row-template");
         const emptyState = document.getElementById("linked-assets-empty");
+        const discrepanciesOnlyToggle = document.getElementById("show-discrepancies-only");
+        const undoToast = document.getElementById("undo-toast");
+        const undoRemoveButton = document.getElementById("undo-remove-row");
 
         const distinctAssetsTotal = document.getElementById("distinct-assets-total");
         const quantityTotal = document.getElementById("quantity-total");
         const initialValueTotal = document.getElementById("initial-value-total");
+        const discrepancyRowsTotal = document.getElementById("discrepancy-rows-total");
 
         const assetValueById = {
             {% for asset in fixed_assets %}
@@ -657,6 +747,8 @@
 
         let isDirty = false;
         let isSubmitting = false;
+        let undoTimer = null;
+        let lastRemovedRow = null;
 
         function formatMoney(value) {
             return Number(value || 0).toFixed(2);
@@ -675,9 +767,31 @@
             }
         }
 
+        function parseExpectedQuantity(row) {
+            const expected = row.querySelector('.expected-qty');
+            if (!expected) return 0;
+            return Math.max(0, Number(expected.dataset.expected || expected.textContent || 0));
+        }
+
         function toggleEmptyState() {
             if (!emptyState || !grid) return;
-            emptyState.style.display = grid.children.length ? "none" : "block";
+            const visibleRows = Array.from(grid.querySelectorAll('.linked-asset-row')).filter((row) => row.style.display !== 'none');
+            emptyState.style.display = visibleRows.length ? "none" : "block";
+            if (!visibleRows.length && discrepanciesOnlyToggle && discrepanciesOnlyToggle.checked) {
+                emptyState.textContent = "No discrepancy rows. Disable filter to view all linked assets.";
+            } else {
+                emptyState.textContent = "No linked assets yet. Use + Add asset to start.";
+            }
+        }
+
+        function applyDiscrepancyFilter() {
+            if (!grid) return;
+            const onlyDiscrepancies = !!(discrepanciesOnlyToggle && discrepanciesOnlyToggle.checked);
+            grid.querySelectorAll('.linked-asset-row').forEach((row) => {
+                const hasDiscrepancy = row.classList.contains('has-discrepancy');
+                row.style.display = onlyDiscrepancies && !hasDiscrepancy ? 'none' : '';
+            });
+            toggleEmptyState();
         }
 
         function selectedAssetIdsExcluding(currentSelect) {
@@ -722,20 +836,40 @@
             const chosenAssetIds = new Set();
             let qtySum = 0;
             let valueSum = 0;
+            let discrepancyRows = 0;
 
             rows.forEach((row) => {
                 const select = row.querySelector('select[name="fixed_asset_ids"]');
                 const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
                 const lineValue = row.querySelector('.line-value');
+                const diffValue = row.querySelector('.diff-value');
                 if (!select || !qtyInput) return;
 
                 const assetId = (select.value || "").trim();
                 const quantity = Math.max(0, Number(qtyInput.value || 0));
+                const expectedQty = parseExpectedQuantity(row);
+                const diff = quantity - expectedQty;
                 const unitValue = Number(assetValueById[assetId] || 0);
                 const rowValue = assetId && quantity ? (unitValue * quantity) : 0;
 
                 if (lineValue) {
                     lineValue.textContent = formatMoney(rowValue);
+                }
+                if (diffValue) {
+                    const signDiff = diff > 0 ? `+${diff}` : `${diff}`;
+                    diffValue.textContent = signDiff;
+                    diffValue.classList.remove('diff-zero', 'diff-positive', 'diff-negative');
+                    if (diff > 0) {
+                        diffValue.classList.add('diff-positive');
+                    } else if (diff < 0) {
+                        diffValue.classList.add('diff-negative');
+                    } else {
+                        diffValue.classList.add('diff-zero');
+                    }
+                }
+                row.classList.toggle('has-discrepancy', diff !== 0);
+                if (diff !== 0) {
+                    discrepancyRows += 1;
                 }
                 if (!assetId || !quantity) return;
                 chosenAssetIds.add(assetId);
@@ -746,6 +880,8 @@
             if (distinctAssetsTotal) distinctAssetsTotal.textContent = String(chosenAssetIds.size);
             if (quantityTotal) quantityTotal.textContent = String(qtySum);
             if (initialValueTotal) initialValueTotal.textContent = formatMoney(valueSum);
+            if (discrepancyRowsTotal) discrepancyRowsTotal.textContent = String(discrepancyRows);
+            applyDiscrepancyFilter();
         }
 
         function wireSearch(row) {
@@ -782,7 +918,124 @@
                     markDirty();
                 });
             }
+
+            row.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter') return;
+                if (event.ctrlKey) {
+                    event.preventDefault();
+                    if (!addButton || addButton.disabled) return;
+                    const createdRow = appendLinkedAssetRow();
+                    const focusTarget = createdRow ? createdRow.querySelector('.asset-search') : null;
+                    if (focusTarget) focusTarget.focus();
+                    return;
+                }
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                if (target.tagName === 'TEXTAREA') return;
+                event.preventDefault();
+
+                const focusablesInRow = Array.from(
+                    row.querySelectorAll('input, select, button.remove-linked-asset')
+                ).filter((el) => !el.disabled && el.offsetParent !== null);
+                if (!focusablesInRow.length) return;
+
+                const currentIndex = focusablesInRow.indexOf(target);
+                const nextInRow = currentIndex >= 0 ? focusablesInRow[currentIndex + 1] : null;
+                if (nextInRow) {
+                    nextInRow.focus();
+                    return;
+                }
+
+                const nextRow = row.nextElementSibling;
+                if (nextRow && nextRow.classList.contains('linked-asset-row')) {
+                    const nextRowFirst = nextRow.querySelector('input, select, button.remove-linked-asset');
+                    if (nextRowFirst && !nextRowFirst.disabled) {
+                        nextRowFirst.focus();
+                        return;
+                    }
+                }
+
+                if (addButton && !addButton.disabled) {
+                    const createdRow = appendLinkedAssetRow();
+                    const focusTarget = createdRow ? createdRow.querySelector('.asset-search') : null;
+                    if (focusTarget) focusTarget.focus();
+                }
+            });
             wireSearch(row);
+        }
+
+        function appendLinkedAssetRow() {
+            if (!template || !grid) return null;
+            const node = template.content.cloneNode(true);
+            grid.appendChild(node);
+            const row = grid.lastElementChild;
+            if (row) {
+                wireRowEvents(row);
+            }
+            toggleEmptyState();
+            updateDuplicateProtection();
+            updateTotals();
+            markDirty();
+            return row;
+        }
+
+        function hideUndoToast() {
+            if (!undoToast) return;
+            undoToast.style.display = 'none';
+            if (undoTimer) {
+                clearTimeout(undoTimer);
+                undoTimer = null;
+            }
+        }
+
+        function showUndoToast() {
+            if (!undoToast) return;
+            undoToast.style.display = 'inline-flex';
+            if (undoTimer) {
+                clearTimeout(undoTimer);
+            }
+            undoTimer = setTimeout(function () {
+                hideUndoToast();
+                lastRemovedRow = null;
+            }, 6000);
+        }
+
+        function removeLinkedAssetRow(row) {
+            if (!grid || !row) return;
+            lastRemovedRow = {
+                html: row.outerHTML,
+                index: Array.from(grid.children).indexOf(row),
+            };
+            row.remove();
+            showUndoToast();
+            toggleEmptyState();
+            updateDuplicateProtection();
+            updateTotals();
+            markDirty();
+        }
+
+        function restoreLastRemovedRow() {
+            if (!grid || !lastRemovedRow) return;
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = lastRemovedRow.html;
+            const restoredRow = wrapper.firstElementChild;
+            if (!restoredRow) return;
+
+            const rowIndex = lastRemovedRow.index;
+            const currentRows = Array.from(grid.children);
+            if (rowIndex >= 0 && rowIndex < currentRows.length) {
+                grid.insertBefore(restoredRow, currentRows[rowIndex]);
+            } else {
+                grid.appendChild(restoredRow);
+            }
+
+            wireRowEvents(restoredRow);
+            hideUndoToast();
+            lastRemovedRow = null;
+            toggleEmptyState();
+            updateDuplicateProtection();
+            updateTotals();
+            markDirty();
         }
 
         function wireAllRows() {
@@ -862,16 +1115,9 @@
 
         if (addButton && template && grid) {
             addButton.addEventListener("click", function () {
-                const node = template.content.cloneNode(true);
-                grid.appendChild(node);
-                const row = grid.lastElementChild;
-                if (row) {
-                    wireRowEvents(row);
-                }
-                toggleEmptyState();
-                updateDuplicateProtection();
-                updateTotals();
-                markDirty();
+                const row = appendLinkedAssetRow();
+                const focusTarget = row ? row.querySelector('.asset-search') : null;
+                if (focusTarget) focusTarget.focus();
             });
         }
 
@@ -884,7 +1130,15 @@
 
                 const row = button.closest(".linked-asset-row");
                 if (!row) return;
-                row.remove();
+                removeLinkedAssetRow(row);
+            });
+        }
+
+        if (clearButton && grid) {
+            clearButton.addEventListener("click", function () {
+                grid.innerHTML = "";
+                hideUndoToast();
+                lastRemovedRow = null;
                 toggleEmptyState();
                 updateDuplicateProtection();
                 updateTotals();
@@ -892,13 +1146,15 @@
             });
         }
 
-        if (clearButton && grid) {
-            clearButton.addEventListener("click", function () {
-                grid.innerHTML = "";
-                toggleEmptyState();
-                updateDuplicateProtection();
-                updateTotals();
-                markDirty();
+        if (discrepanciesOnlyToggle) {
+            discrepanciesOnlyToggle.addEventListener('change', function () {
+                applyDiscrepancyFilter();
+            });
+        }
+
+        if (undoRemoveButton) {
+            undoRemoveButton.addEventListener('click', function () {
+                restoreLastRemovedRow();
             });
         }
 

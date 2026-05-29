@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from html import escape
+import os
 
 from fastapi import APIRouter, Cookie, Form, Query
 from fastapi.responses import HTMLResponse
@@ -23,12 +24,33 @@ SESSION_COOKIE_NAME = "session_token"
 SESSION_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
+def _is_production() -> bool:
+    env = os.getenv("APP_ENV", "").strip().lower()
+    return env in {"prod", "production"}
+
+
+def _cookie_secure() -> bool:
+    # Explicit override wins; otherwise default to secure cookies only in production.
+    override = os.getenv("SESSION_COOKIE_SECURE", "").strip().lower()
+    if override in {"1", "true", "yes", "on"}:
+        return True
+    if override in {"0", "false", "no", "off"}:
+        return False
+    return _is_production()
+
+
+def _cookie_samesite() -> str:
+    # Keep local workflow unchanged in development but tighten default in production.
+    return "strict" if _is_production() else "lax"
+
+
 def set_session_cookie(response: HTMLResponse, session_token: str) -> HTMLResponse:
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_token,
         httponly=True,
-        samesite="lax",
+        secure=_cookie_secure(),
+        samesite=_cookie_samesite(),
         max_age=SESSION_MAX_AGE_SECONDS,
     )
     return response

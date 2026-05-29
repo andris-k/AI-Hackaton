@@ -11,11 +11,11 @@ from app.services import auth_service
 
 app = FastAPI(title="AI Hackaton")
 _UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.on_event("startup")
 def startup() -> None:
-    _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     auth_service.initialize_defaults()
 
 

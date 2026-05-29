@@ -117,10 +117,6 @@
         width: 290px;
     }
 
-    .col-image {
-        width: 110px;
-    }
-
     .col-value {
         width: 120px;
         text-align: right;
@@ -150,20 +146,6 @@
         width: auto;
         min-width: 88px;
         padding: 7px 10px;
-    }
-
-    .asset-thumb {
-        width: 72px;
-        height: 54px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid var(--border, #d6cfc7);
-        background: #f8f4ee;
-    }
-
-    .asset-thumb-placeholder {
-        color: var(--muted, #6b6055);
-        font-size: 0.8rem;
     }
 
     tr:last-child td { border-bottom: 0; }
@@ -309,7 +291,6 @@
                     <thead>
                         <tr>
                             <th class="col-id">Id</th>
-                            <th class="col-image">Image</th>
                             <th>Name</th>
                             <th>Category</th>
                             <th class="col-value">InitialValue</th>
@@ -322,13 +303,6 @@
                         {% for asset in rows %}
                         <tr>
                             <td class="col-id"><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.id }}</a></td>
-                            <td class="col-image">
-                                {% if asset.image_url %}
-                                <a href="{{ asset.image_url }}" target="_blank" rel="noopener"><img class="asset-thumb" src="{{ asset.image_url }}" alt="{{ asset.name }} image" /></a>
-                                {% else %}
-                                <span class="asset-thumb-placeholder">No image</span>
-                                {% endif %}
-                            </td>
                             <td><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a></td>
                             <td>{{ asset.category }}</td>
                             <td class="col-value">{{ asset.initial_value }}</td>

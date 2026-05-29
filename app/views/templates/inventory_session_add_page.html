@@ -1,0 +1,50 @@
+<style>
+    .session-form {
+        display: grid;
+        gap: 12px;
+    }
+    .session-form-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    @media (max-width: 760px) {
+        .session-form-row { grid-template-columns: 1fr; }
+    }
+</style>
+<div class="stack">
+    <section class="panel">
+        <h2>New Inventory Session</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+
+        <form method="post" action="/inventory-sessions/add" class="session-form">
+            <p style="color: var(--muted, #6b6055); font-size: 0.92em;">
+                New sessions are created with status <strong>New</strong>.
+            </p>
+            <div class="session-form-row">
+                <div>
+                    <label for="date_from">Date From</label>
+                    <input id="date_from" name="date_from" type="date"
+                           value="{{ prefill.date_from if prefill else '' }}" required />
+                </div>
+                <div>
+                    <label for="date_to">Date To</label>
+                    <input id="date_to" name="date_to" type="date"
+                           value="{{ prefill.date_to if prefill else '' }}" required />
+                </div>
+            </div>
+            <div>
+                <label for="responsible_person">Responsible Person</label>
+                <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
+                       value="{{ prefill.responsible_person if prefill else '' }}" required />
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button type="submit">Create</button>
+                <a href="/inventory-sessions"><button type="button">Cancel</button></a>
+            </div>
+        </form>
+    </section>
+</div>

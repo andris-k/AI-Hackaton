@@ -653,3 +653,94 @@ def render_edit_fixed_asset_category_page(
         message=message,
         message_kind=message_kind,
     )
+
+
+# ---------------------------------------------------------------------------
+# Inventory Sessions
+# ---------------------------------------------------------------------------
+
+def render_inventory_sessions_page(
+    current_email: str,
+    sessions: list[object],
+    statuses: list[str],
+    filters: dict[str, str],
+) -> HTMLResponse:
+    content = _render_template(
+        "inventory_sessions_page.html",
+        current_email=current_email,
+        sessions=sessions,
+        statuses=statuses,
+        filters=filters,
+    )
+    return render_page(
+        "AI Hackaton Inventory Sessions",
+        "Inventory Sessions",
+        "Manage inventory sessions.",
+        content,
+        width="1100px",
+    )
+
+
+def render_add_inventory_session_page(
+    current_email: str,
+    *,
+    error: str | None = None,
+    prefill: dict[str, str] | None = None,
+) -> HTMLResponse:
+    content = _render_template(
+        "inventory_session_add_page.html",
+        current_email=current_email,
+        error=error,
+        prefill=prefill,
+    )
+    return render_page(
+        "AI Hackaton New Inventory Session",
+        "New Inventory Session",
+        "Create a new inventory session.",
+        content,
+        width="760px",
+    )
+
+
+def render_inventory_session_details_page(
+    current_email: str,
+    inv_session: object,
+) -> HTMLResponse:
+    content = _render_template(
+        "inventory_session_details_page.html",
+        current_email=current_email,
+        inv_session=inv_session,
+    )
+    return render_page(
+        "AI Hackaton Inventory Session",
+        "Inventory Session",
+        "View inventory session details.",
+        content,
+        width="760px",
+    )
+
+
+def render_edit_inventory_session_page(
+    current_email: str,
+    inv_session: object,
+    statuses: list[str],
+    *,
+    error: str | None = None,
+    prefill: dict[str, str] | None = None,
+) -> HTMLResponse:
+    content = _render_template(
+        "inventory_session_edit_page.html",
+        current_email=current_email,
+        inv_session=inv_session,
+        statuses=statuses,
+        error=error,
+        prefill=prefill,
+    )
+    return render_page(
+        "AI Hackaton Edit Inventory Session",
+        "Edit Inventory Session",
+        "Update inventory session.",
+        content,
+        width="760px",
+    )
+

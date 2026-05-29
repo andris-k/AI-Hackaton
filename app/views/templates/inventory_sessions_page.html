@@ -1,0 +1,109 @@
+<style>
+    .filter-form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 18px;
+        align-items: end;
+    }
+    @media (max-width: 760px) {
+        .filter-form { grid-template-columns: 1fr; }
+    }
+    .filter-form .filter-actions {
+        display: flex;
+        gap: 8px;
+        grid-column: 1 / -1;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    thead th {
+        background: var(--table-head-bg, #f5eee2);
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid var(--border, #d6cfc7);
+    }
+    tbody tr:nth-child(even) { background: var(--table-row-alt, #fcfaf6); }
+    tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border, #d6cfc7); vertical-align: top; }
+    .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.85em;
+        font-weight: 600;
+        background: var(--border, #d6cfc7);
+        color: var(--fg, #1a1a18);
+    }
+    .badge-new       { background: #cfe2ff; color: #0a3678; }
+    .badge-active    { background: #d1fae5; color: #064e3b; }
+    .badge-completed { background: #e0e7ff; color: #3730a3; }
+    .badge-cancelled { background: #fee2e2; color: #7f1d1d; }
+</style>
+<div class="stack">
+    <section class="panel">
+        <h2>Inventory Sessions</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+
+        <form method="get" action="/inventory-sessions" class="filter-form">
+            <div>
+                <label for="status">Status</label>
+                <select id="status" name="status">
+                    <option value="">— All —</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="responsible_person">Responsible person</label>
+                <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
+                       value="{{ filters.responsible_person }}" placeholder="Search…" />
+            </div>
+            <div>
+                <label for="date_from">Date From (≥)</label>
+                <input id="date_from" name="date_from" type="date" value="{{ filters.date_from }}" />
+            </div>
+            <div>
+                <label for="date_to">Date To (≤)</label>
+                <input id="date_to" name="date_to" type="date" value="{{ filters.date_to }}" />
+            </div>
+            <div class="filter-actions">
+                <button type="submit">Filter</button>
+                <a href="/inventory-sessions"><button type="button">Clear</button></a>
+            </div>
+        </form>
+
+        <a href="/inventory-sessions/add"><button>+ New Session</button></a>
+        <a href="/dashboard"><button type="button">← Dashboard</button></a>
+
+        {% if sessions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date From</th>
+                    <th>Date To</th>
+                    <th>Status</th>
+                    <th>Responsible Person</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td>{{ s.date_from }}</td>
+                    <td>{{ s.date_to }}</td>
+                    <td>
+                        <span class="badge badge-{{ s.status | lower }}">{{ s.status }}</span>
+                    </td>
+                    <td>{{ s.responsible_person }}</td>
+                    <td>
+                        <a href="/inventory-sessions/id/{{ s.id }}">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No inventory sessions found.</p>
+        {% endif %}
+    </section>
+</div>

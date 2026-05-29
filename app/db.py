@@ -119,6 +119,24 @@ def initialize_database() -> None:
             "CREATE INDEX IF NOT EXISTS idx_fixed_assets_category_id ON fixed_assets(category_id)"
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inventory_sessions (
+                id TEXT PRIMARY KEY,
+                date_from TEXT NOT NULL,
+                date_to TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('New', 'Active', 'Completed', 'Cancelled')),
+                responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inventory_sessions_status ON inventory_sessions(status)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inventory_sessions_date_from ON inventory_sessions(date_from)"
+        )
+
         distinct_categories = connection.execute(
             """
             SELECT DISTINCT category
@@ -702,3 +720,115 @@ def list_fixed_assets(
             paged_params,
         )
         return cursor.fetchall()
+
+
+# ---------------------------------------------------------------------------
+# InventorySession CRUD
+# ---------------------------------------------------------------------------
+
+INVENTORY_SESSION_STATUSES = ("New", "Active", "Completed", "Cancelled")
+
+_INVENTORY_SESSION_SELECT = """
+    SELECT id, date_from, date_to, status, responsible_person
+    FROM inventory_sessions
+"""
+
+
+def list_inventory_sessions(
+    status: str | None = None,
+    responsible_person: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[sqlite3.Row]:
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if responsible_person:
+        conditions.append("lower(responsible_person) LIKE lower(?)")
+        params.append(f"%{responsible_person}%")
+    if date_from:
+        conditions.append("date_from >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("date_to <= ?")
+        params.append(date_to)
+
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db_session() as connection:
+        cursor = connection.execute(
+            f"{_INVENTORY_SESSION_SELECT}{where} ORDER BY date_from DESC, date_to DESC",
+            params,
+        )
+        return cursor.fetchall()
+
+
+def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
+    with db_session() as connection:
+        cursor = connection.execute(
+            f"{_INVENTORY_SESSION_SELECT} WHERE id = ?",
+            (session_id,),
+        )
+        return cursor.fetchone()
+
+
+def create_inventory_session(
+    date_from: str,
+    date_to: str,
+    responsible_person: str,
+) -> sqlite3.Row:
+    session_id = str(uuid.uuid4())
+    with db_session() as connection:
+        connection.execute(
+            """
+            INSERT INTO inventory_sessions (id, date_from, date_to, status, responsible_person)
+            VALUES (?, ?, ?, 'New', ?)
+            """,
+            (session_id, date_from, date_to, responsible_person.strip()),
+        )
+        cursor = connection.execute(
+            f"{_INVENTORY_SESSION_SELECT} WHERE id = ?",
+            (session_id,),
+        )
+        return cursor.fetchone()
+
+
+def update_inventory_session(
+    session_id: str,
+    date_from: str,
+    date_to: str,
+    status: str,
+    responsible_person: str,
+) -> sqlite3.Row | None:
+    if status not in INVENTORY_SESSION_STATUSES:
+        raise ValueError(f"Invalid status: {status!r}")
+    with db_session() as connection:
+        existing = connection.execute(
+            "SELECT id FROM inventory_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if existing is None:
+            return None
+        connection.execute(
+            """
+            UPDATE inventory_sessions
+            SET date_from = ?, date_to = ?, status = ?, responsible_person = ?
+            WHERE id = ?
+            """,
+            (date_from, date_to, status, responsible_person.strip(), session_id),
+        )
+        cursor = connection.execute(
+            f"{_INVENTORY_SESSION_SELECT} WHERE id = ?",
+            (session_id,),
+        )
+        return cursor.fetchone()
+
+
+def delete_inventory_session(session_id: str) -> bool:
+    with db_session() as connection:
+        cursor = connection.execute(
+            "DELETE FROM inventory_sessions WHERE id = ?",
+            (session_id,),
+        )
+        return cursor.rowcount > 0

@@ -136,6 +136,34 @@ def initialize_database() -> None:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_inventory_sessions_date_from ON inventory_sessions(date_from)"
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inventory_session_fixed_assets (
+                inventory_session_id TEXT NOT NULL,
+                fixed_asset_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+                PRIMARY KEY (inventory_session_id, fixed_asset_id),
+                FOREIGN KEY (inventory_session_id) REFERENCES inventory_sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY (fixed_asset_id) REFERENCES fixed_assets(id) ON DELETE CASCADE
+            )
+            """
+        )
+        link_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(inventory_session_fixed_assets)"
+            ).fetchall()
+        }
+        if "quantity" not in link_columns:
+            connection.execute(
+                "ALTER TABLE inventory_session_fixed_assets ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1"
+            )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inventory_session_fixed_assets_session_id ON inventory_session_fixed_assets(inventory_session_id)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_inventory_session_fixed_assets_asset_id ON inventory_session_fixed_assets(fixed_asset_id)"
+        )
 
         distinct_categories = connection.execute(
             """
@@ -734,6 +762,59 @@ _INVENTORY_SESSION_SELECT = """
 """
 
 
+def _set_inventory_session_fixed_assets(
+    connection: sqlite3.Connection,
+    session_id: str,
+    linked_assets: Sequence[tuple[str, int]],
+) -> None:
+    normalized_assets: list[tuple[str, int]] = []
+    aggregated_quantities: dict[str, int] = {}
+    for fixed_asset_id, quantity in linked_assets:
+        asset_id = fixed_asset_id.strip()
+        if not asset_id:
+            continue
+        if quantity <= 0:
+            continue
+        aggregated_quantities[asset_id] = aggregated_quantities.get(asset_id, 0) + quantity
+
+    for asset_id, quantity in aggregated_quantities.items():
+        normalized_assets.append((asset_id, quantity))
+
+    valid_assets: list[tuple[str, int]] = []
+    if normalized_assets:
+        candidate_ids = [asset_id for asset_id, _ in normalized_assets]
+        placeholders = ",".join("?" for _ in candidate_ids)
+        cursor = connection.execute(
+            f"SELECT id FROM fixed_assets WHERE id IN ({placeholders})",
+            candidate_ids,
+        )
+        valid_ids = {str(row["id"]) for row in cursor.fetchall()}
+        valid_assets = [
+            (asset_id, quantity)
+            for asset_id, quantity in normalized_assets
+            if asset_id in valid_ids
+        ]
+
+    connection.execute(
+        "DELETE FROM inventory_session_fixed_assets WHERE inventory_session_id = ?",
+        (session_id,),
+    )
+    if not valid_assets:
+        return
+
+    rows = [
+        (session_id, asset_id, quantity)
+        for asset_id, quantity in valid_assets
+    ]
+    connection.executemany(
+        """
+        INSERT INTO inventory_session_fixed_assets (inventory_session_id, fixed_asset_id, quantity)
+        VALUES (?, ?, ?)
+        """,
+        rows,
+    )
+
+
 def list_inventory_sessions(
     status: str | None = None,
     responsible_person: str | None = None,
@@ -759,7 +840,27 @@ def list_inventory_sessions(
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
     with db_session() as connection:
         cursor = connection.execute(
-            f"{_INVENTORY_SESSION_SELECT}{where} ORDER BY date_from DESC, date_to DESC",
+            f"""
+            SELECT
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person,
+                COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
+                COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
+            FROM inventory_sessions
+            LEFT JOIN inventory_session_fixed_assets
+                ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
+            {where}
+            GROUP BY
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person
+            ORDER BY inventory_sessions.date_from DESC, inventory_sessions.date_to DESC
+            """,
             params,
         )
         return cursor.fetchall()
@@ -768,16 +869,91 @@ def list_inventory_sessions(
 def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
     with db_session() as connection:
         cursor = connection.execute(
-            f"{_INVENTORY_SESSION_SELECT} WHERE id = ?",
+            """
+            SELECT
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person,
+                COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
+                COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
+            FROM inventory_sessions
+            LEFT JOIN inventory_session_fixed_assets
+                ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
+            WHERE inventory_sessions.id = ?
+            GROUP BY
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person
+            """,
             (session_id,),
         )
         return cursor.fetchone()
+
+
+def list_fixed_assets_for_inventory_session(session_id: str) -> list[sqlite3.Row]:
+    with db_session() as connection:
+        cursor = connection.execute(
+            """
+            SELECT
+                fixed_assets.id,
+                fixed_assets.name,
+                COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.initial_value,
+                fixed_assets.responsible_person,
+                fixed_assets.registration_date,
+                fixed_assets.category_id,
+                inventory_session_fixed_assets.quantity
+            FROM inventory_session_fixed_assets
+            JOIN fixed_assets ON fixed_assets.id = inventory_session_fixed_assets.fixed_asset_id
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            WHERE inventory_session_fixed_assets.inventory_session_id = ?
+            ORDER BY fixed_assets.name ASC
+            """,
+            (session_id,),
+        )
+        return cursor.fetchall()
+
+
+def list_linked_fixed_asset_ids_for_inventory_session(session_id: str) -> list[str]:
+    with db_session() as connection:
+        cursor = connection.execute(
+            """
+            SELECT fixed_asset_id
+            FROM inventory_session_fixed_assets
+            WHERE inventory_session_id = ?
+            ORDER BY fixed_asset_id
+            """,
+            (session_id,),
+        )
+        return [str(row["fixed_asset_id"]) for row in cursor.fetchall()]
+
+
+def list_linked_fixed_assets_for_inventory_session(session_id: str) -> list[tuple[str, int]]:
+    with db_session() as connection:
+        cursor = connection.execute(
+            """
+            SELECT fixed_asset_id, quantity
+            FROM inventory_session_fixed_assets
+            WHERE inventory_session_id = ?
+            ORDER BY fixed_asset_id
+            """,
+            (session_id,),
+        )
+        return [
+            (str(row["fixed_asset_id"]), int(row["quantity"]))
+            for row in cursor.fetchall()
+        ]
 
 
 def create_inventory_session(
     date_from: str,
     date_to: str,
     responsible_person: str,
+    linked_assets: Sequence[tuple[str, int]] = (),
 ) -> sqlite3.Row:
     session_id = str(uuid.uuid4())
     with db_session() as connection:
@@ -788,8 +964,28 @@ def create_inventory_session(
             """,
             (session_id, date_from, date_to, responsible_person.strip()),
         )
+        _set_inventory_session_fixed_assets(connection, session_id, linked_assets)
         cursor = connection.execute(
-            f"{_INVENTORY_SESSION_SELECT} WHERE id = ?",
+            """
+            SELECT
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person,
+                COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
+                COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
+            FROM inventory_sessions
+            LEFT JOIN inventory_session_fixed_assets
+                ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
+            WHERE inventory_sessions.id = ?
+            GROUP BY
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person
+            """,
             (session_id,),
         )
         return cursor.fetchone()
@@ -801,6 +997,7 @@ def update_inventory_session(
     date_to: str,
     status: str,
     responsible_person: str,
+    linked_assets: Sequence[tuple[str, int]] = (),
 ) -> sqlite3.Row | None:
     if status not in INVENTORY_SESSION_STATUSES:
         raise ValueError(f"Invalid status: {status!r}")
@@ -818,8 +1015,28 @@ def update_inventory_session(
             """,
             (date_from, date_to, status, responsible_person.strip(), session_id),
         )
+        _set_inventory_session_fixed_assets(connection, session_id, linked_assets)
         cursor = connection.execute(
-            f"{_INVENTORY_SESSION_SELECT} WHERE id = ?",
+            """
+            SELECT
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person,
+                COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
+                COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
+            FROM inventory_sessions
+            LEFT JOIN inventory_session_fixed_assets
+                ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
+            WHERE inventory_sessions.id = ?
+            GROUP BY
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.status,
+                inventory_sessions.responsible_person
+            """,
             (session_id,),
         )
         return cursor.fetchone()

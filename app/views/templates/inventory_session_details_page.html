@@ -38,17 +38,53 @@
 
             <dt>Responsible</dt>
             <dd>{{ inv_session.responsible_person }}</dd>
+
+            <dt>Linked Assets</dt>
+            <dd>{{ inv_session.linked_assets_count }}</dd>
+
+            <dt>Total Quantity</dt>
+            <dd>{{ inv_session.linked_assets_quantity_total }}</dd>
         </dl>
 
+        <section style="margin: 10px 0 18px;">
+            <h3 style="margin: 0 0 8px; font-size: 1rem;">Fixed Assets in Session</h3>
+            {% if linked_assets %}
+            <ul style="margin: 0; padding-left: 18px;">
+                {% for asset in linked_assets %}
+                <li>
+                    <a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a>
+                    <span style="color: var(--muted, #6b6055);">({{ asset.category }})</span>
+                    <span style="color: var(--muted, #6b6055);">x {{ asset.quantity }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="margin: 0; color: var(--muted, #6b6055);">No fixed assets linked to this session.</p>
+            {% endif %}
+        </section>
+
+        {% if inv_session.status == "Completed" %}
+        <p style="margin: 0 0 8px; color: var(--muted, #6b6055);">This session is completed and read-only.</p>
+        {% endif %}
+
         <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+            {% if inv_session.status == "New" %}
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/start" style="display:inline;">
+                <button type="submit">Start</button>
+            </form>
+            {% endif %}
+            {% if inv_session.status != "Completed" %}
             <a href="/inventory-sessions/id/{{ inv_session.id }}/edit">
                 <button>Edit</button>
             </a>
+            {% endif %}
             <a href="/inventory-sessions"><button type="button">Back to list</button></a>
+            {% if inv_session.status != "Completed" %}
             <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/delete" style="display:inline;"
                   onsubmit="return confirm('Delete this inventory session? This cannot be undone.')">
                 <button type="submit" style="background: #b91c1c; color: #fff; border-color: #b91c1c;">Delete</button>
             </form>
+            {% endif %}
         </div>
     </section>
 </div>

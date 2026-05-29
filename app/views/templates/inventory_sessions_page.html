@@ -83,6 +83,8 @@
                     <th>Date To</th>
                     <th>Status</th>
                     <th>Responsible Person</th>
+                    <th>Linked Assets</th>
+                    <th>Total Quantity</th>
                     <th></th>
                 </tr>
             </thead>
@@ -95,6 +97,8 @@
                         <span class="badge badge-{{ s.status | lower }}">{{ s.status }}</span>
                     </td>
                     <td>{{ s.responsible_person }}</td>
+                    <td>{{ s.linked_assets_count }}</td>
+                    <td>{{ s.linked_assets_quantity_total }}</td>
                     <td>
                         <a href="/inventory-sessions/id/{{ s.id }}">View</a>
                     </td>

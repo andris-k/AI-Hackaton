@@ -683,6 +683,8 @@ def render_inventory_sessions_page(
 
 def render_add_inventory_session_page(
     current_email: str,
+    fixed_assets: list[object],
+    linked_asset_rows: list[dict[str, str]],
     *,
     error: str | None = None,
     prefill: dict[str, str] | None = None,
@@ -692,6 +694,8 @@ def render_add_inventory_session_page(
         current_email=current_email,
         error=error,
         prefill=prefill,
+        fixed_assets=fixed_assets,
+        linked_asset_rows=linked_asset_rows,
     )
     return render_page(
         "AI Hackaton New Inventory Session",
@@ -705,11 +709,13 @@ def render_add_inventory_session_page(
 def render_inventory_session_details_page(
     current_email: str,
     inv_session: object,
+    linked_assets: list[object],
 ) -> HTMLResponse:
     content = _render_template(
         "inventory_session_details_page.html",
         current_email=current_email,
         inv_session=inv_session,
+        linked_assets=linked_assets,
     )
     return render_page(
         "AI Hackaton Inventory Session",
@@ -724,6 +730,9 @@ def render_edit_inventory_session_page(
     current_email: str,
     inv_session: object,
     statuses: list[str],
+    fixed_assets: list[object],
+    linked_asset_rows: list[dict[str, str]],
+    is_read_only: bool,
     *,
     error: str | None = None,
     prefill: dict[str, str] | None = None,
@@ -733,6 +742,9 @@ def render_edit_inventory_session_page(
         current_email=current_email,
         inv_session=inv_session,
         statuses=statuses,
+        fixed_assets=fixed_assets,
+        linked_asset_rows=linked_asset_rows,
+        is_read_only=is_read_only,
         error=error,
         prefill=prefill,
     )

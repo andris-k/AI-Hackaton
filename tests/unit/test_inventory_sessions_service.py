@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from app.services.inventory_sessions_service import (
+    parse_linked_assets,
     STATUSES,
     validate_create_form,
     validate_session_form,
@@ -154,3 +155,67 @@ def test_create_form_empty_person_rejected():
         responsible_person="",
     )
     assert error is not None
+
+
+# ---------------------------------------------------------------------------
+# parse_linked_assets
+# ---------------------------------------------------------------------------
+
+
+def test_parse_linked_assets_valid_rows():
+    linked_assets, error = parse_linked_assets(
+        fixed_asset_ids=["a1", "a2"],
+        fixed_asset_quantities=["2", "3"],
+    )
+    assert error is None
+    assert linked_assets == [("a1", 2), ("a2", 3)]
+
+
+def test_parse_linked_assets_aggregates_duplicates():
+    linked_assets, error = parse_linked_assets(
+        fixed_asset_ids=["a1", "a1", "a2"],
+        fixed_asset_quantities=["2", "3", "1"],
+    )
+    assert error is None
+    assert ("a1", 5) in linked_assets
+    assert ("a2", 1) in linked_assets
+
+
+def test_parse_linked_assets_rejects_non_numeric_quantity():
+    linked_assets, error = parse_linked_assets(
+        fixed_asset_ids=["a1"],
+        fixed_asset_quantities=["x"],
+    )
+    assert linked_assets == []
+    assert error is not None
+
+
+def test_parse_linked_assets_rejects_zero_or_negative_quantity():
+    _, error_zero = parse_linked_assets(
+        fixed_asset_ids=["a1"],
+        fixed_asset_quantities=["0"],
+    )
+    _, error_negative = parse_linked_assets(
+        fixed_asset_ids=["a1"],
+        fixed_asset_quantities=["-1"],
+    )
+    assert error_zero is not None
+    assert error_negative is not None
+
+
+def test_parse_linked_assets_rejects_missing_asset_with_quantity():
+    linked_assets, error = parse_linked_assets(
+        fixed_asset_ids=[""],
+        fixed_asset_quantities=["2"],
+    )
+    assert linked_assets == []
+    assert error is not None
+
+
+def test_parse_linked_assets_ignores_fully_empty_rows():
+    linked_assets, error = parse_linked_assets(
+        fixed_asset_ids=["", "a1"],
+        fixed_asset_quantities=["", "1"],
+    )
+    assert error is None
+    assert linked_assets == [("a1", 1)]

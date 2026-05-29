@@ -11,6 +11,19 @@
     @media (max-width: 760px) {
         .session-form-row { grid-template-columns: 1fr; }
     }
+    .linked-assets-grid {
+        display: grid;
+        gap: 8px;
+    }
+    .linked-asset-row {
+        display: grid;
+        grid-template-columns: 1fr 120px auto;
+        gap: 8px;
+        align-items: end;
+    }
+    @media (max-width: 760px) {
+        .linked-asset-row { grid-template-columns: 1fr; }
+    }
 </style>
 <div class="stack">
     <section class="panel">
@@ -41,6 +54,32 @@
                 <input id="responsible_person" name="responsible_person" type="text" maxlength="100"
                        value="{{ prefill.responsible_person if prefill else '' }}" required />
             </div>
+            <div>
+                <label>Linked Fixed Assets</label>
+                <div class="linked-assets-grid" id="linked-assets-grid">
+                    {% for row in linked_asset_rows %}
+                    <div class="linked-asset-row">
+                        <div>
+                            <label>Fixed Asset</label>
+                            <select name="fixed_asset_ids">
+                                <option value="">-- Select fixed asset --</option>
+                                {% for asset in fixed_assets %}
+                                <option value="{{ asset.id }}" {% if asset.id == row.fixed_asset_id %}selected{% endif %}>
+                                    {{ asset.name }} ({{ asset.category }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label>Quantity</label>
+                            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" />
+                        </div>
+                        <button type="button" class="remove-linked-asset">Remove</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" id="add-linked-asset">+ Add asset</button>
+            </div>
             <div style="display:flex; gap:10px;">
                 <button type="submit">Create</button>
                 <a href="/inventory-sessions"><button type="button">Cancel</button></a>
@@ -48,3 +87,51 @@
         </form>
     </section>
 </div>
+<template id="linked-asset-row-template">
+    <div class="linked-asset-row">
+        <div>
+            <label>Fixed Asset</label>
+            <select name="fixed_asset_ids">
+                <option value="">-- Select fixed asset --</option>
+                {% for asset in fixed_assets %}
+                <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>Quantity</label>
+            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="1" />
+        </div>
+        <button type="button" class="remove-linked-asset">Remove</button>
+    </div>
+</template>
+<script>
+    (function () {
+        const grid = document.getElementById("linked-assets-grid");
+        const addButton = document.getElementById("add-linked-asset");
+        const template = document.getElementById("linked-asset-row-template");
+
+        function wireRemoveButtons() {
+            grid.querySelectorAll(".remove-linked-asset").forEach((button) => {
+                button.onclick = function () {
+                    const row = button.closest(".linked-asset-row");
+                    if (!row) return;
+                    if (grid.children.length === 1) {
+                        row.querySelector('select[name="fixed_asset_ids"]').value = "";
+                        row.querySelector('input[name="fixed_asset_quantities"]').value = "1";
+                        return;
+                    }
+                    row.remove();
+                };
+            });
+        }
+
+        addButton.addEventListener("click", function () {
+            const node = template.content.cloneNode(true);
+            grid.appendChild(node);
+            wireRemoveButtons();
+        });
+
+        wireRemoveButtons();
+    })();
+</script>

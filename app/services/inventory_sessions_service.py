@@ -43,3 +43,36 @@ def validate_create_form(
         status="New",
         responsible_person=responsible_person,
     )
+
+
+def parse_linked_assets(
+    fixed_asset_ids: list[str],
+    fixed_asset_quantities: list[str],
+) -> tuple[list[tuple[str, int]], str | None]:
+    if len(fixed_asset_ids) != len(fixed_asset_quantities):
+        return [], "Linked asset data is invalid. Please try again."
+
+    aggregated: dict[str, int] = {}
+    for index, fixed_asset_id in enumerate(fixed_asset_ids):
+        asset_id = fixed_asset_id.strip()
+        quantity_text = fixed_asset_quantities[index].strip()
+
+        if not asset_id and not quantity_text:
+            continue
+        if not asset_id:
+            return [], "Each linked row must have a fixed asset selected."
+        if not quantity_text:
+            return [], "Each linked asset must have a quantity."
+
+        try:
+            quantity = int(quantity_text)
+        except ValueError:
+            return [], "Linked asset quantity must be a whole number."
+
+        if quantity <= 0:
+            return [], "Linked asset quantity must be greater than zero."
+
+        aggregated[asset_id] = aggregated.get(asset_id, 0) + quantity
+
+    linked_assets = [(asset_id, quantity) for asset_id, quantity in aggregated.items()]
+    return linked_assets, None

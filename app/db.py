@@ -6,6 +6,7 @@ import secrets
 import sqlite3
 import uuid
 from typing import Any
+from collections.abc import Sequence
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -573,7 +574,16 @@ def update_fixed_asset(
         return cursor.fetchone()
 
 
-def _fixed_assets_filter_clause(filters: dict[str, str] | None = None) -> tuple[str, list[Any]]:
+def delete_fixed_asset(fixed_asset_id: str) -> bool:
+    with db_session() as connection:
+        cursor = connection.execute(
+            "DELETE FROM fixed_assets WHERE id = ?",
+            (fixed_asset_id,),
+        )
+        return cursor.rowcount > 0
+
+
+def _fixed_assets_filter_clause(filters: dict[str, Any] | None = None) -> tuple[str, list[Any]]:
     if not filters:
         return "", []
 
@@ -584,17 +594,35 @@ def _fixed_assets_filter_clause(filters: dict[str, str] | None = None) -> tuple[
         conditions.append("lower(fixed_assets.name) LIKE lower(?)")
         params.append(f"%{filters['name']}%")
 
-    if filters.get("category"):
-        conditions.append("lower(COALESCE(fixed_asset_categories.name, fixed_assets.category)) LIKE lower(?)")
-        params.append(f"%{filters['category']}%")
+    raw_category_values = filters.get("category_values")
+    category_values: list[str] = []
+    if isinstance(raw_category_values, Sequence) and not isinstance(raw_category_values, str):
+        category_values = [str(value).strip() for value in raw_category_values if str(value).strip()]
+    elif filters.get("category"):
+        category_values = [
+            value.strip()
+            for value in str(filters["category"]).split(",")
+            if value.strip()
+        ]
+
+    if category_values:
+        placeholders = ", ".join("lower(?)" for _ in category_values)
+        conditions.append(
+            f"lower(COALESCE(fixed_asset_categories.name, fixed_assets.category)) IN ({placeholders})"
+        )
+        params.extend(category_values)
 
     if filters.get("responsible_person"):
         conditions.append("lower(fixed_assets.responsible_person) LIKE lower(?)")
         params.append(f"%{filters['responsible_person']}%")
 
-    if filters.get("initial_value"):
-        conditions.append("abs(fixed_assets.initial_value - ?) < 0.000001")
-        params.append(float(filters["initial_value"]))
+    if filters.get("initial_value_from"):
+        conditions.append("fixed_assets.initial_value >= ?")
+        params.append(float(filters["initial_value_from"]))
+
+    if filters.get("initial_value_to"):
+        conditions.append("fixed_assets.initial_value <= ?")
+        params.append(float(filters["initial_value_to"]))
 
     if filters.get("registration_date_from"):
         conditions.append("fixed_assets.registration_date >= ?")
@@ -610,7 +638,7 @@ def _fixed_assets_filter_clause(filters: dict[str, str] | None = None) -> tuple[
     return " WHERE " + " AND ".join(conditions), params
 
 
-def count_fixed_assets(filters: dict[str, str] | None = None) -> int:
+def count_fixed_assets(filters: dict[str, Any] | None = None) -> int:
     where_clause, params = _fixed_assets_filter_clause(filters)
     with db_session() as connection:
         cursor = connection.execute(
@@ -629,7 +657,7 @@ def count_fixed_assets(filters: dict[str, str] | None = None) -> int:
 def list_fixed_assets(
     page: int | None = None,
     page_size: int | None = None,
-    filters: dict[str, str] | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> list[sqlite3.Row]:
     where_clause, params = _fixed_assets_filter_clause(filters)
     with db_session() as connection:

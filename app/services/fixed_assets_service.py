@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 MIN_PAGE_SIZE = 1
 MAX_PAGE_SIZE = 100
@@ -10,16 +11,24 @@ MAX_TEXT_LEN = 100
 def build_filters(
     *,
     name: str = "",
-    category: str = "",
-    initial_value: str = "",
+    category: str | list[str] = "",
+    initial_value_from: str = "",
+    initial_value_to: str = "",
     responsible_person: str = "",
     registration_date_from: str = "",
     registration_date_to: str = "",
-) -> dict[str, str]:
+) -> dict[str, Any]:
+    if isinstance(category, list):
+        category_values = [value.strip() for value in category if value.strip()]
+    else:
+        category_values = [value.strip() for value in category.split(",") if value.strip()]
+
     return {
         "name": name.strip(),
-        "category": category.strip(),
-        "initial_value": initial_value.strip(),
+        "category": ",".join(category_values),
+        "category_values": category_values,
+        "initial_value_from": initial_value_from.strip(),
+        "initial_value_to": initial_value_to.strip(),
         "responsible_person": responsible_person.strip(),
         "registration_date_from": registration_date_from.strip(),
         "registration_date_to": registration_date_to.strip(),
@@ -33,13 +42,23 @@ def normalize_paging(page: int, page_size: int, total_items: int) -> tuple[int, 
     return current_page, safe_page_size, total_pages
 
 
-def validate_list_filters(filters: dict[str, str]) -> str | None:
+def validate_list_filters(filters: dict[str, Any]) -> str | None:
     try:
-        if filters.get("initial_value"):
-            float(filters["initial_value"])
+        if filters.get("initial_value_from"):
+            float(filters["initial_value_from"])
+        if filters.get("initial_value_to"):
+            float(filters["initial_value_to"])
     except ValueError:
-        filters["initial_value"] = ""
-        return "InitialValue filter must be a valid number."
+        filters["initial_value_from"] = ""
+        filters["initial_value_to"] = ""
+        return "InitialValue filters must be valid numbers."
+
+    if (
+        filters.get("initial_value_from")
+        and filters.get("initial_value_to")
+        and float(filters["initial_value_from"]) > float(filters["initial_value_to"])
+    ):
+        return "InitialValue From must be less than or equal to InitialValue To."
 
     try:
         if filters.get("registration_date_from"):

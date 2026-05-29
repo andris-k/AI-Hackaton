@@ -358,10 +358,16 @@ def render_fixed_assets_page(
     page: int,
     page_size: int,
     total_assets: int,
-    filters: dict[str, str],
+    filters: dict[str, object],
     message: str | None = None,
     message_kind: str = "info",
 ) -> HTMLResponse:
+    category_filter_options = [str(category["name"]) for category in assets_repo.list_categories()]
+    selected_category_filters = [
+        value.strip()
+        for value in str(filters.get("category", "")).split(",")
+        if value.strip()
+    ]
     rows = [
         {
             "id": str(asset["id"]),
@@ -383,7 +389,8 @@ def render_fixed_assets_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
-        "initial_value": filters.get("initial_value", ""),
+        "initial_value_from": filters.get("initial_value_from", ""),
+        "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
         "registration_date_from": filters.get("registration_date_from", ""),
         "registration_date_to": filters.get("registration_date_to", ""),
@@ -401,6 +408,8 @@ def render_fixed_assets_page(
         page=page,
         page_size=page_size,
         filters=filters,
+        category_filter_options=category_filter_options,
+        selected_category_filters=selected_category_filters,
         total_assets=total_assets,
         total_pages=total_pages,
         start_row=start_row,
@@ -427,14 +436,15 @@ def render_fixed_asset_details_page(
     *,
     page: int,
     page_size: int,
-    filters: dict[str, str],
+    filters: dict[str, object],
 ) -> HTMLResponse:
     back_query = {
         "page": str(page),
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
-        "initial_value": filters.get("initial_value", ""),
+        "initial_value_from": filters.get("initial_value_from", ""),
+        "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
         "registration_date_from": filters.get("registration_date_from", ""),
         "registration_date_to": filters.get("registration_date_to", ""),
@@ -451,6 +461,10 @@ def render_fixed_asset_details_page(
             "responsible_person": str(fixed_asset["responsible_person"]),
             "registration_date": str(fixed_asset["registration_date"]),
         },
+        page=page,
+        page_size=page_size,
+        filters=filters,
+        delete_action=f"/fixed-assets/id/{fixed_asset['id']}/delete",
         edit_href=f"/fixed-assets/id/{fixed_asset['id']}/edit?{urlencode(back_query)}",
         back_href=f"/fixed-assets?{urlencode(back_query)}",
     )
@@ -485,7 +499,8 @@ def render_edit_fixed_asset_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
-        "initial_value": filters.get("initial_value", ""),
+        "initial_value_from": filters.get("initial_value_from", ""),
+        "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
         "registration_date_from": filters.get("registration_date_from", ""),
         "registration_date_to": filters.get("registration_date_to", ""),
@@ -539,7 +554,8 @@ def render_add_fixed_asset_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
-        "initial_value": filters.get("initial_value", ""),
+        "initial_value_from": filters.get("initial_value_from", ""),
+        "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
         "registration_date_from": filters.get("registration_date_from", ""),
         "registration_date_to": filters.get("registration_date_to", ""),

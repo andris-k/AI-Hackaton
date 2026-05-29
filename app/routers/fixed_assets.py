@@ -24,8 +24,9 @@ def fixed_assets_page(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
-    category: str = Query(default=""),
-    initial_value: str = Query(default=""),
+    category: list[str] = Query(default=[]),
+    initial_value_from: str = Query(default=""),
+    initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
     registration_date_from: str = Query(default=""),
     registration_date_to: str = Query(default=""),
@@ -37,7 +38,8 @@ def fixed_assets_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
-        initial_value=initial_value,
+        initial_value_from=initial_value_from,
+        initial_value_to=initial_value_to,
         responsible_person=responsible_person,
         registration_date_from=registration_date_from,
         registration_date_to=registration_date_to,
@@ -77,7 +79,8 @@ def fixed_asset_details_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: str = Query(default=""),
-    initial_value: str = Query(default=""),
+    initial_value_from: str = Query(default=""),
+    initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
     registration_date_from: str = Query(default=""),
     registration_date_to: str = Query(default=""),
@@ -100,7 +103,8 @@ def fixed_asset_details_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
-        initial_value=initial_value,
+        initial_value_from=initial_value_from,
+        initial_value_to=initial_value_to,
         responsible_person=responsible_person,
         registration_date_from=registration_date_from,
         registration_date_to=registration_date_to,
@@ -122,7 +126,8 @@ def edit_fixed_asset_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: str = Query(default=""),
-    initial_value: str = Query(default=""),
+    initial_value_from: str = Query(default=""),
+    initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
     registration_date_from: str = Query(default=""),
     registration_date_to: str = Query(default=""),
@@ -155,7 +160,8 @@ def edit_fixed_asset_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
-        initial_value=initial_value,
+        initial_value_from=initial_value_from,
+        initial_value_to=initial_value_to,
         responsible_person=responsible_person,
         registration_date_from=registration_date_from,
         registration_date_to=registration_date_to,
@@ -182,7 +188,8 @@ def edit_fixed_asset_route(
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
     category_filter: str = Form(default=""),
-    initial_value_filter: str = Form(default=""),
+    initial_value_from_filter: str = Form(default=""),
+    initial_value_to_filter: str = Form(default=""),
     responsible_person_filter: str = Form(default=""),
     registration_date_from_filter: str = Form(default=""),
     registration_date_to_filter: str = Form(default=""),
@@ -215,7 +222,8 @@ def edit_fixed_asset_route(
     filters = assets_service.build_filters(
         name=name_filter,
         category=category_filter,
-        initial_value=initial_value_filter,
+        initial_value_from=initial_value_from_filter,
+        initial_value_to=initial_value_to_filter,
         responsible_person=responsible_person_filter,
         registration_date_from=registration_date_from_filter,
         registration_date_to=registration_date_to_filter,
@@ -287,7 +295,8 @@ def add_fixed_asset_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: str = Query(default=""),
-    initial_value: str = Query(default=""),
+    initial_value_from: str = Query(default=""),
+    initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
     registration_date_from: str = Query(default=""),
     registration_date_to: str = Query(default=""),
@@ -299,7 +308,8 @@ def add_fixed_asset_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
-        initial_value=initial_value,
+        initial_value_from=initial_value_from,
+        initial_value_to=initial_value_to,
         responsible_person=responsible_person,
         registration_date_from=registration_date_from,
         registration_date_to=registration_date_to,
@@ -336,7 +346,8 @@ def create_fixed_asset_route(
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
     category_filter: str = Form(default=""),
-    initial_value_filter: str = Form(default=""),
+    initial_value_from_filter: str = Form(default=""),
+    initial_value_to_filter: str = Form(default=""),
     responsible_person_filter: str = Form(default=""),
     registration_date_from_filter: str = Form(default=""),
     registration_date_to_filter: str = Form(default=""),
@@ -348,7 +359,8 @@ def create_fixed_asset_route(
     filters = assets_service.build_filters(
         name=name_filter,
         category=category_filter,
-        initial_value=initial_value_filter,
+        initial_value_from=initial_value_from_filter,
+        initial_value_to=initial_value_to_filter,
         responsible_person=responsible_person_filter,
         registration_date_from=registration_date_from_filter,
         registration_date_to=registration_date_to_filter,
@@ -418,5 +430,62 @@ def create_fixed_asset_route(
         total_assets=updated_total_assets,
         filters=filters,
         message="Fixed asset created successfully.",
+        message_kind="success",
+    )
+
+
+@router.post("/fixed-assets/id/{fixed_asset_id}/delete", response_class=HTMLResponse)
+def delete_fixed_asset_route(
+    fixed_asset_id: str,
+    session_token: str | None = Cookie(default=None),
+    page: int = Form(default=1),
+    page_size: int = Form(default=20),
+    name_filter: str = Form(default=""),
+    category_filter: str = Form(default=""),
+    initial_value_from_filter: str = Form(default=""),
+    initial_value_to_filter: str = Form(default=""),
+    responsible_person_filter: str = Form(default=""),
+    registration_date_from_filter: str = Form(default=""),
+    registration_date_to_filter: str = Form(default=""),
+) -> HTMLResponse:
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to manage fixed assets.")
+
+    filters = assets_service.build_filters(
+        name=name_filter,
+        category=category_filter,
+        initial_value_from=initial_value_from_filter,
+        initial_value_to=initial_value_to_filter,
+        responsible_person=responsible_person_filter,
+        registration_date_from=registration_date_from_filter,
+        registration_date_to=registration_date_to_filter,
+    )
+
+    deleted = assets_repo.delete_asset(fixed_asset_id)
+    total_assets = assets_repo.count_assets(filters)
+    current_page, safe_page_size, _ = assets_service.normalize_paging(page, page_size, total_assets)
+    assets = assets_repo.list_assets(current_page, safe_page_size, filters)
+
+    if not deleted:
+        return render_fixed_assets_page(
+            user["email"],
+            assets,
+            page=current_page,
+            page_size=safe_page_size,
+            total_assets=total_assets,
+            filters=filters,
+            message="Fixed asset not found or already deleted.",
+            message_kind="error",
+        )
+
+    return render_fixed_assets_page(
+        user["email"],
+        assets,
+        page=current_page,
+        page_size=safe_page_size,
+        total_assets=total_assets,
+        filters=filters,
+        message="Fixed asset deleted successfully.",
         message_kind="success",
     )

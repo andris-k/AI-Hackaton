@@ -12,6 +12,18 @@
                 <tr><th style="text-align: left; padding: 8px;">RegistrationDate</th><td style="padding: 8px;">{{ fixed_asset.registration_date }}</td></tr>
             </tbody>
         </table>
+        <form method="post" action="{{ delete_action }}" onsubmit="return confirm('Delete this fixed asset?');" style="margin-top: 12px;">
+            <input type="hidden" name="page" value="{{ page }}" />
+            <input type="hidden" name="page_size" value="{{ page_size }}" />
+            <input type="hidden" name="name_filter" value="{{ filters.name }}" />
+            <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+            <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
+            <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
+            <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />
+            <input type="hidden" name="registration_date_from_filter" value="{{ filters.registration_date_from }}" />
+            <input type="hidden" name="registration_date_to_filter" value="{{ filters.registration_date_to }}" />
+            <button type="submit" style="width: auto; min-width: 180px; background: #b91c1c; border-color: #b91c1c;">Delete fixed asset</button>
+        </form>
         <div class="links">
             <a href="{{ edit_href }}">Edit fixed asset</a>
             <a href="{{ back_href }}">Back to fixed assets</a>

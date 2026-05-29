@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import Any
 
 from app.db import (
     count_fixed_assets,
     create_fixed_asset,
     create_fixed_asset_category,
+    delete_fixed_asset,
     delete_fixed_asset_category,
     get_fixed_asset_by_id,
     get_fixed_asset_category_by_id,
@@ -17,14 +19,14 @@ from app.db import (
 )
 
 
-def count_assets(filters: dict[str, str] | None = None) -> int:
+def count_assets(filters: dict[str, Any] | None = None) -> int:
     return count_fixed_assets(filters)
 
 
 def list_assets(
     page: int | None = None,
     page_size: int | None = None,
-    filters: dict[str, str] | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> list[sqlite3.Row]:
     return list_fixed_assets(page, page_size, filters)
 
@@ -65,6 +67,10 @@ def update_asset(
         responsible_person=responsible_person,
         registration_date=registration_date,
     )
+
+
+def delete_asset(fixed_asset_id: str) -> bool:
+    return delete_fixed_asset(fixed_asset_id)
 
 
 def list_categories() -> list[sqlite3.Row]:

@@ -1,79 +1,119 @@
 <style>
-    table {
-        width: 100%;
-        border-collapse: collapse;
+    .users-filter {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 10px;
         border: 1px solid var(--border);
-        border-radius: 14px;
-        overflow: hidden;
+        border-radius: 8px;
+        background: var(--surface-alt);
     }
 
-    th, td {
-        padding: 12px 10px;
-        text-align: left;
-        border-bottom: 1px solid var(--border);
-        font-size: 0.95rem;
-    }
-
-    th {
-        background: rgba(37, 99, 235, 0.1);
-        font-weight: 700;
-    }
-
-    tr:last-child td { border-bottom: 0; }
-
-    .filter-row {
+    .users-filter-row {
         display: grid;
         grid-template-columns: 1fr auto;
-        gap: 10px;
+        gap: 8px;
         align-items: end;
-        margin-bottom: 14px;
     }
 
-    .filter-row button {
+    .users-filter-row button {
         width: auto;
         min-width: 110px;
     }
 
+    .table-wrap {
+        max-height: min(58vh, 560px);
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 0;
+    }
+
+    th, td {
+        padding: 7px 8px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.86rem;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #eef2f7;
+        font-weight: 700;
+    }
+
+    tbody tr:nth-child(even) {
+        background: #f8fafc;
+    }
+
+    .col-id {
+        width: 90px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .col-created {
+        width: 175px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
     @media (max-width: 640px) {
-        .filter-row { grid-template-columns: 1fr; }
-        .filter-row button { width: 100%; }
+        .users-filter-row { grid-template-columns: 1fr; }
+        .users-filter-row button { width: 100%; }
+        .table-wrap { max-height: none; }
     }
 </style>
 <div class="stack">
     <section class="panel wide">
         <h2>Registered users</h2>
         <p>Signed in as <strong>{{ current_email }}</strong>.</p>
-        <form method="get" action="/users" class="filter-row">
-            <div>
-                <label for="email_filter">Filter by email</label>
-                <input
-                    id="email_filter"
-                    name="email"
-                    type="text"
-                    value="{{ email_filter }}"
-                    placeholder="Type part of an email"
-                />
+        <form method="get" action="/users" class="users-filter">
+            <div class="users-filter-row">
+                <div>
+                    <label for="email_filter">Filter by email</label>
+                    <input
+                        id="email_filter"
+                        name="email"
+                        type="text"
+                        value="{{ email_filter }}"
+                        placeholder="Type part of an email"
+                    />
+                </div>
+                <button type="submit">Apply filter</button>
             </div>
-            <button type="submit">Apply filter</button>
         </form>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Email</th>
-                    <th>Created</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in users %}
-                <tr>
-                    <td>{{ user.id }}</td>
-                    <td>{{ user.email }}</td>
-                    <td>{{ user.created_at }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th>Email</th>
+                        <th class="col-created">Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td class="col-id">{{ user.id }}</td>
+                        <td>{{ user.email }}</td>
+                        <td class="col-created">{{ user.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         <div class="links">
             <a href="/dashboard">Back to dashboard</a>
             <a href="/logout">Log out</a>

@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import secrets
 import sqlite3
+import uuid
+from typing import Any
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -75,6 +77,21 @@ def initialize_database() -> None:
         )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fixed_assets (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL CHECK (length(name) <= 100),
+                category TEXT NOT NULL CHECK (length(category) <= 100),
+                initial_value REAL NOT NULL,
+                responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100),
+                registration_date TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fixed_assets_name ON fixed_assets(name)"
         )
 
 
@@ -153,6 +170,25 @@ def get_user_by_id(user_id: int) -> sqlite3.Row | None:
             (user_id,),
         )
         return cursor.fetchone()
+
+
+def list_users(email_filter: str | None = None) -> list[sqlite3.Row]:
+    with db_session() as connection:
+        if email_filter:
+            cursor = connection.execute(
+                """
+                SELECT id, email, created_at
+                FROM users
+                WHERE lower(email) LIKE lower(?)
+                ORDER BY email ASC
+                """,
+                (f"%{email_filter}%",),
+            )
+        else:
+            cursor = connection.execute(
+                "SELECT id, email, created_at FROM users ORDER BY email ASC"
+            )
+        return cursor.fetchall()
 
 
 def update_user_password(user_id: int, password: str) -> None:
@@ -248,3 +284,178 @@ def mark_password_reset_token_used(token: str) -> None:
             "UPDATE password_reset_tokens SET used_at = ? WHERE token = ?",
             (used_at, token),
         )
+
+
+def create_fixed_asset(
+    name: str,
+    category: str,
+    initial_value: float,
+    responsible_person: str,
+    registration_date: str,
+) -> sqlite3.Row:
+    fixed_asset_id = str(uuid.uuid4())
+    with db_session() as connection:
+        connection.execute(
+            """
+            INSERT INTO fixed_assets (
+                id,
+                name,
+                category,
+                initial_value,
+                responsible_person,
+                registration_date
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                fixed_asset_id,
+                name,
+                category,
+                initial_value,
+                responsible_person,
+                registration_date,
+            ),
+        )
+        cursor = connection.execute(
+            """
+            SELECT id, name, category, initial_value, responsible_person, registration_date
+            FROM fixed_assets
+            WHERE id = ?
+            """,
+            (fixed_asset_id,),
+        )
+        return cursor.fetchone()
+
+
+def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
+    with db_session() as connection:
+        cursor = connection.execute(
+            """
+            SELECT id, name, category, initial_value, responsible_person, registration_date
+            FROM fixed_assets
+            WHERE id = ?
+            """,
+            (fixed_asset_id,),
+        )
+        return cursor.fetchone()
+
+
+def update_fixed_asset(
+    fixed_asset_id: str,
+    name: str,
+    category: str,
+    initial_value: float,
+    responsible_person: str,
+    registration_date: str,
+) -> sqlite3.Row | None:
+    with db_session() as connection:
+        connection.execute(
+            """
+            UPDATE fixed_assets
+            SET
+                name = ?,
+                category = ?,
+                initial_value = ?,
+                responsible_person = ?,
+                registration_date = ?
+            WHERE id = ?
+            """,
+            (
+                name,
+                category,
+                initial_value,
+                responsible_person,
+                registration_date,
+                fixed_asset_id,
+            ),
+        )
+        cursor = connection.execute(
+            """
+            SELECT id, name, category, initial_value, responsible_person, registration_date
+            FROM fixed_assets
+            WHERE id = ?
+            """,
+            (fixed_asset_id,),
+        )
+        return cursor.fetchone()
+
+
+def _fixed_assets_filter_clause(filters: dict[str, str] | None = None) -> tuple[str, list[Any]]:
+    if not filters:
+        return "", []
+
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if filters.get("name"):
+        conditions.append("lower(name) LIKE lower(?)")
+        params.append(f"%{filters['name']}%")
+
+    if filters.get("category"):
+        conditions.append("lower(category) LIKE lower(?)")
+        params.append(f"%{filters['category']}%")
+
+    if filters.get("responsible_person"):
+        conditions.append("lower(responsible_person) LIKE lower(?)")
+        params.append(f"%{filters['responsible_person']}%")
+
+    if filters.get("initial_value"):
+        conditions.append("abs(initial_value - ?) < 0.000001")
+        params.append(float(filters["initial_value"]))
+
+    if filters.get("registration_date_from"):
+        conditions.append("registration_date >= ?")
+        params.append(filters["registration_date_from"])
+
+    if filters.get("registration_date_to"):
+        conditions.append("registration_date <= ?")
+        params.append(filters["registration_date_to"])
+
+    if not conditions:
+        return "", params
+
+    return " WHERE " + " AND ".join(conditions), params
+
+
+def count_fixed_assets(filters: dict[str, str] | None = None) -> int:
+    where_clause, params = _fixed_assets_filter_clause(filters)
+    with db_session() as connection:
+        cursor = connection.execute(
+            f"SELECT COUNT(1) AS total FROM fixed_assets{where_clause}",
+            params,
+        )
+        row = cursor.fetchone()
+        return int(row["total"]) if row else 0
+
+
+def list_fixed_assets(
+    page: int | None = None,
+    page_size: int | None = None,
+    filters: dict[str, str] | None = None,
+) -> list[sqlite3.Row]:
+    where_clause, params = _fixed_assets_filter_clause(filters)
+    with db_session() as connection:
+        if page is None or page_size is None:
+            cursor = connection.execute(
+                f"""
+                SELECT id, name, category, initial_value, responsible_person, registration_date
+                FROM fixed_assets
+                {where_clause}
+                ORDER BY registration_date DESC, name ASC
+                """,
+                params,
+            )
+            return cursor.fetchall()
+
+        offset = max(page - 1, 0) * page_size
+        paged_params = [*params, page_size, offset]
+        cursor = connection.execute(
+            f"""
+            SELECT id, name, category, initial_value, responsible_person, registration_date
+            FROM fixed_assets
+            {where_clause}
+            ORDER BY registration_date DESC, name ASC
+            LIMIT ? OFFSET ?
+            """,
+            paged_params,
+        )
+        return cursor.fetchall()

@@ -32,7 +32,28 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/forgot-password` - generate a local password reset link
 * `/reset-password/{token}` - set a new password using a reset token
 * `/dashboard` - protected dashboard for signed-in users
+* `/users` - protected list of all registered users
+* `/fixed-assets` - protected fixed assets management page
+* `/fixed-assets/add` - separate page for adding a fixed asset
+* `/fixed-assets/id/{fixed_asset_id}` - fixed asset details page
+* `/fixed-assets/id/{fixed_asset_id}/edit` - fixed asset edit page
 * `/logout` - clear the active session
+
+Fixed assets page supports paging query parameters:
+
+* `page` (default `1`)
+* `page_size` (default `20`, max `100`)
+
+Fixed assets page also supports filtering by:
+
+* `name`
+* `category`
+* `initial_value`
+* `responsible_person`
+* `registration_date_from`
+* `registration_date_to`
+
+`registration_date_from` and `registration_date_to` form a date interval filter.
 
 ## Database
 
@@ -42,6 +63,18 @@ The app creates `app.db` automatically on startup and stores:
 * hashed passwords
 * sessions
 * password reset tokens
+* fixed assets
+
+## FixedAsset entity
+
+The project now includes `FixedAsset` with these properties:
+
+* `Id` - GUID
+* `Name` - Text (max 100)
+* `Category` - Text (max 100)
+* `InitialValue` - Number
+* `ResponsiblePerson` - Text (max 100)
+* `RegistrationDate` - Date (`YYYY-MM-DD`)
 
 Default login credentials are created automatically for local testing:
 

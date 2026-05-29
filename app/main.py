@@ -1,22 +1,30 @@
 from html import escape
+from datetime import datetime
+from urllib.parse import urlencode
 
-from fastapi import Cookie, FastAPI, Form
+from fastapi import Cookie, FastAPI, Form, Query
 from fastapi.responses import HTMLResponse
 
 from app.db import (
+    count_fixed_assets,
+    create_fixed_asset,
     create_password_reset_token,
     create_session,
     create_user,
     delete_session,
     delete_sessions_for_user,
     ensure_default_user,
+    get_fixed_asset_by_id,
     get_password_reset_token,
     get_session,
     get_user_by_email,
     get_user_by_id,
     get_user_by_session_token,
     initialize_database,
+    list_fixed_assets,
+    list_users,
     mark_password_reset_token_used,
+    update_fixed_asset,
     update_user_password,
     verify_password,
 )
@@ -377,6 +385,8 @@ def render_dashboard_page(
         <section class="panel">
             <h2>Account actions</h2>
             <div class="links" style="margin-top: 0; flex-direction: column; align-items: flex-start;">
+                <a href="/fixed-assets">Manage fixed assets</a>
+                <a href="/users">View registered users</a>
                 <a href="/logout">Log out</a>
                 <a href="/forgot-password">Reset password</a>
                 <a href="/register">Create another account</a>
@@ -410,6 +420,596 @@ def set_session_cookie(response: HTMLResponse, session_token: str) -> HTMLRespon
     return response
 
 
+def render_users_page(current_email: str, users: list[object], email_filter: str = "") -> HTMLResponse:
+    safe_current_email = escape(current_email)
+    safe_email_filter = escape(email_filter)
+    rows = "".join(
+        "<tr>"
+        f"<td>{escape(str(user['id']))}</td>"
+        f"<td>{escape(user['email'])}</td>"
+        f"<td>{escape(user['created_at'])}</td>"
+        "</tr>"
+        for user in users
+    )
+    table = f"""
+    <style>
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }}
+
+        th, td {{
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.95rem;
+        }}
+
+        th {{
+            background: rgba(37, 99, 235, 0.1);
+            font-weight: 700;
+        }}
+
+        tr:last-child td {{ border-bottom: 0; }}
+
+        .filter-row {{
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 14px;
+        }}
+
+        .filter-row button {{
+            width: auto;
+            min-width: 110px;
+        }}
+
+        @media (max-width: 640px) {{
+            .filter-row {{ grid-template-columns: 1fr; }}
+            .filter-row button {{ width: 100%; }}
+        }}
+    </style>
+    <div class="stack">
+        <section class="panel wide">
+            <h2>Registered users</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <form method="get" action="/users" class="filter-row">
+                <div>
+                    <label for="email_filter">Filter by email</label>
+                    <input
+                        id="email_filter"
+                        name="email"
+                        type="text"
+                        value="{safe_email_filter}"
+                        placeholder="Type part of an email"
+                    />
+                </div>
+                <button type="submit">Apply filter</button>
+            </form>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Email</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows}
+                </tbody>
+            </table>
+            <div class="links">
+                <a href="/dashboard">Back to dashboard</a>
+                <a href="/logout">Log out</a>
+            </div>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Users",
+        "Users",
+        "List of registered users in the system.",
+        table,
+        width="860px",
+    )
+
+
+def render_fixed_assets_page(
+    current_email: str,
+    fixed_assets: list[object],
+    *,
+    page: int,
+    page_size: int,
+    total_assets: int,
+    filters: dict[str, str],
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    safe_current_email = escape(current_email)
+    safe_name = escape(filters.get("name", ""))
+    safe_category = escape(filters.get("category", ""))
+    safe_initial_value = escape(filters.get("initial_value", ""))
+    safe_responsible_person = escape(filters.get("responsible_person", ""))
+    safe_registration_date_from = escape(filters.get("registration_date_from", ""))
+    safe_registration_date_to = escape(filters.get("registration_date_to", ""))
+
+    rows = "".join(
+        "<tr>"
+        f"<td><a href=\"/fixed-assets/id/{escape(asset['id'])}\">{escape(asset['id'])}</a></td>"
+        f"<td><a href=\"/fixed-assets/id/{escape(asset['id'])}\">{escape(asset['name'])}</a></td>"
+        f"<td>{escape(asset['category'])}</td>"
+        f"<td>{escape('{:.2f}'.format(float(asset['initial_value'])))}</td>"
+        f"<td>{escape(asset['responsible_person'])}</td>"
+        f"<td>{escape(asset['registration_date'])}</td>"
+        f"<td><a href=\"/fixed-assets/id/{escape(asset['id'])}/edit\">Edit</a></td>"
+        "</tr>"
+        for asset in fixed_assets
+    )
+    total_pages = max((total_assets + page_size - 1) // page_size, 1)
+    previous_page = page - 1 if page > 1 else 1
+    next_page = page + 1 if page < total_pages else total_pages
+    start_row = (page - 1) * page_size + 1 if total_assets > 0 else 0
+    end_row = min(page * page_size, total_assets)
+
+    base_query = {
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    def page_link(target_page: int) -> str:
+        query = {**base_query, "page": str(target_page)}
+        return f"/fixed-assets?{urlencode(query)}"
+
+    add_asset_query = {**base_query, "page": str(page)}
+
+    prev_link = (
+        f'<a href="{page_link(previous_page)}">Previous</a>'
+        if page > 1
+        else '<span style="color: var(--muted);">Previous</span>'
+    )
+    next_link = (
+        f'<a href="{page_link(next_page)}">Next</a>'
+        if page < total_pages
+        else '<span style="color: var(--muted);">Next</span>'
+    )
+
+    content = f"""
+    <style>
+        .assets-grid {{
+            display: grid;
+            gap: 16px;
+        }}
+
+        .asset-form-row {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }}
+
+        .filter-form {{
+            display: grid;
+            gap: 12px;
+            margin-bottom: 14px;
+        }}
+
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            font-size: 0.93rem;
+        }}
+
+        th, td {{
+            padding: 10px 9px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }}
+
+        th {{
+            background: rgba(37, 99, 235, 0.1);
+            font-weight: 700;
+        }}
+
+        tr:last-child td {{ border-bottom: 0; }}
+
+        @media (max-width: 760px) {{
+            .asset-form-row {{ grid-template-columns: 1fr; }}
+        }}
+
+        .pager {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }}
+
+        .pager .controls {{
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }}
+
+        .pager .meta {{
+            color: var(--muted);
+            font-size: 0.9rem;
+        }}
+    </style>
+    <div class="assets-grid">
+        <section class="panel">
+            <h2>Registered fixed assets</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <form method="get" action="/fixed-assets" class="filter-form">
+                <input type="hidden" name="page" value="1" />
+                <input type="hidden" name="page_size" value="{page_size}" />
+                <div class="asset-form-row">
+                    <div>
+                        <label for="filter_name">Name</label>
+                        <input id="filter_name" name="name" type="text" value="{safe_name}" />
+                    </div>
+                    <div>
+                        <label for="filter_category">Category</label>
+                        <input id="filter_category" name="category" type="text" value="{safe_category}" />
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
+                        <label for="filter_initial_value">InitialValue</label>
+                        <input id="filter_initial_value" name="initial_value" type="number" step="0.01" min="0" value="{safe_initial_value}" />
+                    </div>
+                    <div>
+                        <label for="filter_responsible_person">ResponsiblePerson</label>
+                        <input id="filter_responsible_person" name="responsible_person" type="text" value="{safe_responsible_person}" />
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
+                        <label for="filter_registration_date_from">RegistrationDate From</label>
+                        <input id="filter_registration_date_from" name="registration_date_from" type="date" value="{safe_registration_date_from}" />
+                    </div>
+                    <div>
+                        <label for="filter_registration_date_to">RegistrationDate To</label>
+                        <input id="filter_registration_date_to" name="registration_date_to" type="date" value="{safe_registration_date_to}" />
+                    </div>
+                </div>
+                <div class="links" style="margin-top: 0;">
+                    <button type="submit">Apply filters</button>
+                    <a href="/fixed-assets?page=1&page_size={page_size}">Clear filters</a>
+                </div>
+            </form>
+            <div class="links" style="margin-top: 0; margin-bottom: 12px;">
+                <a href="/fixed-assets/add?{urlencode(add_asset_query)}">Add fixed asset</a>
+                <a href="/dashboard">Back to dashboard</a>
+                <a href="/logout">Log out</a>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>InitialValue</th>
+                        <th>ResponsiblePerson</th>
+                        <th>RegistrationDate</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows}
+                </tbody>
+            </table>
+            <div class="pager">
+                <div class="meta">Showing {start_row}-{end_row} of {total_assets}</div>
+                <div class="controls">
+                    {prev_link}
+                    <span>Page {page} / {total_pages}</span>
+                    {next_link}
+                </div>
+            </div>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Fixed Assets",
+        "Fixed Assets",
+        "Create and view fixed assets.",
+        content,
+        width="1100px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_fixed_asset_details_page(
+    current_email: str,
+    fixed_asset: object,
+    *,
+    page: int,
+    page_size: int,
+    filters: dict[str, str],
+) -> HTMLResponse:
+    safe_current_email = escape(current_email)
+    safe_id = escape(fixed_asset["id"])
+    safe_name = escape(fixed_asset["name"])
+    safe_category = escape(fixed_asset["category"])
+    safe_initial_value = escape("{:.2f}".format(float(fixed_asset["initial_value"])))
+    safe_responsible_person = escape(fixed_asset["responsible_person"])
+    safe_registration_date = escape(fixed_asset["registration_date"])
+
+    back_query = {
+        "page": str(page),
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    content = f"""
+    <div class="stack">
+        <section class="panel">
+            <h2>Fixed asset details</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tbody>
+                    <tr><th style="text-align: left; padding: 8px; width: 220px;">Id</th><td style="padding: 8px;">{safe_id}</td></tr>
+                    <tr><th style="text-align: left; padding: 8px;">Name</th><td style="padding: 8px;">{safe_name}</td></tr>
+                    <tr><th style="text-align: left; padding: 8px;">Category</th><td style="padding: 8px;">{safe_category}</td></tr>
+                    <tr><th style="text-align: left; padding: 8px;">InitialValue</th><td style="padding: 8px;">{safe_initial_value}</td></tr>
+                    <tr><th style="text-align: left; padding: 8px;">ResponsiblePerson</th><td style="padding: 8px;">{safe_responsible_person}</td></tr>
+                    <tr><th style="text-align: left; padding: 8px;">RegistrationDate</th><td style="padding: 8px;">{safe_registration_date}</td></tr>
+                </tbody>
+            </table>
+            <div class="links">
+                <a href="/fixed-assets/id/{safe_id}/edit?{urlencode(back_query)}">Edit fixed asset</a>
+                <a href="/fixed-assets?{urlencode(back_query)}">Back to fixed assets</a>
+                <a href="/dashboard">Back to dashboard</a>
+            </div>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Fixed Asset Details",
+        "Fixed Asset Details",
+        "Detailed view of a fixed asset.",
+        content,
+        width="860px",
+    )
+
+
+def render_edit_fixed_asset_page(
+    current_email: str,
+    fixed_asset: object,
+    *,
+    page: int,
+    page_size: int,
+    filters: dict[str, str],
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    safe_current_email = escape(current_email)
+    safe_id = escape(fixed_asset["id"])
+    safe_name = escape(fixed_asset["name"])
+    safe_category = escape(fixed_asset["category"])
+    safe_initial_value = escape("{:.2f}".format(float(fixed_asset["initial_value"])))
+    safe_responsible_person = escape(fixed_asset["responsible_person"])
+    safe_registration_date = escape(fixed_asset["registration_date"])
+
+    safe_name_filter = escape(filters.get("name", ""))
+    safe_category_filter = escape(filters.get("category", ""))
+    safe_initial_value_filter = escape(filters.get("initial_value", ""))
+    safe_responsible_person_filter = escape(filters.get("responsible_person", ""))
+    safe_registration_date_from_filter = escape(filters.get("registration_date_from", ""))
+    safe_registration_date_to_filter = escape(filters.get("registration_date_to", ""))
+
+    back_query = {
+        "page": str(page),
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    content = f"""
+    <style>
+        .asset-form {{
+            display: grid;
+            gap: 12px;
+        }}
+
+        .asset-form-row {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }}
+
+        @media (max-width: 760px) {{
+            .asset-form-row {{ grid-template-columns: 1fr; }}
+        }}
+    </style>
+    <div class="stack">
+        <section class="panel">
+            <h2>Edit fixed asset</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <form method="post" action="/fixed-assets/id/{safe_id}/edit" class="asset-form">
+                <input type="hidden" name="page" value="{page}" />
+                <input type="hidden" name="page_size" value="{page_size}" />
+                <input type="hidden" name="name_filter" value="{safe_name_filter}" />
+                <input type="hidden" name="category_filter" value="{safe_category_filter}" />
+                <input type="hidden" name="initial_value_filter" value="{safe_initial_value_filter}" />
+                <input type="hidden" name="responsible_person_filter" value="{safe_responsible_person_filter}" />
+                <input type="hidden" name="registration_date_from_filter" value="{safe_registration_date_from_filter}" />
+                <input type="hidden" name="registration_date_to_filter" value="{safe_registration_date_to_filter}" />
+                <div class="asset-form-row">
+                    <div>
+                        <label for="name">Name</label>
+                        <input id="name" name="name" type="text" maxlength="100" value="{safe_name}" required />
+                    </div>
+                    <div>
+                        <label for="category">Category</label>
+                        <input id="category" name="category" type="text" maxlength="100" value="{safe_category}" required />
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
+                        <label for="initial_value">Initial value</label>
+                        <input id="initial_value" name="initial_value" type="number" step="0.01" min="0" value="{safe_initial_value}" required />
+                    </div>
+                    <div>
+                        <label for="responsible_person">Responsible person</label>
+                        <input id="responsible_person" name="responsible_person" type="text" maxlength="100" value="{safe_responsible_person}" required />
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
+                        <label for="registration_date">Registration date</label>
+                        <input id="registration_date" name="registration_date" type="date" value="{safe_registration_date}" required />
+                    </div>
+                </div>
+                <button type="submit">Save changes</button>
+            </form>
+            <div class="links">
+                <a href="/fixed-assets/id/{safe_id}?{urlencode(back_query)}">Back to details</a>
+                <a href="/fixed-assets?{urlencode(back_query)}">Back to fixed assets</a>
+            </div>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Edit Fixed Asset",
+        "Edit Fixed Asset",
+        "Update fixed asset details.",
+        content,
+        width="860px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_add_fixed_asset_page(
+    current_email: str,
+    *,
+    page: int,
+    page_size: int,
+    filters: dict[str, str],
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    safe_current_email = escape(current_email)
+
+    safe_name = escape(filters.get("name", ""))
+    safe_category = escape(filters.get("category", ""))
+    safe_initial_value = escape(filters.get("initial_value", ""))
+    safe_responsible_person = escape(filters.get("responsible_person", ""))
+    safe_registration_date_from = escape(filters.get("registration_date_from", ""))
+    safe_registration_date_to = escape(filters.get("registration_date_to", ""))
+
+    back_query = {
+        "page": str(page),
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    content = f"""
+    <style>
+        .asset-form {{
+            display: grid;
+            gap: 12px;
+        }}
+
+        .asset-form-row {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }}
+
+        @media (max-width: 760px) {{
+            .asset-form-row {{ grid-template-columns: 1fr; }}
+        }}
+    </style>
+    <div class="stack">
+        <section class="panel">
+            <h2>Add fixed asset</h2>
+            <p>Signed in as <strong>{safe_current_email}</strong>.</p>
+            <form method="post" action="/fixed-assets/add" class="asset-form">
+                <input type="hidden" name="page" value="{page}" />
+                <input type="hidden" name="page_size" value="{page_size}" />
+                <input type="hidden" name="name_filter" value="{safe_name}" />
+                <input type="hidden" name="category_filter" value="{safe_category}" />
+                <input type="hidden" name="initial_value_filter" value="{safe_initial_value}" />
+                <input type="hidden" name="responsible_person_filter" value="{safe_responsible_person}" />
+                <input type="hidden" name="registration_date_from_filter" value="{safe_registration_date_from}" />
+                <input type="hidden" name="registration_date_to_filter" value="{safe_registration_date_to}" />
+                <div class="asset-form-row">
+                    <div>
+                        <label for="name">Name</label>
+                        <input id="name" name="name" type="text" maxlength="100" required />
+                    </div>
+                    <div>
+                        <label for="category">Category</label>
+                        <input id="category" name="category" type="text" maxlength="100" required />
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
+                        <label for="initial_value">Initial value</label>
+                        <input id="initial_value" name="initial_value" type="number" step="0.01" min="0" required />
+                    </div>
+                    <div>
+                        <label for="responsible_person">Responsible person</label>
+                        <input id="responsible_person" name="responsible_person" type="text" maxlength="100" required />
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
+                        <label for="registration_date">Registration date</label>
+                        <input id="registration_date" name="registration_date" type="date" required />
+                    </div>
+                </div>
+                <button type="submit">Save fixed asset</button>
+            </form>
+            <div class="links">
+                <a href="/fixed-assets?{urlencode(back_query)}">Back to fixed assets</a>
+                <a href="/dashboard">Back to dashboard</a>
+                <a href="/logout">Log out</a>
+            </div>
+        </section>
+    </div>
+    """
+    return render_page(
+        "AI Hackaton Add Fixed Asset",
+        "Add Fixed Asset",
+        "Create a new fixed asset in the system.",
+        content,
+        width="760px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
 def current_user(session_token: str | None) -> tuple[str, object] | None:
     if not session_token:
         return None
@@ -439,6 +1039,427 @@ def dashboard(session_token: str | None = Cookie(default=None)) -> HTMLResponse:
 
     _, user = authenticated
     return render_dashboard_page(user["email"], session_token or "")
+
+
+@app.get("/users", response_class=HTMLResponse)
+def users_page(
+    session_token: str | None = Cookie(default=None),
+    email: str = Query(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to access the users page.")
+
+    _, user = authenticated
+    users = list_users(email)
+    return render_users_page(user["email"], users, email)
+
+
+@app.get("/fixed-assets", response_class=HTMLResponse)
+def fixed_assets_page(
+    session_token: str | None = Cookie(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    name: str = Query(default=""),
+    category: str = Query(default=""),
+    initial_value: str = Query(default=""),
+    responsible_person: str = Query(default=""),
+    registration_date_from: str = Query(default=""),
+    registration_date_to: str = Query(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to access fixed assets.")
+
+    _, user = authenticated
+
+    filters = {
+        "name": name.strip(),
+        "category": category.strip(),
+        "initial_value": initial_value.strip(),
+        "responsible_person": responsible_person.strip(),
+        "registration_date_from": registration_date_from.strip(),
+        "registration_date_to": registration_date_to.strip(),
+    }
+
+    try:
+        if filters["initial_value"]:
+            float(filters["initial_value"])
+    except ValueError:
+        filters["initial_value"] = ""
+        total_assets = count_fixed_assets(filters)
+        total_pages = max((total_assets + page_size - 1) // page_size, 1)
+        current_page = min(page, total_pages)
+        assets = list_fixed_assets(current_page, page_size, filters)
+        return render_fixed_assets_page(
+            user["email"],
+            assets,
+            page=current_page,
+            page_size=page_size,
+            total_assets=total_assets,
+            filters=filters,
+            message="InitialValue filter must be a valid number.",
+            message_kind="error",
+        )
+
+    try:
+        if filters["registration_date_from"]:
+            datetime.strptime(filters["registration_date_from"], "%Y-%m-%d")
+        if filters["registration_date_to"]:
+            datetime.strptime(filters["registration_date_to"], "%Y-%m-%d")
+    except ValueError:
+        total_assets = count_fixed_assets(filters)
+        total_pages = max((total_assets + page_size - 1) // page_size, 1)
+        current_page = min(page, total_pages)
+        assets = list_fixed_assets(current_page, page_size, filters)
+        return render_fixed_assets_page(
+            user["email"],
+            assets,
+            page=current_page,
+            page_size=page_size,
+            total_assets=total_assets,
+            filters=filters,
+            message="RegistrationDate filters must be valid dates (YYYY-MM-DD).",
+            message_kind="error",
+        )
+
+    if (
+        filters["registration_date_from"]
+        and filters["registration_date_to"]
+        and filters["registration_date_from"] > filters["registration_date_to"]
+    ):
+        total_assets = count_fixed_assets(filters)
+        total_pages = max((total_assets + page_size - 1) // page_size, 1)
+        current_page = min(page, total_pages)
+        assets = list_fixed_assets(current_page, page_size, filters)
+        return render_fixed_assets_page(
+            user["email"],
+            assets,
+            page=current_page,
+            page_size=page_size,
+            total_assets=total_assets,
+            filters=filters,
+            message="RegistrationDate From must be earlier than or equal to RegistrationDate To.",
+            message_kind="error",
+        )
+
+    total_assets = count_fixed_assets(filters)
+    total_pages = max((total_assets + page_size - 1) // page_size, 1)
+    current_page = min(page, total_pages)
+    assets = list_fixed_assets(current_page, page_size, filters)
+    return render_fixed_assets_page(
+        user["email"],
+        assets,
+        page=current_page,
+        page_size=page_size,
+        total_assets=total_assets,
+        filters=filters,
+    )
+
+
+@app.get("/fixed-assets/id/{fixed_asset_id}", response_class=HTMLResponse)
+def fixed_asset_details_page(
+    fixed_asset_id: str,
+    session_token: str | None = Cookie(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    name: str = Query(default=""),
+    category: str = Query(default=""),
+    initial_value: str = Query(default=""),
+    responsible_person: str = Query(default=""),
+    registration_date_from: str = Query(default=""),
+    registration_date_to: str = Query(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to access fixed asset details.")
+
+    _, user = authenticated
+    fixed_asset = get_fixed_asset_by_id(fixed_asset_id)
+    if fixed_asset is None:
+        return render_page(
+            "AI Hackaton Fixed Asset Details",
+            "Fixed Asset Not Found",
+            "The requested fixed asset does not exist.",
+            '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="Fixed asset not found.",
+            message_kind="error",
+        )
+
+    filters = {
+        "name": name.strip(),
+        "category": category.strip(),
+        "initial_value": initial_value.strip(),
+        "responsible_person": responsible_person.strip(),
+        "registration_date_from": registration_date_from.strip(),
+        "registration_date_to": registration_date_to.strip(),
+    }
+    return render_fixed_asset_details_page(
+        user["email"],
+        fixed_asset,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+    )
+
+
+@app.get("/fixed-assets/id/{fixed_asset_id}/edit", response_class=HTMLResponse)
+def edit_fixed_asset_page(
+    fixed_asset_id: str,
+    session_token: str | None = Cookie(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    name: str = Query(default=""),
+    category: str = Query(default=""),
+    initial_value: str = Query(default=""),
+    responsible_person: str = Query(default=""),
+    registration_date_from: str = Query(default=""),
+    registration_date_to: str = Query(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to edit fixed assets.")
+
+    _, user = authenticated
+    fixed_asset = get_fixed_asset_by_id(fixed_asset_id)
+    if fixed_asset is None:
+        return render_page(
+            "AI Hackaton Edit Fixed Asset",
+            "Fixed Asset Not Found",
+            "The requested fixed asset does not exist.",
+            '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="Fixed asset not found.",
+            message_kind="error",
+        )
+
+    filters = {
+        "name": name.strip(),
+        "category": category.strip(),
+        "initial_value": initial_value.strip(),
+        "responsible_person": responsible_person.strip(),
+        "registration_date_from": registration_date_from.strip(),
+        "registration_date_to": registration_date_to.strip(),
+    }
+    return render_edit_fixed_asset_page(
+        user["email"],
+        fixed_asset,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+    )
+
+
+@app.post("/fixed-assets/id/{fixed_asset_id}/edit", response_class=HTMLResponse)
+def edit_fixed_asset_route(
+    fixed_asset_id: str,
+    session_token: str | None = Cookie(default=None),
+    name: str = Form(...),
+    category: str = Form(...),
+    initial_value: float = Form(...),
+    responsible_person: str = Form(...),
+    registration_date: str = Form(...),
+    page: int = Form(default=1),
+    page_size: int = Form(default=20),
+    name_filter: str = Form(default=""),
+    category_filter: str = Form(default=""),
+    initial_value_filter: str = Form(default=""),
+    responsible_person_filter: str = Form(default=""),
+    registration_date_from_filter: str = Form(default=""),
+    registration_date_to_filter: str = Form(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to edit fixed assets.")
+
+    _, user = authenticated
+    fixed_asset = get_fixed_asset_by_id(fixed_asset_id)
+    if fixed_asset is None:
+        return render_page(
+            "AI Hackaton Edit Fixed Asset",
+            "Fixed Asset Not Found",
+            "The requested fixed asset does not exist.",
+            '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="Fixed asset not found.",
+            message_kind="error",
+        )
+
+    filters = {
+        "name": name_filter.strip(),
+        "category": category_filter.strip(),
+        "initial_value": initial_value_filter.strip(),
+        "responsible_person": responsible_person_filter.strip(),
+        "registration_date_from": registration_date_from_filter.strip(),
+        "registration_date_to": registration_date_to_filter.strip(),
+    }
+
+    safe_page_size = max(1, min(page_size, 100))
+    safe_page = max(1, page)
+
+    if len(name) > 100 or len(category) > 100 or len(responsible_person) > 100:
+        return render_edit_fixed_asset_page(
+            user["email"],
+            fixed_asset,
+            page=safe_page,
+            page_size=safe_page_size,
+            filters=filters,
+            message="Name, Category, and ResponsiblePerson must be 100 characters or less.",
+            message_kind="error",
+        )
+
+    try:
+        datetime.strptime(registration_date, "%Y-%m-%d")
+    except ValueError:
+        return render_edit_fixed_asset_page(
+            user["email"],
+            fixed_asset,
+            page=safe_page,
+            page_size=safe_page_size,
+            filters=filters,
+            message="RegistrationDate must be a valid date in YYYY-MM-DD format.",
+            message_kind="error",
+        )
+
+    updated = update_fixed_asset(
+        fixed_asset_id=fixed_asset_id,
+        name=name.strip(),
+        category=category.strip(),
+        initial_value=initial_value,
+        responsible_person=responsible_person.strip(),
+        registration_date=registration_date,
+    )
+    if updated is None:
+        return render_page(
+            "AI Hackaton Edit Fixed Asset",
+            "Fixed Asset Not Found",
+            "The requested fixed asset does not exist.",
+            '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
+            message="Fixed asset not found.",
+            message_kind="error",
+        )
+
+    return render_edit_fixed_asset_page(
+        user["email"],
+        updated,
+        page=safe_page,
+        page_size=safe_page_size,
+        filters=filters,
+        message="Fixed asset updated successfully.",
+        message_kind="success",
+    )
+
+
+@app.get("/fixed-assets/add", response_class=HTMLResponse)
+def add_fixed_asset_page(
+    session_token: str | None = Cookie(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    name: str = Query(default=""),
+    category: str = Query(default=""),
+    initial_value: str = Query(default=""),
+    responsible_person: str = Query(default=""),
+    registration_date_from: str = Query(default=""),
+    registration_date_to: str = Query(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed assets.")
+
+    _, user = authenticated
+    filters = {
+        "name": name.strip(),
+        "category": category.strip(),
+        "initial_value": initial_value.strip(),
+        "responsible_person": responsible_person.strip(),
+        "registration_date_from": registration_date_from.strip(),
+        "registration_date_to": registration_date_to.strip(),
+    }
+    return render_add_fixed_asset_page(
+        user["email"],
+        page=page,
+        page_size=page_size,
+        filters=filters,
+    )
+
+
+@app.post("/fixed-assets/add", response_class=HTMLResponse)
+def create_fixed_asset_route(
+    session_token: str | None = Cookie(default=None),
+    name: str = Form(...),
+    category: str = Form(...),
+    initial_value: float = Form(...),
+    responsible_person: str = Form(...),
+    registration_date: str = Form(...),
+    page: int = Form(default=1),
+    page_size: int = Form(default=20),
+    name_filter: str = Form(default=""),
+    category_filter: str = Form(default=""),
+    initial_value_filter: str = Form(default=""),
+    responsible_person_filter: str = Form(default=""),
+    registration_date_from_filter: str = Form(default=""),
+    registration_date_to_filter: str = Form(default=""),
+) -> HTMLResponse:
+    authenticated = current_user(session_token)
+    if authenticated is None:
+        return render_login_page("Please log in to manage fixed assets.")
+
+    _, user = authenticated
+
+    filters = {
+        "name": name_filter.strip(),
+        "category": category_filter.strip(),
+        "initial_value": initial_value_filter.strip(),
+        "responsible_person": responsible_person_filter.strip(),
+        "registration_date_from": registration_date_from_filter.strip(),
+        "registration_date_to": registration_date_to_filter.strip(),
+    }
+
+    safe_page_size = max(1, min(page_size, 100))
+    total_assets = count_fixed_assets(filters)
+    total_pages = max((total_assets + safe_page_size - 1) // safe_page_size, 1)
+    current_page = min(max(page, 1), total_pages)
+
+    if len(name) > 100 or len(category) > 100 or len(responsible_person) > 100:
+        return render_add_fixed_asset_page(
+            user["email"],
+            page=current_page,
+            page_size=safe_page_size,
+            filters=filters,
+            message="Name, Category, and ResponsiblePerson must be 100 characters or less.",
+            message_kind="error",
+        )
+
+    try:
+        datetime.strptime(registration_date, "%Y-%m-%d")
+    except ValueError:
+        return render_add_fixed_asset_page(
+            user["email"],
+            page=current_page,
+            page_size=safe_page_size,
+            filters=filters,
+            message="RegistrationDate must be a valid date in YYYY-MM-DD format.",
+            message_kind="error",
+        )
+
+    create_fixed_asset(
+        name=name.strip(),
+        category=category.strip(),
+        initial_value=initial_value,
+        responsible_person=responsible_person.strip(),
+        registration_date=registration_date,
+    )
+    updated_total_assets = count_fixed_assets(filters)
+    updated_total_pages = max((updated_total_assets + safe_page_size - 1) // safe_page_size, 1)
+    target_page = updated_total_pages
+    return render_fixed_assets_page(
+        user["email"],
+        list_fixed_assets(target_page, safe_page_size, filters),
+        page=target_page,
+        page_size=safe_page_size,
+        total_assets=updated_total_assets,
+        filters=filters,
+        message="Fixed asset created successfully.",
+        message_kind="success",
+    )
 
 
 @app.post("/", response_class=HTMLResponse)

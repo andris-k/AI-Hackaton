@@ -1,0 +1,21 @@
+<div class="stack">
+    <section class="panel">
+        <h2>Fixed asset details</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+                <tr><th style="text-align: left; padding: 8px; width: 220px;">Id</th><td style="padding: 8px;">{{ fixed_asset.id }}</td></tr>
+                <tr><th style="text-align: left; padding: 8px;">Name</th><td style="padding: 8px;">{{ fixed_asset.name }}</td></tr>
+                <tr><th style="text-align: left; padding: 8px;">Category</th><td style="padding: 8px;">{{ fixed_asset.category }}</td></tr>
+                <tr><th style="text-align: left; padding: 8px;">InitialValue</th><td style="padding: 8px;">{{ fixed_asset.initial_value }}</td></tr>
+                <tr><th style="text-align: left; padding: 8px;">ResponsiblePerson</th><td style="padding: 8px;">{{ fixed_asset.responsible_person }}</td></tr>
+                <tr><th style="text-align: left; padding: 8px;">RegistrationDate</th><td style="padding: 8px;">{{ fixed_asset.registration_date }}</td></tr>
+            </tbody>
+        </table>
+        <div class="links">
+            <a href="{{ edit_href }}">Edit fixed asset</a>
+            <a href="{{ back_href }}">Back to fixed assets</a>
+            <a href="/dashboard">Back to dashboard</a>
+        </div>
+    </section>
+</div>

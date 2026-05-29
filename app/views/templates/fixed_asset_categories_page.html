@@ -1,0 +1,46 @@
+<div class="stack">
+    <section class="panel">
+        <h2>Add category</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <form method="post" action="/fixed-asset-categories">
+            <div class="field">
+                <label for="category_name">Category name</label>
+                <input id="category_name" name="name" type="text" maxlength="100" required />
+            </div>
+            <button type="submit">Create category</button>
+        </form>
+        <div class="links">
+            <a href="/dashboard">Back to dashboard</a>
+            <a href="/fixed-assets">Back to fixed assets</a>
+        </div>
+    </section>
+    <section class="panel">
+        <h2>Existing categories</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align: left; padding: 10px;">Id</th>
+                    <th style="text-align: left; padding: 10px;">Category name</th>
+                    <th style="text-align: left; padding: 10px;">Assets count</th>
+                    <th style="text-align: left; padding: 10px;">Edit</th>
+                    <th style="text-align: left; padding: 10px;">Delete</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in categories %}
+                <tr>
+                    <td>{{ category.id }}</td>
+                    <td>{{ category.name }}</td>
+                    <td>{{ category.assets_count }}</td>
+                    <td><a href="/fixed-asset-categories/{{ category.id }}/edit">Edit</a></td>
+                    <td>
+                        <form method="post" action="/fixed-asset-categories/{{ category.id }}/delete" onsubmit="return confirm('Delete this category?');">
+                            <button type="submit">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>

@@ -1,0 +1,82 @@
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    th, td {
+        padding: 12px 10px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.95rem;
+    }
+
+    th {
+        background: rgba(37, 99, 235, 0.1);
+        font-weight: 700;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .filter-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: end;
+        margin-bottom: 14px;
+    }
+
+    .filter-row button {
+        width: auto;
+        min-width: 110px;
+    }
+
+    @media (max-width: 640px) {
+        .filter-row { grid-template-columns: 1fr; }
+        .filter-row button { width: 100%; }
+    }
+</style>
+<div class="stack">
+    <section class="panel wide">
+        <h2>Registered users</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <form method="get" action="/users" class="filter-row">
+            <div>
+                <label for="email_filter">Filter by email</label>
+                <input
+                    id="email_filter"
+                    name="email"
+                    type="text"
+                    value="{{ email_filter }}"
+                    placeholder="Type part of an email"
+                />
+            </div>
+            <button type="submit">Apply filter</button>
+        </form>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Email</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.created_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="links">
+            <a href="/dashboard">Back to dashboard</a>
+            <a href="/logout">Log out</a>
+        </div>
+    </section>
+</div>

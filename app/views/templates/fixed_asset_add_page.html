@@ -1,0 +1,69 @@
+<style>
+    .asset-form {
+        display: grid;
+        gap: 12px;
+    }
+
+    .asset-form-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    @media (max-width: 760px) {
+        .asset-form-row { grid-template-columns: 1fr; }
+    }
+</style>
+<div class="stack">
+    <section class="panel">
+        <h2>Add fixed asset</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <form method="post" action="/fixed-assets/add" class="asset-form">
+            <input type="hidden" name="page" value="{{ page }}" />
+            <input type="hidden" name="page_size" value="{{ page_size }}" />
+            <input type="hidden" name="name_filter" value="{{ filters.name }}" />
+            <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+            <input type="hidden" name="initial_value_filter" value="{{ filters.initial_value }}" />
+            <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />
+            <input type="hidden" name="registration_date_from_filter" value="{{ filters.registration_date_from }}" />
+            <input type="hidden" name="registration_date_to_filter" value="{{ filters.registration_date_to }}" />
+            <div class="asset-form-row">
+                <div>
+                    <label for="name">Name</label>
+                    <input id="name" name="name" type="text" maxlength="100" value="{{ form_data.name }}" required />
+                </div>
+                <div>
+                    <label for="category">Category</label>
+                    <select id="category_id" name="category_id" required>
+                        <option value="">Select category</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if category.id == selected_category_id %}selected{% endif %}>{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="asset-form-row">
+                <div>
+                    <label for="initial_value">Initial value</label>
+                    <input id="initial_value" name="initial_value" type="number" step="0.01" min="0" value="{{ form_data.initial_value }}" required />
+                </div>
+                <div>
+                    <label for="responsible_person">Responsible person</label>
+                    <input id="responsible_person" name="responsible_person" type="text" maxlength="100" value="{{ form_data.responsible_person }}" required />
+                </div>
+            </div>
+            <div class="asset-form-row">
+                <div>
+                    <label for="registration_date">Registration date</label>
+                    <input id="registration_date" name="registration_date" type="date" value="{{ form_data.registration_date }}" required />
+                </div>
+            </div>
+            <button type="submit">Save fixed asset</button>
+        </form>
+        <div class="links">
+            <a href="{{ back_href }}">Back to fixed assets</a>
+            <a href="/dashboard">Back to dashboard</a>
+            <a href="/logout">Log out</a>
+        </div>
+    </section>
+</div>

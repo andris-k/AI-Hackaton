@@ -1,0 +1,17 @@
+<div class="stack">
+    <section class="panel">
+        <h2>Edit category</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <form method="post" action="/fixed-asset-categories/{{ category.id }}/edit">
+            <div class="field">
+                <label for="category_name">Category name</label>
+                <input id="category_name" name="name" type="text" maxlength="100" value="{{ category.name }}" required />
+            </div>
+            <button type="submit">Save category</button>
+        </form>
+        <div class="links">
+            <a href="/fixed-asset-categories">Back to categories</a>
+            <a href="/fixed-assets">Back to fixed assets</a>
+        </div>
+    </section>
+</div>

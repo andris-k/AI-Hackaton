@@ -1,0 +1,629 @@
+from __future__ import annotations
+
+from html import escape
+from pathlib import Path
+from urllib.parse import urlencode
+
+from fastapi.responses import HTMLResponse
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from app.repositories import fixed_assets_repository as assets_repo
+
+_TEMPLATES_PATH = Path(__file__).resolve().parent / "templates"
+_TEMPLATE_ENV = Environment(
+    loader=FileSystemLoader(_TEMPLATES_PATH),
+    autoescape=select_autoescape(default_for_string=True, default=True),
+)
+
+
+def _render_template(template_name: str, **context: object) -> str:
+    template = _TEMPLATE_ENV.get_template(template_name)
+    return template.render(**context)
+
+
+def render_page(
+    page_title: str,
+    heading: str,
+    subtitle: str,
+    content: str,
+    *,
+    width: str = "440px",
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    message_block = f'<p class="message {message_kind}">{escape(message)}</p>' if message else ""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>{escape(page_title)}</title>
+            <style>
+                :root {{
+                    color-scheme: light;
+                    font-family: "IBM Plex Sans", "Source Sans 3", "Segoe UI", Arial, sans-serif;
+                    --bg: #f3f5f8;
+                    --surface: #ffffff;
+                    --surface-alt: #f9fafb;
+                    --text: #111827;
+                    --muted: #4b5563;
+                    --accent: #0f4c81;
+                    --accent-hover: #0c3e68;
+                    --border: #d1d5db;
+                    --success: #0f766e;
+                    --error: #b91c1c;
+                    --info: #1d4ed8;
+                    --ring: rgba(15, 76, 129, 0.2);
+                    --shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+                }}
+
+                * {{ box-sizing: border-box; }}
+
+                body {{
+                    margin: 0;
+                    min-height: 100vh;
+                    display: block;
+                    background: var(--bg);
+                    color: var(--text);
+                    padding: 12px;
+                }}
+
+                .card {{
+                    width: min(100%, {width});
+                    margin: 0 auto;
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    box-shadow: var(--shadow);
+                    padding: 18px;
+                }}
+
+                .eyebrow {{
+                    margin: 0 0 8px;
+                    color: var(--accent);
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                }}
+
+                h1 {{
+                    margin: 0 0 6px;
+                    font-size: 1.35rem;
+                    line-height: 1.2;
+                }}
+
+                p.subtitle {{
+                    margin: 0 0 14px;
+                    color: var(--muted);
+                    line-height: 1.35;
+                    font-size: 0.92rem;
+                }}
+
+                .message {{
+                    margin: 0 0 10px;
+                    padding: 8px 10px;
+                    border-radius: 8px;
+                    border: 1px solid transparent;
+                    font-size: 0.86rem;
+                }}
+
+                .message.info {{ background: #eef5ff; color: var(--info); border-color: #bfdbfe; }}
+                .message.success {{ background: #ecfdf5; color: var(--success); border-color: #99f6e4; }}
+                .message.error {{ background: #fef2f2; color: var(--error); border-color: #fecaca; }}
+
+                label {{
+                    display: block;
+                    margin: 0 0 4px;
+                    font-size: 0.78rem;
+                    font-weight: 700;
+                    letter-spacing: 0.01em;
+                }}
+
+                .field {{ margin-bottom: 10px; }}
+
+                input, select {{
+                    width: 100%;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    padding: 9px 10px;
+                    font-size: 0.88rem;
+                    background: var(--surface-alt);
+                    outline: none;
+                    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+                }}
+
+                input:focus, select:focus {{
+                    border-color: var(--accent);
+                    box-shadow: 0 0 0 3px var(--ring);
+                }}
+
+                button {{
+                    width: 100%;
+                    border: 1px solid var(--accent);
+                    border-radius: 8px;
+                    padding: 9px 12px;
+                    background: var(--accent);
+                    color: white;
+                    font-size: 0.86rem;
+                    font-weight: 700;
+                    cursor: pointer;
+                    transition: background-color 0.15s ease, border-color 0.15s ease;
+                }}
+
+                button:hover {{
+                    background: var(--accent-hover);
+                    border-color: var(--accent-hover);
+                }}
+
+                .links {{
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-top: 10px;
+                }}
+
+                .links a {{
+                    color: var(--accent);
+                    font-size: 0.84rem;
+                    font-weight: 700;
+                    text-decoration: none;
+                }}
+
+                .links a:hover {{
+                    color: var(--accent-hover);
+                    text-decoration: underline;
+                }}
+
+                .small {{
+                    margin-top: 10px;
+                    color: var(--muted);
+                    font-size: 0.78rem;
+                    line-height: 1.35;
+                }}
+
+                .stack {{ display: grid; gap: 10px; }}
+
+                .panel {{
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    padding: 12px;
+                    background: var(--surface);
+                }}
+
+                .panel h2 {{
+                    margin: 0 0 6px;
+                    font-size: 0.97rem;
+                }}
+
+                code {{
+                    display: block;
+                    margin-top: 8px;
+                    padding: 8px 10px;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    background: var(--surface-alt);
+                    font-size: 0.78rem;
+                    overflow-wrap: anywhere;
+                }}
+
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    border: 1px solid var(--border);
+                    background: var(--surface);
+                }}
+
+                th, td {{
+                    padding: 8px 8px;
+                    text-align: left;
+                    border-bottom: 1px solid var(--border);
+                    font-size: 0.83rem;
+                }}
+
+                th {{
+                    background: #eef2f7;
+                    font-weight: 700;
+                    color: #1f2937;
+                }}
+
+                tr:last-child td {{ border-bottom: 0; }}
+
+                .dashboard-grid {{
+                    display: grid;
+                    gap: 10px;
+                }}
+
+                @media (min-width: 900px) {{
+                    .dashboard-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+                    .dashboard-grid .wide {{ grid-column: 1 / -1; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <main class="card">
+                <p class="eyebrow">AI Hackaton</p>
+                <h1>{escape(heading)}</h1>
+                <p class="subtitle">{escape(subtitle)}</p>
+                {message_block}
+                {content}
+            </main>
+        </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html)
+
+
+def render_login_page(error: str | None = None, email: str = "") -> HTMLResponse:
+    content = _render_template("login_page.html", email=email)
+    return render_page(
+        "AI Hackaton Login",
+        "Log in",
+        "Enter your email and password to access the system.",
+        content,
+        message=error,
+        message_kind="error" if error else "info",
+    )
+
+
+def render_register_page(error: str | None = None, email: str = "") -> HTMLResponse:
+    content = _render_template("register_page.html", email=email)
+    return render_page(
+        "AI Hackaton Registration",
+        "Create account",
+        "Register a new user to access the dashboard.",
+        content,
+        message=error,
+        message_kind="error" if error else "info",
+    )
+
+
+def render_forgot_password_page(error: str | None = None, email: str = "") -> HTMLResponse:
+    content = _render_template("forgot_password_page.html", email=email)
+    return render_page(
+        "AI Hackaton Password Reset",
+        "Reset password",
+        "Request a reset link for an existing account.",
+        content,
+        message=error,
+        message_kind="error" if error else "info",
+    )
+
+
+def render_reset_password_page(token: str, error: str | None = None) -> HTMLResponse:
+    content = _render_template("reset_password_page.html", token=token)
+    return render_page(
+        "AI Hackaton Reset Password",
+        "Set a new password",
+        "Use the reset token to choose a new password.",
+        content,
+        message=error,
+        message_kind="error" if error else "info",
+    )
+
+
+def render_dashboard_page(
+    user_email: str,
+    session_token: str,
+    *,
+    message: str | None = None,
+    message_kind: str = "success",
+) -> HTMLResponse:
+    content = _render_template(
+        "dashboard_page.html",
+        user_email=user_email,
+        session_token=session_token,
+    )
+    return render_page(
+        "AI Hackaton Dashboard",
+        "Dashboard",
+        "Protected workspace for authenticated users.",
+        content,
+        width="760px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_users_page(current_email: str, users: list[object], email_filter: str = "") -> HTMLResponse:
+    table = _render_template(
+        "users_page.html",
+        current_email=current_email,
+        email_filter=email_filter,
+        users=[
+            {
+                "id": str(user["id"]),
+                "email": str(user["email"]),
+                "created_at": str(user["created_at"]),
+            }
+            for user in users
+        ],
+    )
+    return render_page(
+        "AI Hackaton Users",
+        "Users",
+        "List of registered users in the system.",
+        table,
+        width="860px",
+    )
+
+
+def render_fixed_assets_page(
+    current_email: str,
+    fixed_assets: list[object],
+    *,
+    page: int,
+    page_size: int,
+    total_assets: int,
+    filters: dict[str, str],
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    rows = [
+        {
+            "id": str(asset["id"]),
+            "name": str(asset["name"]),
+            "category": str(asset["category"]),
+            "initial_value": "{:.2f}".format(float(asset["initial_value"])),
+            "responsible_person": str(asset["responsible_person"]),
+            "registration_date": str(asset["registration_date"]),
+        }
+        for asset in fixed_assets
+    ]
+    total_pages = max((total_assets + page_size - 1) // page_size, 1)
+    previous_page = page - 1 if page > 1 else 1
+    next_page = page + 1 if page < total_pages else total_pages
+    start_row = (page - 1) * page_size + 1 if total_assets > 0 else 0
+    end_row = min(page * page_size, total_assets)
+
+    base_query = {
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    def page_link(target_page: int) -> str:
+        query = {**base_query, "page": str(target_page)}
+        return f"/fixed-assets?{urlencode(query)}"
+
+    add_asset_query = {**base_query, "page": str(page)}
+    content = _render_template(
+        "fixed_assets_page.html",
+        current_email=current_email,
+        rows=rows,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+        total_assets=total_assets,
+        total_pages=total_pages,
+        start_row=start_row,
+        end_row=end_row,
+        add_asset_href=f"/fixed-assets/add?{urlencode(add_asset_query)}",
+        clear_filters_href=f"/fixed-assets?page=1&page_size={page_size}",
+        previous_page_href=page_link(previous_page) if page > 1 else None,
+        next_page_href=page_link(next_page) if page < total_pages else None,
+    )
+    return render_page(
+        "AI Hackaton Fixed Assets",
+        "Fixed Assets",
+        "Create and view fixed assets.",
+        content,
+        width="1100px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_fixed_asset_details_page(
+    current_email: str,
+    fixed_asset: object,
+    *,
+    page: int,
+    page_size: int,
+    filters: dict[str, str],
+) -> HTMLResponse:
+    back_query = {
+        "page": str(page),
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    content = _render_template(
+        "fixed_asset_details_page.html",
+        current_email=current_email,
+        fixed_asset={
+            "id": str(fixed_asset["id"]),
+            "name": str(fixed_asset["name"]),
+            "category": str(fixed_asset["category"]),
+            "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
+            "responsible_person": str(fixed_asset["responsible_person"]),
+            "registration_date": str(fixed_asset["registration_date"]),
+        },
+        edit_href=f"/fixed-assets/id/{fixed_asset['id']}/edit?{urlencode(back_query)}",
+        back_href=f"/fixed-assets?{urlencode(back_query)}",
+    )
+    return render_page(
+        "AI Hackaton Fixed Asset Details",
+        "Fixed Asset Details",
+        "Detailed view of a fixed asset.",
+        content,
+        width="860px",
+    )
+
+
+def render_edit_fixed_asset_page(
+    current_email: str,
+    fixed_asset: object,
+    *,
+    page: int,
+    page_size: int,
+    filters: dict[str, str],
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    categories = assets_repo.list_categories()
+    selected_category_id = (
+        str(fixed_asset["category_id"])
+        if "category_id" in fixed_asset.keys() and fixed_asset["category_id"]
+        else ""
+    )
+
+    back_query = {
+        "page": str(page),
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    content = _render_template(
+        "fixed_asset_edit_page.html",
+        current_email=current_email,
+        fixed_asset={
+            "id": str(fixed_asset["id"]),
+            "name": str(fixed_asset["name"]),
+            "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
+            "responsible_person": str(fixed_asset["responsible_person"]),
+            "registration_date": str(fixed_asset["registration_date"]),
+        },
+        page=page,
+        page_size=page_size,
+        filters=filters,
+        categories=[{"id": str(category["id"]), "name": str(category["name"])} for category in categories],
+        selected_category_id=selected_category_id,
+        details_href=f"/fixed-assets/id/{fixed_asset['id']}?{urlencode(back_query)}",
+        back_href=f"/fixed-assets?{urlencode(back_query)}",
+    )
+    return render_page(
+        "AI Hackaton Edit Fixed Asset",
+        "Edit Fixed Asset",
+        "Update fixed asset details.",
+        content,
+        width="860px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_add_fixed_asset_page(
+    current_email: str,
+    *,
+    page: int,
+    page_size: int,
+    categories: list[object],
+    form_data: dict[str, str] | None = None,
+    filters: dict[str, str],
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    form_data = form_data or {}
+    selected_category_id = form_data.get("category_id", "")
+
+    back_query = {
+        "page": str(page),
+        "page_size": str(page_size),
+        "name": filters.get("name", ""),
+        "category": filters.get("category", ""),
+        "initial_value": filters.get("initial_value", ""),
+        "responsible_person": filters.get("responsible_person", ""),
+        "registration_date_from": filters.get("registration_date_from", ""),
+        "registration_date_to": filters.get("registration_date_to", ""),
+    }
+
+    content = _render_template(
+        "fixed_asset_add_page.html",
+        current_email=current_email,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+        form_data={
+            "name": form_data.get("name", ""),
+            "category_id": form_data.get("category_id", ""),
+            "initial_value": form_data.get("initial_value", ""),
+            "responsible_person": form_data.get("responsible_person", ""),
+            "registration_date": form_data.get("registration_date", ""),
+        },
+        categories=[{"id": str(category["id"]), "name": str(category["name"])} for category in categories],
+        selected_category_id=selected_category_id,
+        back_href=f"/fixed-assets?{urlencode(back_query)}",
+    )
+    return render_page(
+        "AI Hackaton Add Fixed Asset",
+        "Add Fixed Asset",
+        "Create a new fixed asset in the system.",
+        content,
+        width="760px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_fixed_asset_categories_page(
+    current_email: str,
+    categories: list[object],
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    content = _render_template(
+        "fixed_asset_categories_page.html",
+        current_email=current_email,
+        categories=[
+            {
+                "id": str(category["id"]),
+                "name": str(category["name"]),
+                "assets_count": str(category["assets_count"]),
+            }
+            for category in categories
+        ],
+    )
+    return render_page(
+        "AI Hackaton Fixed Asset Categories",
+        "Fixed Asset Categories",
+        "Create and manage fixed asset categories.",
+        content,
+        width="980px",
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def render_edit_fixed_asset_category_page(
+    current_email: str,
+    category: object,
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    content = _render_template(
+        "fixed_asset_category_edit_page.html",
+        current_email=current_email,
+        category={
+            "id": str(category["id"]),
+            "name": str(category["name"]),
+        },
+    )
+    return render_page(
+        "AI Hackaton Edit Fixed Asset Category",
+        "Edit Fixed Asset Category",
+        "Update fixed asset category name.",
+        content,
+        width="760px",
+        message=message,
+        message_kind=message_kind,
+    )

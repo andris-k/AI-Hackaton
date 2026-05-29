@@ -2,6 +2,28 @@
 
 A minimal FastAPI web project with SQLite-backed authentication.
 
+## Architecture
+
+The project now uses a modular monolith layering:
+
+* `app/main.py` - app bootstrap and router registration
+* `app/routers/auth.py` - auth, dashboard, and users HTTP routes
+* `app/routers/fixed_assets.py` - fixed asset HTTP routes
+* `app/routers/categories.py` - fixed asset category HTTP routes
+* `app/views/pages.py` - server-rendered HTML page helpers
+* `app/views/templates/` - Jinja2 templates for auth, users, fixed assets, and category pages
+* `app/services/auth_service.py` - auth/session business logic
+* `app/services/fixed_assets_service.py` - fixed asset business rules (validation, filters, pagination normalization)
+* `app/repositories/auth_repository.py` - auth/session data access abstraction
+* `app/repositories/fixed_assets_repository.py` - fixed asset and category data access abstraction
+* `app/db.py` - SQLite schema management and lower-level DB operations
+
+Layering rule:
+
+* Routes call services/repositories.
+* Services contain business logic and input normalization.
+* Repositories isolate persistence calls.
+
 ## Run
 
 1. Create and activate a virtual environment.

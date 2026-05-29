@@ -1,0 +1,156 @@
+<style>
+    .assets-grid {
+        display: grid;
+        gap: 16px;
+    }
+
+    .asset-form-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .filter-form {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        font-size: 0.93rem;
+    }
+
+    th, td {
+        padding: 10px 9px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+    }
+
+    th {
+        background: rgba(37, 99, 235, 0.1);
+        font-weight: 700;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    @media (max-width: 760px) {
+        .asset-form-row { grid-template-columns: 1fr; }
+    }
+
+    .pager {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-top: 14px;
+        flex-wrap: wrap;
+    }
+
+    .pager .controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .pager .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+    }
+</style>
+<div class="assets-grid">
+    <section class="panel">
+        <h2>Registered fixed assets</h2>
+        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+        <form method="get" action="/fixed-assets" class="filter-form">
+            <input type="hidden" name="page" value="1" />
+            <input type="hidden" name="page_size" value="{{ page_size }}" />
+            <div class="asset-form-row">
+                <div>
+                    <label for="filter_name">Name</label>
+                    <input id="filter_name" name="name" type="text" value="{{ filters.name }}" />
+                </div>
+                <div>
+                    <label for="filter_category">Category</label>
+                    <input id="filter_category" name="category" type="text" value="{{ filters.category }}" />
+                </div>
+            </div>
+            <div class="asset-form-row">
+                <div>
+                    <label for="filter_initial_value">InitialValue</label>
+                    <input id="filter_initial_value" name="initial_value" type="number" step="0.01" min="0" value="{{ filters.initial_value }}" />
+                </div>
+                <div>
+                    <label for="filter_responsible_person">ResponsiblePerson</label>
+                    <input id="filter_responsible_person" name="responsible_person" type="text" value="{{ filters.responsible_person }}" />
+                </div>
+            </div>
+            <div class="asset-form-row">
+                <div>
+                    <label for="filter_registration_date_from">RegistrationDate From</label>
+                    <input id="filter_registration_date_from" name="registration_date_from" type="date" value="{{ filters.registration_date_from }}" />
+                </div>
+                <div>
+                    <label for="filter_registration_date_to">RegistrationDate To</label>
+                    <input id="filter_registration_date_to" name="registration_date_to" type="date" value="{{ filters.registration_date_to }}" />
+                </div>
+            </div>
+            <div class="links" style="margin-top: 0;">
+                <button type="submit">Apply filters</button>
+                <a href="{{ clear_filters_href }}">Clear filters</a>
+            </div>
+        </form>
+        <div class="links" style="margin-top: 0; margin-bottom: 12px;">
+            <a href="{{ add_asset_href }}">Add fixed asset</a>
+            <a href="/dashboard">Back to dashboard</a>
+            <a href="/logout">Log out</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>InitialValue</th>
+                    <th>ResponsiblePerson</th>
+                    <th>RegistrationDate</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for asset in rows %}
+                <tr>
+                    <td><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.id }}</a></td>
+                    <td><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a></td>
+                    <td>{{ asset.category }}</td>
+                    <td>{{ asset.initial_value }}</td>
+                    <td>{{ asset.responsible_person }}</td>
+                    <td>{{ asset.registration_date }}</td>
+                    <td><a href="/fixed-assets/id/{{ asset.id }}/edit">Edit</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="pager">
+            <div class="meta">Showing {{ start_row }}-{{ end_row }} of {{ total_assets }}</div>
+            <div class="controls">
+                {% if previous_page_href %}
+                <a href="{{ previous_page_href }}">Previous</a>
+                {% else %}
+                <span style="color: var(--muted);">Previous</span>
+                {% endif %}
+                <span>Page {{ page }} / {{ total_pages }}</span>
+                {% if next_page_href %}
+                <a href="{{ next_page_href }}">Next</a>
+                {% else %}
+                <span style="color: var(--muted);">Next</span>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+</div>

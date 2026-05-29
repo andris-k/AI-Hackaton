@@ -22,10 +22,13 @@
         align-items: center;
     }
     .page-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .page-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -132,8 +135,8 @@
                 <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Manage category names and see how many assets use each one.</p>
             </div>
             <div class="page-actions">
-                <a href="/fixed-assets"><button type="button">← Fixed Assets</button></a>
-                <a href="/dashboard"><button type="button">← Dashboard</button></a>
+                <a href="/fixed-assets">← Fixed Assets</a>
+                <a href="/dashboard">← Dashboard</a>
             </div>
         </div>
 

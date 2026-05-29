@@ -22,10 +22,13 @@
         align-items: center;
     }
     .page-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .page-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -89,8 +92,8 @@
                 <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Create a new fixed asset and keep the list filtered context.</p>
             </div>
             <div class="page-actions">
-                <a href="{{ back_href }}"><button type="button">← Back to fixed assets</button></a>
-                <a href="/dashboard"><button type="button">← Dashboard</button></a>
+                <a href="{{ back_href }}">← Back to fixed assets</a>
+                <a href="/dashboard">← Dashboard</a>
             </div>
         </div>
 
@@ -106,7 +109,7 @@
         </div>
 
         <section class="section-card">
-        <form method="post" action="/fixed-assets/add" class="asset-form">
+        <form method="post" action="/fixed-assets/add" class="asset-form" enctype="multipart/form-data">
             <input type="hidden" name="page" value="{{ page }}" />
             <input type="hidden" name="page_size" value="{{ page_size }}" />
             <input type="hidden" name="name_filter" value="{{ filters.name }}" />
@@ -145,6 +148,10 @@
                 <div>
                     <label for="registration_date">Registration date</label>
                     <input id="registration_date" name="registration_date" type="date" value="{{ form_data.registration_date }}" required />
+                </div>
+                <div>
+                    <label for="image">Asset image (optional)</label>
+                    <input id="image" name="image" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,image/*" />
                 </div>
             </div>
             <button type="submit">Save fixed asset</button>

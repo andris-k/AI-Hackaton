@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 MIN_PAGE_SIZE = 1
 MAX_PAGE_SIZE = 100
 MAX_TEXT_LEN = 100
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
 def build_filters(
@@ -121,3 +124,27 @@ def validate_category_name(name: str) -> tuple[str, str | None]:
     if not normalized or len(normalized) > MAX_TEXT_LEN:
         return normalized, "Category name is required and must be 100 characters or less."
     return normalized, None
+
+
+def validate_image_upload(
+    filename: str | None,
+    content_type: str | None,
+    size_bytes: int,
+) -> str | None:
+    if not filename:
+        return "Image file must have a valid filename."
+
+    extension = Path(filename).suffix.lower()
+    if extension not in ALLOWED_IMAGE_EXTENSIONS:
+        return "Allowed image types: .png, .jpg, .jpeg, .gif, .webp."
+
+    if not (content_type or "").lower().startswith("image/"):
+        return "Uploaded file must be an image."
+
+    if size_bytes <= 0:
+        return "Uploaded image file is empty."
+
+    if size_bytes > MAX_IMAGE_SIZE_BYTES:
+        return "Image exceeds maximum size of 5 MB."
+
+    return None

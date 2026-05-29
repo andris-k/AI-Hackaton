@@ -32,10 +32,13 @@
         align-items: center;
     }
     .hero-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .hero-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -115,26 +118,6 @@
         text-decoration: none;
     }
 
-    details.system-details {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        padding: 10px;
-    }
-    details.system-details summary {
-        cursor: pointer;
-        font-weight: 600;
-    }
-    .token-box {
-        margin-top: 8px;
-        display: block;
-        padding: 8px;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 8px;
-        background: var(--table-row-alt, #fcfaf6);
-        overflow-wrap: anywhere;
-    }
-
     @media (max-width: 980px) {
         .summary-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -154,8 +137,8 @@
                 <p class="hero-subtitle">Welcome back, <strong>{{ user_email }}</strong>. Choose an area to continue operational work.</p>
             </div>
             <div class="hero-actions">
-                <a href="/fixed-assets"><button type="button">Fixed Assets</button></a>
-                <a href="/inventory-sessions"><button type="button">Inventory Sessions</button></a>
+                <a href="/fixed-assets">Fixed Assets</a>
+                <a href="/inventory-sessions">Inventory Sessions</a>
             </div>
         </div>
     </section>
@@ -213,11 +196,7 @@
 
         <section class="section-card">
             <h3>System</h3>
-            <p style="margin: 0 0 8px; color: var(--muted, #6b6055);">This dashboard is protected and available only to authenticated users.</p>
-            <details class="system-details">
-                <summary>Session diagnostics</summary>
-                <code class="token-box">Session token: {{ session_token }}</code>
-            </details>
+            <p style="margin: 0; color: var(--muted, #6b6055);">This dashboard is protected and available only to authenticated users.</p>
         </section>
     </section>
 </div>

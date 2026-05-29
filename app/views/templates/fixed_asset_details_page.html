@@ -22,10 +22,13 @@
         align-items: center;
     }
     .page-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .page-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -82,6 +85,17 @@
     .detail-grid dd {
         margin: 0;
     }
+    .asset-image {
+        margin-top: 12px;
+    }
+    .asset-image img {
+        width: 220px;
+        max-width: 100%;
+        height: auto;
+        border-radius: 12px;
+        border: 1px solid var(--border, #d6cfc7);
+        background: #f8f4ee;
+    }
 </style>
 <div class="stack">
     <section class="panel">
@@ -91,8 +105,8 @@
                 <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Read-only record view.</p>
             </div>
             <div class="page-actions">
-                <a href="{{ edit_href }}"><button type="button">Edit fixed asset</button></a>
-                <a href="{{ back_href }}"><button type="button">← Fixed Assets</button></a>
+                <a href="{{ edit_href }}">Edit fixed asset</a>
+                <a href="{{ back_href }}">← Fixed Assets</a>
             </div>
         </div>
 
@@ -127,6 +141,13 @@
                 <dt>RegistrationDate</dt>
                 <dd>{{ fixed_asset.registration_date }}</dd>
             </dl>
+            {% if fixed_asset.image_url %}
+            <div class="asset-image">
+                <p><strong>Image</strong></p>
+                <div><a href="{{ fixed_asset.image_url }}" target="_blank" rel="noopener">Open image</a></div>
+                <img src="{{ fixed_asset.image_url }}" alt="{{ fixed_asset.name }} image" />
+            </div>
+            {% endif %}
         </section>
 
         <form method="post" action="{{ delete_action }}" onsubmit="return confirm('Delete this fixed asset?');" style="margin-top: 12px;">

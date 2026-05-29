@@ -22,10 +22,13 @@
         align-items: center;
     }
     .page-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .page-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -80,6 +83,17 @@
     @media (max-width: 760px) {
         .asset-form-row { grid-template-columns: 1fr; }
     }
+    .image-preview {
+        margin-top: 8px;
+    }
+    .image-preview img {
+        width: 160px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid var(--border, #d6cfc7);
+        background: #f8f4ee;
+    }
 </style>
 <div class="stack">
     <section class="panel">
@@ -89,8 +103,8 @@
                 <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Update the asset and keep the current filter context.</p>
             </div>
             <div class="page-actions">
-                <a href="{{ details_href }}"><button type="button">← Back to details</button></a>
-                <a href="{{ back_href }}"><button type="button">← Fixed Assets</button></a>
+                <a href="{{ details_href }}">← Back to details</a>
+                <a href="{{ back_href }}">← Fixed Assets</a>
             </div>
         </div>
 
@@ -107,7 +121,7 @@
 
         <section class="section-card">
             <h3>Edit fixed asset</h3>
-        <form method="post" action="/fixed-assets/id/{{ fixed_asset.id }}/edit" class="asset-form">
+        <form method="post" action="/fixed-assets/id/{{ fixed_asset.id }}/edit" class="asset-form" enctype="multipart/form-data">
             <input type="hidden" name="page" value="{{ page }}" />
             <input type="hidden" name="page_size" value="{{ page_size }}" />
             <input type="hidden" name="name_filter" value="{{ filters.name }}" />
@@ -145,6 +159,16 @@
                 <div>
                     <label for="registration_date">Registration date</label>
                     <input id="registration_date" name="registration_date" type="date" value="{{ fixed_asset.registration_date }}" required />
+                </div>
+                <div>
+                    <label for="image">Replace image (optional)</label>
+                    <input id="image" name="image" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,image/*" />
+                    {% if fixed_asset.image_url %}
+                    <div class="image-preview">
+                        <a href="{{ fixed_asset.image_url }}" target="_blank" rel="noopener">Open current image</a>
+                        <img src="{{ fixed_asset.image_url }}" alt="{{ fixed_asset.name }} image" />
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             <button type="submit">Save changes</button>

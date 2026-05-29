@@ -100,6 +100,7 @@ def initialize_database() -> None:
                 initial_value REAL NOT NULL,
                 responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100),
                 registration_date TEXT NOT NULL,
+                image_path TEXT,
                 FOREIGN KEY (category_id) REFERENCES fixed_asset_categories(id)
             )
             """
@@ -114,6 +115,8 @@ def initialize_database() -> None:
         }
         if "category_id" not in columns:
             connection.execute("ALTER TABLE fixed_assets ADD COLUMN category_id TEXT")
+        if "image_path" not in columns:
+            connection.execute("ALTER TABLE fixed_assets ADD COLUMN image_path TEXT")
 
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_fixed_assets_category_id ON fixed_assets(category_id)"
@@ -544,6 +547,7 @@ def create_fixed_asset(
     initial_value: float,
     responsible_person: str,
     registration_date: str,
+    image_path: str | None = None,
 ) -> sqlite3.Row:
     fixed_asset_id = str(uuid.uuid4())
     with db_session() as connection:
@@ -563,8 +567,9 @@ def create_fixed_asset(
                 category,
                 initial_value,
                 responsible_person,
-                registration_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                registration_date,
+                image_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 fixed_asset_id,
@@ -574,6 +579,7 @@ def create_fixed_asset(
                 initial_value,
                 responsible_person,
                 registration_date,
+                image_path,
             ),
         )
         cursor = connection.execute(
@@ -585,7 +591,8 @@ def create_fixed_asset(
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
-                fixed_assets.category_id
+                fixed_assets.category_id,
+                fixed_assets.image_path
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             WHERE fixed_assets.id = ?
@@ -606,7 +613,8 @@ def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
-                fixed_assets.category_id
+                fixed_assets.category_id,
+                fixed_assets.image_path
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             WHERE fixed_assets.id = ?
@@ -623,6 +631,7 @@ def update_fixed_asset(
     initial_value: float,
     responsible_person: str,
     registration_date: str,
+    image_path: str | None = None,
 ) -> sqlite3.Row | None:
     with db_session() as connection:
         category = connection.execute(
@@ -641,7 +650,8 @@ def update_fixed_asset(
                 category = ?,
                 initial_value = ?,
                 responsible_person = ?,
-                registration_date = ?
+                registration_date = ?,
+                image_path = ?
             WHERE id = ?
             """,
             (
@@ -651,6 +661,7 @@ def update_fixed_asset(
                 initial_value,
                 responsible_person,
                 registration_date,
+                image_path,
                 fixed_asset_id,
             ),
         )
@@ -663,7 +674,8 @@ def update_fixed_asset(
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
-                fixed_assets.category_id
+                fixed_assets.category_id,
+                fixed_assets.image_path
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             WHERE fixed_assets.id = ?
@@ -770,7 +782,8 @@ def list_fixed_assets(
                     fixed_assets.initial_value,
                     fixed_assets.responsible_person,
                     fixed_assets.registration_date,
-                    fixed_assets.category_id
+                    fixed_assets.category_id,
+                    fixed_assets.image_path
                 FROM fixed_assets
                 LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
                 {where_clause}
@@ -791,7 +804,8 @@ def list_fixed_assets(
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
-                fixed_assets.category_id
+                fixed_assets.category_id,
+                fixed_assets.image_path
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             {where_clause}

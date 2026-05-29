@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, Form, Query
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import APIRouter, Cookie, File, Form, Query, UploadFile
 from fastapi.responses import HTMLResponse
 
 from app.repositories import fixed_assets_repository as assets_repo
@@ -16,6 +19,43 @@ from app.views.pages import (
 )
 
 router = APIRouter()
+_UPLOADS_ROOT = Path(__file__).resolve().parent.parent / "uploads"
+_FIXED_ASSET_UPLOAD_DIR = _UPLOADS_ROOT / "fixed-assets"
+
+
+def _save_fixed_asset_image(image: UploadFile) -> tuple[str | None, str | None]:
+    raw_filename = (image.filename or "").strip()
+    if not raw_filename:
+        return None, None
+
+    content = image.file.read()
+    validation_error = assets_service.validate_image_upload(
+        filename=raw_filename,
+        content_type=image.content_type,
+        size_bytes=len(content),
+    )
+    if validation_error:
+        return None, validation_error
+
+    extension = Path(raw_filename).suffix.lower()
+    stored_name = f"{uuid4().hex}{extension}"
+    _FIXED_ASSET_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = _FIXED_ASSET_UPLOAD_DIR / stored_name
+    target_path.write_bytes(content)
+    return f"fixed-assets/{stored_name}", None
+
+
+def _delete_uploaded_image(image_path: str | None) -> None:
+    normalized_path = (image_path or "").strip()
+    if not normalized_path:
+        return
+
+    target_path = (_UPLOADS_ROOT / normalized_path).resolve()
+    uploads_root = _UPLOADS_ROOT.resolve()
+    if not str(target_path).startswith(str(uploads_root)):
+        return
+    if target_path.exists() and target_path.is_file():
+        target_path.unlink()
 
 
 @router.get("/fixed-assets", response_class=HTMLResponse)
@@ -184,6 +224,7 @@ def edit_fixed_asset_route(
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
+    image: UploadFile | None = File(default=None),
     page: int = Form(default=1),
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
@@ -248,6 +289,24 @@ def edit_fixed_asset_route(
             message_kind="error",
         )
 
+    previous_image_path = str(fixed_asset["image_path"] or "").strip() or None
+    image_path_to_save = previous_image_path
+    new_image_path: str | None = None
+    if image and (image.filename or "").strip():
+        uploaded_path, image_error = _save_fixed_asset_image(image)
+        if image_error:
+            return render_edit_fixed_asset_page(
+                user["email"],
+                fixed_asset,
+                page=safe_page,
+                page_size=safe_page_size,
+                filters=filters,
+                message=image_error,
+                message_kind="error",
+            )
+        new_image_path = uploaded_path
+        image_path_to_save = uploaded_path
+
     try:
         updated = assets_repo.update_asset(
             fixed_asset_id=fixed_asset_id,
@@ -256,8 +315,11 @@ def edit_fixed_asset_route(
             initial_value=initial_value,
             responsible_person=responsible_person.strip(),
             registration_date=registration_date,
+            image_path=image_path_to_save,
         )
     except ValueError:
+        if new_image_path:
+            _delete_uploaded_image(new_image_path)
         return render_edit_fixed_asset_page(
             user["email"],
             fixed_asset,
@@ -268,6 +330,8 @@ def edit_fixed_asset_route(
             message_kind="error",
         )
     if updated is None:
+        if new_image_path:
+            _delete_uploaded_image(new_image_path)
         return render_page(
             "AI Hackaton Edit Fixed Asset",
             "Fixed Asset Not Found",
@@ -276,6 +340,9 @@ def edit_fixed_asset_route(
             message="Fixed asset not found.",
             message_kind="error",
         )
+
+    if new_image_path and previous_image_path and new_image_path != previous_image_path:
+        _delete_uploaded_image(previous_image_path)
 
     return render_edit_fixed_asset_page(
         user["email"],
@@ -342,6 +409,7 @@ def create_fixed_asset_route(
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
+    image: UploadFile | None = File(default=None),
     page: int = Form(default=1),
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
@@ -394,6 +462,27 @@ def create_fixed_asset_route(
             message_kind="error",
         )
 
+    uploaded_image_path: str | None = None
+    if image and (image.filename or "").strip():
+        uploaded_image_path, image_error = _save_fixed_asset_image(image)
+        if image_error:
+            return render_add_fixed_asset_page(
+                user["email"],
+                page=current_page,
+                page_size=safe_page_size,
+                categories=categories,
+                form_data=assets_service.build_asset_form_data(
+                    name=name,
+                    category_id=category_id,
+                    initial_value=initial_value,
+                    responsible_person=responsible_person,
+                    registration_date=registration_date,
+                ),
+                filters=filters,
+                message=image_error,
+                message_kind="error",
+            )
+
     try:
         assets_repo.create_asset(
             name=name.strip(),
@@ -401,8 +490,11 @@ def create_fixed_asset_route(
             initial_value=initial_value,
             responsible_person=responsible_person.strip(),
             registration_date=registration_date,
+            image_path=uploaded_image_path,
         )
     except ValueError:
+        if uploaded_image_path:
+            _delete_uploaded_image(uploaded_image_path)
         return render_add_fixed_asset_page(
             user["email"],
             page=current_page,
@@ -462,7 +554,10 @@ def delete_fixed_asset_route(
         registration_date_to=registration_date_to_filter,
     )
 
+    asset_before_delete = assets_repo.get_asset_by_id(fixed_asset_id)
     deleted = assets_repo.delete_asset(fixed_asset_id)
+    if deleted and asset_before_delete is not None:
+        _delete_uploaded_image(str(asset_before_delete["image_path"] or "").strip() or None)
     total_assets = assets_repo.count_assets(filters)
     current_page, safe_page_size, _ = assets_service.normalize_paging(page, page_size, total_assets)
     assets = assets_repo.list_assets(current_page, safe_page_size, filters)

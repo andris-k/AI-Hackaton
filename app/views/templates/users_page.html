@@ -22,10 +22,13 @@
         align-items: center;
     }
     .page-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .page-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -161,14 +164,14 @@
                 <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Browse registered accounts and filter by email.</p>
             </div>
             <div class="page-actions">
-                <a href="/dashboard"><button type="button">← Dashboard</button></a>
-                <a href="/logout"><button type="button">Log out</button></a>
+                <a href="/dashboard">← Dashboard</a>
+                <a href="/logout">Log out</a>
             </div>
         </div>
 
         <div class="summary-grid">
             <article class="summary-card">
-                <p>Total users</p>
+                <p>Users shown</p>
                 <strong>{{ users | length }}</strong>
             </article>
             <article class="summary-card">

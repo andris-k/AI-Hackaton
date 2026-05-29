@@ -21,6 +21,13 @@ def _render_template(template_name: str, **context: object) -> str:
     return template.render(**context)
 
 
+def _fixed_asset_image_url(image_path: object) -> str | None:
+    raw_value = str(image_path or "").strip()
+    if not raw_value:
+        return None
+    return f"/uploads/{raw_value}"
+
+
 def render_page(
     page_title: str,
     heading: str,
@@ -386,6 +393,7 @@ def render_fixed_assets_page(
             "initial_value": "{:.2f}".format(float(asset["initial_value"])),
             "responsible_person": str(asset["responsible_person"]),
             "registration_date": str(asset["registration_date"]),
+            "image_url": _fixed_asset_image_url(asset["image_path"]),
         }
         for asset in fixed_assets
     ]
@@ -470,6 +478,7 @@ def render_fixed_asset_details_page(
             "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
             "responsible_person": str(fixed_asset["responsible_person"]),
             "registration_date": str(fixed_asset["registration_date"]),
+            "image_url": _fixed_asset_image_url(fixed_asset["image_path"]),
         },
         page=page,
         page_size=page_size,
@@ -525,6 +534,7 @@ def render_edit_fixed_asset_page(
             "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
             "responsible_person": str(fixed_asset["responsible_person"]),
             "registration_date": str(fixed_asset["registration_date"]),
+            "image_url": _fixed_asset_image_url(fixed_asset["image_path"]),
         },
         page=page,
         page_size=page_size,

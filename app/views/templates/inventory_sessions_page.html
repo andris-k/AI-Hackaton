@@ -22,10 +22,13 @@
         align-items: center;
     }
     .page-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .page-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -51,10 +54,13 @@
         margin: 0 0 12px;
     }
     .quick-actions a {
+        display: inline-flex;
+        align-items: center;
         text-decoration: none;
-    }
-    .quick-actions button {
-        width: auto;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: #fff;
+        color: inherit;
         white-space: nowrap;
         padding: 8px 12px;
     }
@@ -137,8 +143,8 @@
                 <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Use filters to focus on current work or completed records.</p>
             </div>
             <div class="page-actions">
-                <a href="/inventory-sessions/add"><button>+ New Session</button></a>
-                <a href="/dashboard"><button type="button">← Dashboard</button></a>
+                <a href="/inventory-sessions/add">+ New Session</a>
+                <a href="/dashboard">← Dashboard</a>
             </div>
         </div>
 
@@ -165,12 +171,12 @@
         {% endif %}
 
         <div class="quick-actions">
-            <a href="/inventory-sessions?status=New"><button type="button">New</button></a>
-            <a href="/inventory-sessions?status=Active"><button type="button">Active</button></a>
-            <a href="/inventory-sessions?status=Completed"><button type="button">Completed</button></a>
-            <a href="/inventory-sessions?status=Cancelled"><button type="button">Cancelled</button></a>
-            <a href="/inventory-sessions/export.csv?status={{ filters.status }}&responsible_person={{ filters.responsible_person }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}"><button type="button">Export CSV</button></a>
-            <a href="/inventory-sessions/export.json?status={{ filters.status }}&responsible_person={{ filters.responsible_person }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}"><button type="button">Export JSON</button></a>
+            <a href="/inventory-sessions?status=New">New</a>
+            <a href="/inventory-sessions?status=Active">Active</a>
+            <a href="/inventory-sessions?status=Completed">Completed</a>
+            <a href="/inventory-sessions?status=Cancelled">Cancelled</a>
+            <a href="/inventory-sessions/export.csv?status={{ filters.status }}&responsible_person={{ filters.responsible_person }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Export CSV</a>
+            <a href="/inventory-sessions/export.json?status={{ filters.status }}&responsible_person={{ filters.responsible_person }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}">Export JSON</a>
         </div>
 
         <form method="get" action="/inventory-sessions" class="filter-form">
@@ -198,7 +204,7 @@
             </div>
             <div class="filter-actions">
                 <button type="submit">Filter</button>
-                <a href="/inventory-sessions"><button type="button">Clear</button></a>
+                <a href="/inventory-sessions">Clear</a>
             </div>
         </form>
 

@@ -41,6 +41,7 @@ def create_asset(
     initial_value: float,
     responsible_person: str,
     registration_date: str,
+    image_path: str | None = None,
 ) -> sqlite3.Row:
     return create_fixed_asset(
         name=name,
@@ -48,6 +49,7 @@ def create_asset(
         initial_value=initial_value,
         responsible_person=responsible_person,
         registration_date=registration_date,
+        image_path=image_path,
     )
 
 
@@ -58,6 +60,7 @@ def update_asset(
     initial_value: float,
     responsible_person: str,
     registration_date: str,
+    image_path: str | None = None,
 ) -> sqlite3.Row | None:
     return update_fixed_asset(
         fixed_asset_id=fixed_asset_id,
@@ -66,6 +69,7 @@ def update_asset(
         initial_value=initial_value,
         responsible_person=responsible_person,
         registration_date=registration_date,
+        image_path=image_path,
     )
 
 

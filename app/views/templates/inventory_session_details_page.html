@@ -63,8 +63,8 @@
             {% endif %}
         </section>
 
-        {% if inv_session.status == "Completed" %}
-        <p style="margin: 0 0 8px; color: var(--muted, #6b6055);">This session is completed and read-only.</p>
+        {% if inv_session.status in ["Completed", "Cancelled"] %}
+        <p style="margin: 0 0 8px; color: var(--muted, #6b6055);">This session is {{ inv_session.status | lower }} and read-only.</p>
         {% endif %}
 
         <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
@@ -73,13 +73,19 @@
                 <button type="submit">Start</button>
             </form>
             {% endif %}
-            {% if inv_session.status != "Completed" %}
+                        {% if inv_session.status not in ["Completed", "Cancelled"] %}
             <a href="/inventory-sessions/id/{{ inv_session.id }}/edit">
                 <button>Edit</button>
             </a>
             {% endif %}
+                        {% if inv_session.status in ["New", "Active"] %}
+                        <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/cancel" style="display:inline;"
+                                    onsubmit="return confirm('Cancel this inventory session? It cannot be modified afterwards.')">
+                                <button type="submit" style="background: #b91c1c; color: #fff; border-color: #b91c1c;">Cancel Session</button>
+                        </form>
+                        {% endif %}
             <a href="/inventory-sessions"><button type="button">Back to list</button></a>
-            {% if inv_session.status != "Completed" %}
+                        {% if inv_session.status not in ["Completed", "Cancelled"] %}
             <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/delete" style="display:inline;"
                   onsubmit="return confirm('Delete this inventory session? This cannot be undone.')">
                 <button type="submit" style="background: #b91c1c; color: #fff; border-color: #b91c1c;">Delete</button>

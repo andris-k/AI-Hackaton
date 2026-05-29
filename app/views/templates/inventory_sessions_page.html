@@ -37,11 +37,81 @@
     .badge-active    { background: #d1fae5; color: #064e3b; }
     .badge-completed { background: #e0e7ff; color: #3730a3; }
     .badge-cancelled { background: #fee2e2; color: #7f1d1d; }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 760px) {
+        .summary-grid { grid-template-columns: 1fr; }
+    }
+    .summary-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: var(--table-row-alt, #fcfaf6);
+        padding: 10px;
+    }
+    .summary-card p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .summary-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.15rem;
+    }
+    .quick-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 0 0 12px;
+    }
+    .quick-actions a {
+        text-decoration: none;
+    }
+    .quick-actions button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
 </style>
 <div class="stack">
     <section class="panel">
         <h2>Inventory Sessions</h2>
         <p>Signed in as <strong>{{ current_email }}</strong>.</p>
+
+        {% if summary %}
+        <div class="summary-grid">
+            <article class="summary-card">
+                <p>Total sessions</p>
+                <strong>{{ summary.total_sessions }}</strong>
+            </article>
+            <article class="summary-card">
+                <p>Linked assets / quantity</p>
+                <strong>{{ summary.total_linked_assets }} / {{ summary.total_quantity }}</strong>
+            </article>
+            <article class="summary-card">
+                <p>By status</p>
+                <strong>
+                    New {{ summary.status_counts.New }},
+                    Active {{ summary.status_counts.Active }},
+                    Completed {{ summary.status_counts.Completed }},
+                    Cancelled {{ summary.status_counts.Cancelled }}
+                </strong>
+            </article>
+        </div>
+        {% endif %}
+
+        <div class="quick-actions">
+            <a href="/inventory-sessions?status=New"><button type="button">Only New</button></a>
+            <a href="/inventory-sessions?status=Active"><button type="button">Only Active</button></a>
+            <a href="/inventory-sessions?status=Completed"><button type="button">Only Completed</button></a>
+            <a href="/inventory-sessions?status=Cancelled"><button type="button">Only Cancelled</button></a>
+            <a href="/inventory-sessions/export.csv?status={{ filters.status }}&responsible_person={{ filters.responsible_person }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}"><button type="button">Export CSV</button></a>
+            <a href="/inventory-sessions/export.json?status={{ filters.status }}&responsible_person={{ filters.responsible_person }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}"><button type="button">Export JSON</button></a>
+        </div>
 
         <form method="get" action="/inventory-sessions" class="filter-form">
             <div>

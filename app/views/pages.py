@@ -664,6 +664,10 @@ def render_inventory_sessions_page(
     sessions: list[object],
     statuses: list[str],
     filters: dict[str, str],
+    summary: dict[str, object] | None = None,
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
 ) -> HTMLResponse:
     content = _render_template(
         "inventory_sessions_page.html",
@@ -671,6 +675,7 @@ def render_inventory_sessions_page(
         sessions=sessions,
         statuses=statuses,
         filters=filters,
+        summary=summary,
     )
     return render_page(
         "AI Hackaton Inventory Sessions",
@@ -678,6 +683,8 @@ def render_inventory_sessions_page(
         "Manage inventory sessions.",
         content,
         width="1100px",
+        message=message,
+        message_kind=message_kind,
     )
 
 
@@ -710,6 +717,9 @@ def render_inventory_session_details_page(
     current_email: str,
     inv_session: object,
     linked_assets: list[object],
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
 ) -> HTMLResponse:
     content = _render_template(
         "inventory_session_details_page.html",
@@ -723,6 +733,8 @@ def render_inventory_session_details_page(
         "View inventory session details.",
         content,
         width="760px",
+        message=message,
+        message_kind=message_kind,
     )
 
 
@@ -754,5 +766,7 @@ def render_edit_inventory_session_page(
         "Update inventory session.",
         content,
         width="760px",
+        message=error,
+        message_kind="error" if error else "info",
     )
 

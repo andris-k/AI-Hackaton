@@ -29,11 +29,8 @@
     <section class="panel">
         <h2>Edit Inventory Session</h2>
         <p>Signed in as <strong>{{ current_email }}</strong>.</p>
-        {% if error %}
-        <p class="error">{{ error }}</p>
-        {% endif %}
         {% if is_read_only %}
-        <p style="color: var(--muted, #6b6055); margin: 0;">This session is Completed and read-only.</p>
+        <p style="color: var(--muted, #6b6055); margin: 0;">This session is terminal and read-only.</p>
         {% endif %}
 
         <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/edit" class="session-form">
@@ -102,7 +99,7 @@
                 {% if not is_read_only %}
                 <button type="submit">Save</button>
                 {% endif %}
-                {% if inv_session.status != "Completed" %}
+                {% if inv_session.status == "Active" %}
                 <button type="submit" formaction="/inventory-sessions/id/{{ inv_session.id }}/complete" formmethod="post">Complete</button>
                 {% endif %}
                 <a href="/inventory-sessions/id/{{ inv_session.id }}">

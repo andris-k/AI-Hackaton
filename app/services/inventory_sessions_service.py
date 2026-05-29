@@ -5,7 +5,47 @@ from datetime import datetime
 from app.db import INVENTORY_SESSION_STATUSES
 
 STATUSES: tuple[str, ...] = INVENTORY_SESSION_STATUSES
+TERMINAL_STATUSES: tuple[str, ...] = ("Completed", "Cancelled")
+_ALLOWED_TRANSITIONS: dict[str, set[str]] = {
+    "New": {"Active", "Cancelled"},
+    "Active": {"Completed", "Cancelled"},
+    "Completed": set(),
+    "Cancelled": set(),
+}
 MAX_TEXT_LEN = 100
+
+
+def is_terminal_status(status: str) -> bool:
+    return status in TERMINAL_STATUSES
+
+
+def can_transition(current_status: str, target_status: str) -> bool:
+    if current_status == target_status:
+        return True
+    return target_status in _ALLOWED_TRANSITIONS.get(current_status, set())
+
+
+def transition_error(current_status: str, target_status: str) -> str | None:
+    if current_status not in STATUSES:
+        return f"Status must be one of: {', '.join(STATUSES)}."
+    if target_status not in STATUSES:
+        return f"Status must be one of: {', '.join(STATUSES)}."
+    if can_transition(current_status, target_status):
+        return None
+
+    allowed_targets = sorted(_ALLOWED_TRANSITIONS.get(current_status, set()))
+    if not allowed_targets:
+        return f"Session in '{current_status}' is terminal and cannot change status."
+    return (
+        f"Invalid status transition from '{current_status}' to '{target_status}'. "
+        f"Allowed targets: {', '.join(allowed_targets)}."
+    )
+
+
+def available_target_statuses(current_status: str) -> list[str]:
+    if current_status not in STATUSES:
+        return list(STATUSES)
+    return [current_status, *sorted(_ALLOWED_TRANSITIONS.get(current_status, set()))]
 
 
 def validate_session_form(

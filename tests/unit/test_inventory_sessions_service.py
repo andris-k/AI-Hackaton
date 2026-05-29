@@ -10,6 +10,11 @@ import pytest
 from app.services.inventory_sessions_service import (
     parse_linked_assets,
     STATUSES,
+    TERMINAL_STATUSES,
+    available_target_statuses,
+    can_transition,
+    is_terminal_status,
+    transition_error,
     validate_create_form,
     validate_session_form,
 )
@@ -219,3 +224,63 @@ def test_parse_linked_assets_ignores_fully_empty_rows():
     )
     assert error is None
     assert linked_assets == [("a1", 1)]
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle transitions and terminal status helpers
+# ---------------------------------------------------------------------------
+
+
+def test_terminal_statuses_are_detected_correctly():
+    assert is_terminal_status("Completed") is True
+    assert is_terminal_status("Cancelled") is True
+    assert is_terminal_status("New") is False
+    assert is_terminal_status("Active") is False
+    assert set(TERMINAL_STATUSES) == {"Completed", "Cancelled"}
+
+
+@pytest.mark.parametrize(
+    "current_status,target_status,expected",
+    [
+        ("New", "Active", True),
+        ("New", "Cancelled", True),
+        ("Active", "Completed", True),
+        ("Active", "Cancelled", True),
+        ("Completed", "Completed", True),
+        ("Cancelled", "Cancelled", True),
+        ("New", "Completed", False),
+        ("Completed", "Active", False),
+        ("Cancelled", "Active", False),
+    ],
+)
+def test_can_transition_matrix(current_status, target_status, expected):
+    assert can_transition(current_status, target_status) is expected
+
+
+def test_transition_error_for_invalid_move_includes_allowed_targets():
+    error = transition_error("New", "Completed")
+    assert error is not None
+    assert "Invalid status transition" in error
+    assert "Active" in error
+    assert "Cancelled" in error
+
+
+def test_transition_error_for_terminal_state_is_explicit():
+    error = transition_error("Completed", "Active")
+    assert error is not None
+    assert "terminal" in error.lower()
+
+
+def test_transition_error_none_for_valid_transition():
+    assert transition_error("Active", "Completed") is None
+
+
+def test_available_target_statuses_for_new():
+    targets = available_target_statuses("New")
+    assert targets[0] == "New"
+    assert set(targets[1:]) == {"Active", "Cancelled"}
+
+
+def test_available_target_statuses_for_terminal_states_have_only_current_status():
+    assert available_target_statuses("Completed") == ["Completed"]
+    assert available_target_statuses("Cancelled") == ["Cancelled"]

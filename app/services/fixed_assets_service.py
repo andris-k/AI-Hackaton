@@ -85,6 +85,7 @@ def validate_asset_form(
     *,
     name: str,
     category_id: str,
+    quantity: int,
     responsible_person: str,
     registration_date: str,
 ) -> str | None:
@@ -93,6 +94,9 @@ def validate_asset_form(
 
     if not category_id.strip():
         return "Category is required."
+
+    if quantity < 0:
+        return "Quantity must be zero or greater."
 
     try:
         datetime.strptime(registration_date, "%Y-%m-%d")
@@ -106,6 +110,7 @@ def build_asset_form_data(
     *,
     name: str,
     category_id: str,
+    quantity: int | str,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
@@ -113,6 +118,7 @@ def build_asset_form_data(
     return {
         "name": name,
         "category_id": category_id,
+        "quantity": str(quantity),
         "initial_value": str(initial_value),
         "responsible_person": responsible_person,
         "registration_date": registration_date,

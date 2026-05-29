@@ -38,6 +38,7 @@ def get_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
 def create_asset(
     name: str,
     category_id: str,
+    quantity: int,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
@@ -46,6 +47,7 @@ def create_asset(
     return create_fixed_asset(
         name=name,
         category_id=category_id,
+        quantity=quantity,
         initial_value=initial_value,
         responsible_person=responsible_person,
         registration_date=registration_date,
@@ -57,6 +59,7 @@ def update_asset(
     fixed_asset_id: str,
     name: str,
     category_id: str,
+    quantity: int,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
@@ -66,6 +69,7 @@ def update_asset(
         fixed_asset_id=fixed_asset_id,
         name=name,
         category_id=category_id,
+        quantity=quantity,
         initial_value=initial_value,
         responsible_person=responsible_person,
         registration_date=registration_date,

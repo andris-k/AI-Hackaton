@@ -97,6 +97,7 @@ def initialize_database() -> None:
                 category_id TEXT NOT NULL,
                 name TEXT NOT NULL CHECK (length(name) <= 100),
                 category TEXT NOT NULL CHECK (length(category) <= 100),
+                quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 0),
                 initial_value REAL NOT NULL,
                 responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100),
                 registration_date TEXT NOT NULL,
@@ -115,6 +116,10 @@ def initialize_database() -> None:
         }
         if "category_id" not in columns:
             connection.execute("ALTER TABLE fixed_assets ADD COLUMN category_id TEXT")
+        if "quantity" not in columns:
+            connection.execute(
+                "ALTER TABLE fixed_assets ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1"
+            )
         if "image_path" not in columns:
             connection.execute("ALTER TABLE fixed_assets ADD COLUMN image_path TEXT")
 
@@ -544,6 +549,7 @@ def delete_fixed_asset_category(category_id: str) -> bool:
 def create_fixed_asset(
     name: str,
     category_id: str,
+    quantity: int,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
@@ -565,17 +571,19 @@ def create_fixed_asset(
                 category_id,
                 name,
                 category,
+                quantity,
                 initial_value,
                 responsible_person,
                 registration_date,
                 image_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 fixed_asset_id,
                 category_id,
                 name,
                 category["name"],
+                quantity,
                 initial_value,
                 responsible_person,
                 registration_date,
@@ -588,6 +596,7 @@ def create_fixed_asset(
                 fixed_assets.id,
                 fixed_assets.name,
                 COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.quantity,
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
@@ -610,6 +619,7 @@ def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
                 fixed_assets.id,
                 fixed_assets.name,
                 COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.quantity,
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
@@ -628,6 +638,7 @@ def update_fixed_asset(
     fixed_asset_id: str,
     name: str,
     category_id: str,
+    quantity: int,
     initial_value: float,
     responsible_person: str,
     registration_date: str,
@@ -648,6 +659,7 @@ def update_fixed_asset(
                 name = ?,
                 category_id = ?,
                 category = ?,
+                quantity = ?,
                 initial_value = ?,
                 responsible_person = ?,
                 registration_date = ?,
@@ -658,6 +670,7 @@ def update_fixed_asset(
                 name,
                 category_id,
                 category["name"],
+                quantity,
                 initial_value,
                 responsible_person,
                 registration_date,
@@ -671,6 +684,7 @@ def update_fixed_asset(
                 fixed_assets.id,
                 fixed_assets.name,
                 COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.quantity,
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
@@ -779,6 +793,7 @@ def list_fixed_assets(
                     fixed_assets.id,
                     fixed_assets.name,
                     COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                    fixed_assets.quantity,
                     fixed_assets.initial_value,
                     fixed_assets.responsible_person,
                     fixed_assets.registration_date,
@@ -801,6 +816,7 @@ def list_fixed_assets(
                 fixed_assets.id,
                 fixed_assets.name,
                 COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                fixed_assets.quantity,
                 fixed_assets.initial_value,
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,

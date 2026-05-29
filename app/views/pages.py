@@ -390,6 +390,7 @@ def render_fixed_assets_page(
             "id": str(asset["id"]),
             "name": str(asset["name"]),
             "category": str(asset["category"]),
+            "quantity": str(asset["quantity"]),
             "initial_value": "{:.2f}".format(float(asset["initial_value"])),
             "responsible_person": str(asset["responsible_person"]),
             "registration_date": str(asset["registration_date"]),
@@ -442,7 +443,7 @@ def render_fixed_assets_page(
         "Fixed Assets",
         "Create and view fixed assets.",
         content,
-        width="1100px",
+        width="1320px",
         message=message,
         message_kind=message_kind,
     )
@@ -475,6 +476,7 @@ def render_fixed_asset_details_page(
             "id": str(fixed_asset["id"]),
             "name": str(fixed_asset["name"]),
             "category": str(fixed_asset["category"]),
+            "quantity": str(fixed_asset["quantity"]),
             "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
             "responsible_person": str(fixed_asset["responsible_person"]),
             "registration_date": str(fixed_asset["registration_date"]),
@@ -531,6 +533,7 @@ def render_edit_fixed_asset_page(
         fixed_asset={
             "id": str(fixed_asset["id"]),
             "name": str(fixed_asset["name"]),
+            "quantity": str(fixed_asset["quantity"]),
             "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
             "responsible_person": str(fixed_asset["responsible_person"]),
             "registration_date": str(fixed_asset["registration_date"]),
@@ -590,6 +593,7 @@ def render_add_fixed_asset_page(
         form_data={
             "name": form_data.get("name", ""),
             "category_id": form_data.get("category_id", ""),
+            "quantity": form_data.get("quantity", "1"),
             "initial_value": form_data.get("initial_value", ""),
             "responsible_person": form_data.get("responsible_person", ""),
             "registration_date": form_data.get("registration_date", ""),

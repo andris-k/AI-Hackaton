@@ -69,7 +69,7 @@
     .header-meta {
         margin-top: 8px;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
     }
     .header-meta-item {
@@ -87,6 +87,16 @@
         display: block;
         margin-top: 2px;
         font-size: 0.92rem;
+    }
+    .session-id-value {
+        margin: 0;
+        padding: 10px 11px;
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 10px;
+        background: var(--surface-alt, #faf7f1);
+        font-weight: 700;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
     .status-quick-actions {
         margin-top: 10px;
@@ -220,10 +230,6 @@
     .asset-cell {
         display: grid;
         gap: 4px;
-    }
-    .asset-search {
-        font-size: 0.83rem;
-        padding: 6px 8px;
     }
     .help-text {
         margin: 2px 0 0;
@@ -430,7 +436,7 @@
 
     @media (min-width: 1024px) {
         .edit-layout {
-            grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr);
+            grid-template-columns: 1fr;
         }
     }
     @media (max-width: 980px) {
@@ -485,10 +491,6 @@
                         <p>Responsible Person</p>
                         <strong>{{ prefill.responsible_person if prefill else inv_session.responsible_person }}</strong>
                     </article>
-                    <article class="header-meta-item">
-                        <p>Session ID</p>
-                        <strong>{{ inv_session.id }}</strong>
-                    </article>
                 </div>
                 {% if not is_read_only %}
                 <div class="status-quick-actions">
@@ -514,6 +516,11 @@
 
                 <div class="edit-layout">
                     <div class="stack">
+                        <section class="section-card">
+                            <h3 class="section-title">Session ID</h3>
+                            <p class="session-id-value">{{ inv_session.id }}</p>
+                        </section>
+
                         <section class="section-card">
                             <h3 class="section-title">Session Info</h3>
                             {% if is_admin_user %}
@@ -601,12 +608,11 @@
                                                 </option>
                                                 {% endfor %}
                                             </select>
-                                            <input type="text" class="asset-search" placeholder="Search by asset name or category" {% if is_read_only %}disabled{% endif %} />
                                             <p class="help-text">Asset can be selected only once.</p>
                                             <p class="duplicate-warning">This asset is already selected in another row.</p>
                                         </div>
                                         <div class="expected-cell">
-                                            <span class="expected-qty" data-expected="{{ row.quantity }}">{{ row.quantity }}</span>
+                                            <span class="expected-qty" data-expected="0">0</span>
                                         </div>
                                         <div class="quantity-cell">
                                             <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
@@ -692,7 +698,6 @@
                 <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>
-            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
             <p class="help-text">Asset can be selected only once.</p>
             <p class="duplicate-warning">This asset is already selected in another row.</p>
         </div>
@@ -744,6 +749,11 @@
             "{{ asset.id }}": {{ asset.initial_value }},
             {% endfor %}
         };
+        const assetExpectedQtyById = {
+            {% for asset in fixed_assets %}
+            "{{ asset.id }}": {{ asset.quantity }},
+            {% endfor %}
+        };
 
         let isDirty = false;
         let isSubmitting = false;
@@ -767,10 +777,8 @@
             }
         }
 
-        function parseExpectedQuantity(row) {
-            const expected = row.querySelector('.expected-qty');
-            if (!expected) return 0;
-            return Math.max(0, Number(expected.dataset.expected || expected.textContent || 0));
+        function expectedQuantityForAsset(assetId) {
+            return Math.max(0, Number(assetExpectedQtyById[assetId] || 0));
         }
 
         function toggleEmptyState() {
@@ -847,13 +855,18 @@
 
                 const assetId = (select.value || "").trim();
                 const quantity = Math.max(0, Number(qtyInput.value || 0));
-                const expectedQty = parseExpectedQuantity(row);
+                const expectedQty = expectedQuantityForAsset(assetId);
                 const diff = quantity - expectedQty;
                 const unitValue = Number(assetValueById[assetId] || 0);
                 const rowValue = assetId && quantity ? (unitValue * quantity) : 0;
+                const expectedQtyEl = row.querySelector('.expected-qty');
 
                 if (lineValue) {
                     lineValue.textContent = formatMoney(rowValue);
+                }
+                if (expectedQtyEl) {
+                    expectedQtyEl.dataset.expected = String(expectedQty);
+                    expectedQtyEl.textContent = String(expectedQty);
                 }
                 if (diffValue) {
                     const signDiff = diff > 0 ? `+${diff}` : `${diff}`;
@@ -884,23 +897,6 @@
             applyDiscrepancyFilter();
         }
 
-        function wireSearch(row) {
-            const searchInput = row.querySelector(".asset-search");
-            const select = row.querySelector('select[name="fixed_asset_ids"]');
-            if (!searchInput || !select) return;
-
-            searchInput.addEventListener("input", function () {
-                const term = searchInput.value.trim().toLowerCase();
-                if (!term) return;
-                const options = Array.from(select.options).filter((opt) => opt.value);
-                const match = options.find((opt) => opt.text.toLowerCase().includes(term));
-                if (match) {
-                    select.value = match.value;
-                    select.dispatchEvent(new Event("change"));
-                }
-            });
-        }
-
         function wireRowEvents(row) {
             const select = row.querySelector('select[name="fixed_asset_ids"]');
             const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
@@ -925,7 +921,7 @@
                     event.preventDefault();
                     if (!addButton || addButton.disabled) return;
                     const createdRow = appendLinkedAssetRow();
-                    const focusTarget = createdRow ? createdRow.querySelector('.asset-search') : null;
+                    const focusTarget = createdRow ? createdRow.querySelector('select[name="fixed_asset_ids"]') : null;
                     if (focusTarget) focusTarget.focus();
                     return;
                 }
@@ -957,11 +953,10 @@
 
                 if (addButton && !addButton.disabled) {
                     const createdRow = appendLinkedAssetRow();
-                    const focusTarget = createdRow ? createdRow.querySelector('.asset-search') : null;
+                    const focusTarget = createdRow ? createdRow.querySelector('select[name="fixed_asset_ids"]') : null;
                     if (focusTarget) focusTarget.focus();
                 }
             });
-            wireSearch(row);
         }
 
         function appendLinkedAssetRow() {
@@ -1116,7 +1111,7 @@
         if (addButton && template && grid) {
             addButton.addEventListener("click", function () {
                 const row = appendLinkedAssetRow();
-                const focusTarget = row ? row.querySelector('.asset-search') : null;
+                const focusTarget = row ? row.querySelector('select[name="fixed_asset_ids"]') : null;
                 if (focusTarget) focusTarget.focus();
             });
         }

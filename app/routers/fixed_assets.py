@@ -221,6 +221,7 @@ def edit_fixed_asset_route(
     session_token: str | None = Cookie(default=None),
     name: str = Form(...),
     category_id: str = Form(...),
+    quantity: int = Form(...),
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
@@ -275,6 +276,7 @@ def edit_fixed_asset_route(
     form_error = assets_service.validate_asset_form(
         name=name,
         category_id=category_id,
+        quantity=quantity,
         responsible_person=responsible_person,
         registration_date=registration_date,
     )
@@ -312,6 +314,7 @@ def edit_fixed_asset_route(
             fixed_asset_id=fixed_asset_id,
             name=name.strip(),
             category_id=category_id.strip(),
+            quantity=quantity,
             initial_value=initial_value,
             responsible_person=responsible_person.strip(),
             registration_date=registration_date,
@@ -406,6 +409,7 @@ def create_fixed_asset_route(
     session_token: str | None = Cookie(default=None),
     name: str = Form(...),
     category_id: str = Form(...),
+    quantity: int = Form(...),
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
@@ -441,6 +445,7 @@ def create_fixed_asset_route(
     form_error = assets_service.validate_asset_form(
         name=name,
         category_id=category_id,
+        quantity=quantity,
         responsible_person=responsible_person,
         registration_date=registration_date,
     )
@@ -453,6 +458,7 @@ def create_fixed_asset_route(
             form_data=assets_service.build_asset_form_data(
                 name=name,
                 category_id=category_id,
+                quantity=quantity,
                 initial_value=initial_value,
                 responsible_person=responsible_person,
                 registration_date=registration_date,
@@ -474,6 +480,7 @@ def create_fixed_asset_route(
                 form_data=assets_service.build_asset_form_data(
                     name=name,
                     category_id=category_id,
+                    quantity=quantity,
                     initial_value=initial_value,
                     responsible_person=responsible_person,
                     registration_date=registration_date,
@@ -487,6 +494,7 @@ def create_fixed_asset_route(
         assets_repo.create_asset(
             name=name.strip(),
             category_id=category_id.strip(),
+            quantity=quantity,
             initial_value=initial_value,
             responsible_person=responsible_person.strip(),
             registration_date=registration_date,
@@ -503,6 +511,7 @@ def create_fixed_asset_route(
             form_data=assets_service.build_asset_form_data(
                 name=name,
                 category_id=category_id,
+                quantity=quantity,
                 initial_value=initial_value,
                 responsible_person=responsible_person,
                 registration_date=registration_date,

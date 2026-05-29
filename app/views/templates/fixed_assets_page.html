@@ -88,6 +88,7 @@
         border-collapse: collapse;
         border: 0;
         font-size: 0.93rem;
+        table-layout: fixed;
     }
 
     th, td {
@@ -95,7 +96,7 @@
         text-align: left;
         border-bottom: 1px solid var(--border);
         vertical-align: middle;
-        white-space: nowrap;
+        white-space: normal;
     }
 
     th {
@@ -114,7 +115,14 @@
     }
 
     .col-id {
-        width: 290px;
+        width: 220px;
+    }
+
+    .col-id a {
+        display: inline-block;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     .col-value {
@@ -123,13 +131,21 @@
         font-variant-numeric: tabular-nums;
     }
 
+    .col-qty {
+        width: 90px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
     .col-date {
         width: 138px;
         font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
 
     .col-actions {
         width: 160px;
+        white-space: nowrap;
     }
 
     .row-actions {
@@ -293,6 +309,7 @@
                             <th class="col-id">Id</th>
                             <th>Name</th>
                             <th>Category</th>
+                            <th class="col-qty">Qty</th>
                             <th class="col-value">InitialValue</th>
                             <th>ResponsiblePerson</th>
                             <th class="col-date">RegistrationDate</th>
@@ -305,6 +322,7 @@
                             <td class="col-id"><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.id }}</a></td>
                             <td><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a></td>
                             <td>{{ asset.category }}</td>
+                            <td class="col-qty">{{ asset.quantity }}</td>
                             <td class="col-value">{{ asset.initial_value }}</td>
                             <td>{{ asset.responsible_person }}</td>
                             <td class="col-date">{{ asset.registration_date }}</td>

@@ -22,6 +22,30 @@ from app.views.pages import (
 router = APIRouter()
 
 
+def _render_edit_page(
+    *,
+    user_email: str,
+    inv_session: object,
+    linked_asset_rows: list[dict[str, str]],
+    is_admin_user: bool,
+    error: str | None = None,
+    prefill: dict[str, str] | None = None,
+) -> HTMLResponse:
+    current_status = str(inv_session["status"])
+    statuses = list(svc.STATUSES) if is_admin_user else svc.available_target_statuses(current_status)
+    return render_edit_inventory_session_page(
+        inv_session=inv_session,
+        current_email=user_email,
+        statuses=statuses,
+        fixed_assets=assets_repo.list_assets(),
+        linked_asset_rows=linked_asset_rows,
+        is_read_only=svc.is_terminal_status(current_status) and not is_admin_user,
+        is_admin_user=is_admin_user,
+        error=error,
+        prefill=prefill,
+    )
+
+
 def _build_filters(
     *,
     status: str,
@@ -54,27 +78,6 @@ def _calculate_summary(sessions: list[object]) -> dict[str, object]:
         "total_linked_assets": total_linked_assets,
         "total_quantity": total_quantity,
     }
-
-
-def _render_edit_page(
-    *,
-    user_email: str,
-    inv_session: object,
-    linked_asset_rows: list[dict[str, str]],
-    error: str | None = None,
-    prefill: dict[str, str] | None = None,
-) -> HTMLResponse:
-    current_status = str(inv_session["status"])
-    return render_edit_inventory_session_page(
-        inv_session=inv_session,
-        current_email=user_email,
-        statuses=svc.available_target_statuses(current_status),
-        fixed_assets=assets_repo.list_assets(),
-        linked_asset_rows=linked_asset_rows,
-        is_read_only=svc.is_terminal_status(current_status),
-        error=error,
-        prefill=prefill,
-    )
 
 
 def _render_details_with_message(
@@ -175,6 +178,13 @@ def export_inventory_sessions_csv(
             "date_to",
             "status",
             "responsible_person",
+            "created_at",
+            "started_at",
+            "completed_at",
+            "cancelled_at",
+            "notes",
+            "completion_reason",
+            "cancellation_reason",
             "linked_assets_count",
             "linked_assets_quantity_total",
         ]
@@ -187,6 +197,13 @@ def export_inventory_sessions_csv(
                 row["date_to"],
                 row["status"],
                 row["responsible_person"],
+                row["created_at"],
+                row["started_at"],
+                row["completed_at"],
+                row["cancelled_at"],
+                row["notes"],
+                row["completion_reason"],
+                row["cancellation_reason"],
                 row["linked_assets_count"],
                 row["linked_assets_quantity_total"],
             ]
@@ -237,6 +254,13 @@ def export_inventory_sessions_json(
                 "date_to": str(row["date_to"]),
                 "status": str(row["status"]),
                 "responsible_person": str(row["responsible_person"]),
+                "created_at": str(row["created_at"] or ""),
+                "started_at": str(row["started_at"] or ""),
+                "completed_at": str(row["completed_at"] or ""),
+                "cancelled_at": str(row["cancelled_at"] or ""),
+                "notes": str(row["notes"] or ""),
+                "completion_reason": str(row["completion_reason"] or ""),
+                "cancellation_reason": str(row["cancellation_reason"] or ""),
                 "linked_assets_count": int(row["linked_assets_count"]),
                 "linked_assets_quantity_total": int(row["linked_assets_quantity_total"]),
             }
@@ -263,7 +287,7 @@ def add_inventory_session_page(
     return render_add_inventory_session_page(
         current_email=user["email"],
         fixed_assets=fixed_assets,
-        linked_asset_rows=[{"fixed_asset_id": "", "quantity": "1"}],
+        linked_asset_rows=[{"fixed_asset_id": "", "quantity": ""}],
     )
 
 
@@ -273,6 +297,7 @@ def add_inventory_session(
     date_from: str = Form(...),
     date_to: str = Form(...),
     responsible_person: str = Form(...),
+    notes: str = Form(default=""),
     fixed_asset_ids: list[str] = Form(default=[]),
     fixed_asset_quantities: list[str] = Form(default=[]),
 ) -> HTMLResponse:
@@ -297,7 +322,7 @@ def add_inventory_session(
             for index in range(min(len(fixed_asset_ids), len(fixed_asset_quantities)))
         ]
         if not linked_asset_rows:
-            linked_asset_rows = [{"fixed_asset_id": "", "quantity": "1"}]
+            linked_asset_rows = [{"fixed_asset_id": "", "quantity": ""}]
         return render_add_inventory_session_page(
             current_email=user["email"],
             error=combined_error,
@@ -305,6 +330,7 @@ def add_inventory_session(
                 "date_from": date_from,
                 "date_to": date_to,
                 "responsible_person": responsible_person,
+                "notes": notes,
             },
             fixed_assets=fixed_assets,
             linked_asset_rows=linked_asset_rows,
@@ -315,6 +341,8 @@ def add_inventory_session(
         date_to=date_to,
         responsible_person=responsible_person,
         linked_assets=linked_assets,
+        created_by_user_id=int(user["id"]),
+        notes=notes,
     )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session['id']}",
@@ -333,6 +361,11 @@ def inventory_session_details_page(
     inv_session = repo.get_session_by_id(session_id)
     if inv_session is None:
         return render_login_page("Inventory session not found.")
+    if str(inv_session["status"]) == "Active":
+        return RedirectResponse(
+            url=f"/inventory-sessions/id/{session_id}/edit",
+            status_code=303,
+        )
     linked_assets = repo.list_linked_assets(session_id)
     return render_inventory_session_details_page(
         inv_session=inv_session,
@@ -352,6 +385,7 @@ def edit_inventory_session_page(
     inv_session = repo.get_session_by_id(session_id)
     if inv_session is None:
         return render_login_page("Inventory session not found.")
+    is_admin_user = svc.is_admin_email(str(user["email"]))
     linked_assets = repo.list_linked_assets_with_quantity(session_id)
     linked_asset_rows = [
         {"fixed_asset_id": fixed_asset_id, "quantity": str(quantity)}
@@ -363,6 +397,7 @@ def edit_inventory_session_page(
         user_email=str(user["email"]),
         inv_session=inv_session,
         linked_asset_rows=linked_asset_rows,
+        is_admin_user=is_admin_user,
     )
 
 
@@ -374,6 +409,10 @@ def edit_inventory_session(
     date_to: str = Form(...),
     status: str = Form(...),
     responsible_person: str = Form(...),
+    notes: str = Form(default=""),
+    completion_reason: str = Form(default=""),
+    cancellation_reason: str = Form(default=""),
+    admin_override: str = Form(default=""),
     fixed_asset_ids: list[str] = Form(default=[]),
     fixed_asset_quantities: list[str] = Form(default=[]),
 ) -> HTMLResponse:
@@ -385,7 +424,9 @@ def edit_inventory_session(
         return render_login_page("Inventory session not found.")
 
     current_status = str(inv_session["status"])
-    if svc.is_terminal_status(current_status):
+    is_admin_user = svc.is_admin_email(str(user["email"]))
+    admin_override_requested = admin_override in {"1", "true", "on", "yes"}
+    if svc.is_terminal_status(current_status) and not is_admin_user:
         linked_assets = repo.list_linked_assets_with_quantity(session_id)
         linked_asset_rows = [
             {"fixed_asset_id": fixed_asset_id, "quantity": str(quantity)}
@@ -397,6 +438,7 @@ def edit_inventory_session(
             user_email=str(user["email"]),
             inv_session=inv_session,
             linked_asset_rows=linked_asset_rows,
+            is_admin_user=is_admin_user,
             error="Terminal sessions are read-only.",
         )
 
@@ -410,7 +452,11 @@ def edit_inventory_session(
         fixed_asset_ids=fixed_asset_ids,
         fixed_asset_quantities=fixed_asset_quantities,
     )
-    status_transition_error = svc.transition_error(current_status, status)
+    status_transition_error = svc.transition_error(
+        current_status,
+        status,
+        allow_override=is_admin_user and admin_override_requested,
+    )
     combined_error = error or linked_assets_error or status_transition_error
     if combined_error:
         linked_asset_rows = [
@@ -428,8 +474,13 @@ def edit_inventory_session(
                 "date_to": date_to,
                 "status": status,
                 "responsible_person": responsible_person,
+                "notes": notes,
+                "completion_reason": completion_reason,
+                "cancellation_reason": cancellation_reason,
+                "admin_override": "1" if admin_override_requested else "",
             },
             linked_asset_rows=linked_asset_rows,
+            is_admin_user=is_admin_user,
         )
 
     updated = repo.update_session(
@@ -439,6 +490,10 @@ def edit_inventory_session(
         status=status,
         responsible_person=responsible_person,
         linked_assets=linked_assets,
+        notes=notes,
+        completion_reason=completion_reason,
+        cancellation_reason=cancellation_reason,
+        actor_user_id=int(user["id"]),
     )
     if updated is None:
         return render_login_page("Inventory session not found.")
@@ -481,10 +536,14 @@ def start_inventory_session(
         status="Active",
         responsible_person=str(inv_session["responsible_person"]),
         linked_assets=linked_assets,
+        notes=str(inv_session["notes"] or ""),
+        completion_reason=str(inv_session["completion_reason"] or ""),
+        cancellation_reason=str(inv_session["cancellation_reason"] or ""),
+        actor_user_id=int(user["id"]),
     )
 
     return RedirectResponse(
-        url=f"/inventory-sessions/id/{session_id}/edit",
+        url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
     )
 
@@ -496,6 +555,7 @@ def start_inventory_session(
 def complete_inventory_session(
     session_id: str,
     session_token: str | None = Cookie(default=None),
+    completion_reason: str = Form(default=""),
 ) -> HTMLResponse:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -522,10 +582,14 @@ def complete_inventory_session(
         status="Completed",
         responsible_person=str(inv_session["responsible_person"]),
         linked_assets=linked_assets,
+        notes=str(inv_session["notes"] or ""),
+        completion_reason=completion_reason,
+        cancellation_reason=str(inv_session["cancellation_reason"] or ""),
+        actor_user_id=int(user["id"]),
     )
 
     return RedirectResponse(
-        url=f"/inventory-sessions/id/{session_id}/edit",
+        url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
     )
 
@@ -537,6 +601,7 @@ def complete_inventory_session(
 def cancel_inventory_session(
     session_id: str,
     session_token: str | None = Cookie(default=None),
+    cancellation_reason: str = Form(default=""),
 ) -> HTMLResponse:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -563,10 +628,14 @@ def cancel_inventory_session(
         status="Cancelled",
         responsible_person=str(inv_session["responsible_person"]),
         linked_assets=linked_assets,
+        notes=str(inv_session["notes"] or ""),
+        completion_reason=str(inv_session["completion_reason"] or ""),
+        cancellation_reason=cancellation_reason,
+        actor_user_id=int(user["id"]),
     )
 
     return RedirectResponse(
-        url=f"/inventory-sessions/id/{session_id}/edit",
+        url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
     )
 

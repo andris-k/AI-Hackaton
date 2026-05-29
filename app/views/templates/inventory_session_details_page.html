@@ -44,6 +44,30 @@
 
             <dt>Total Quantity</dt>
             <dd>{{ inv_session.linked_assets_quantity_total }}</dd>
+
+            <dt>Created</dt>
+            <dd>{{ inv_session.created_at or '-' }} {% if inv_session.created_by_email %}by {{ inv_session.created_by_email }}{% endif %}</dd>
+
+            <dt>Started</dt>
+            <dd>{{ inv_session.started_at or '-' }} {% if inv_session.started_by_email %}by {{ inv_session.started_by_email }}{% endif %}</dd>
+
+            <dt>Completed</dt>
+            <dd>{{ inv_session.completed_at or '-' }} {% if inv_session.completed_by_email %}by {{ inv_session.completed_by_email }}{% endif %}</dd>
+
+            <dt>Cancelled</dt>
+            <dd>{{ inv_session.cancelled_at or '-' }} {% if inv_session.cancelled_by_email %}by {{ inv_session.cancelled_by_email }}{% endif %}</dd>
+
+            <dt>Last Edited</dt>
+            <dd>{{ inv_session.last_edited_at or '-' }} {% if inv_session.last_edited_by_email %}by {{ inv_session.last_edited_by_email }}{% endif %}</dd>
+
+            <dt>Notes</dt>
+            <dd>{{ inv_session.notes or '-' }}</dd>
+
+            <dt>Completion Reason</dt>
+            <dd>{{ inv_session.completion_reason or '-' }}</dd>
+
+            <dt>Cancellation Reason</dt>
+            <dd>{{ inv_session.cancellation_reason or '-' }}</dd>
         </dl>
 
         <section style="margin: 10px 0 18px;">
@@ -73,14 +97,16 @@
                 <button type="submit">Start</button>
             </form>
             {% endif %}
-                        {% if inv_session.status not in ["Completed", "Cancelled"] %}
-            <a href="/inventory-sessions/id/{{ inv_session.id }}/edit">
-                <button>Edit</button>
-            </a>
+            {% if inv_session.status == "Active" %}
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/complete" style="display:inline-flex; gap:8px; align-items:center;">
+                <input type="text" name="completion_reason" maxlength="500" placeholder="Completion reason (optional)" style="width: 240px;" />
+                <button type="submit">Complete</button>
+            </form>
             {% endif %}
                         {% if inv_session.status in ["New", "Active"] %}
-                        <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/cancel" style="display:inline;"
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/cancel" style="display:inline-flex; gap:8px; align-items:center;"
                                     onsubmit="return confirm('Cancel this inventory session? It cannot be modified afterwards.')">
+                <input type="text" name="cancellation_reason" maxlength="500" placeholder="Cancellation reason (optional)" style="width: 240px;" />
                                 <button type="submit" style="background: #b91c1c; color: #fff; border-color: #b91c1c;">Cancel Session</button>
                         </form>
                         {% endif %}

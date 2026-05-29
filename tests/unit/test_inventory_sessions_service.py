@@ -13,6 +13,7 @@ from app.services.inventory_sessions_service import (
     TERMINAL_STATUSES,
     available_target_statuses,
     can_transition,
+    is_admin_email,
     is_terminal_status,
     transition_error,
     validate_create_form,
@@ -273,6 +274,16 @@ def test_transition_error_for_terminal_state_is_explicit():
 
 def test_transition_error_none_for_valid_transition():
     assert transition_error("Active", "Completed") is None
+
+
+def test_transition_error_can_be_bypassed_with_override():
+    assert transition_error("Completed", "Active", allow_override=True) is None
+
+
+def test_admin_email_helper():
+    assert is_admin_email("admin@example.com") is True
+    assert is_admin_email("ADMIN@example.com") is True
+    assert is_admin_email("user@example.com") is False
 
 
 def test_available_target_statuses_for_new():

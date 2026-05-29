@@ -24,6 +24,25 @@
     @media (max-width: 760px) {
         .linked-asset-row { grid-template-columns: 1fr; }
     }
+    .totals-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+    @media (max-width: 760px) {
+        .totals-grid { grid-template-columns: 1fr; }
+    }
+    .totals-grid .panel-lite {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 8px;
+        background: var(--table-row-alt, #fcfaf6);
+        padding: 8px;
+    }
+    .help-text {
+        margin: 2px 0 0;
+        font-size: 0.82rem;
+        color: var(--muted, #6b6055);
+    }
 </style>
 <div class="stack">
     <section class="panel">
@@ -55,12 +74,17 @@
                        value="{{ prefill.responsible_person if prefill else '' }}" required />
             </div>
             <div>
+                <label for="notes">Session Notes (optional)</label>
+                <textarea id="notes" name="notes" rows="3" maxlength="1500" style="width:100%; border: 1px solid var(--border, #d6cfc7); border-radius: 10px; padding: 10px 11px;">{{ prefill.notes if prefill else '' }}</textarea>
+            </div>
+            <div>
                 <label>Linked Fixed Assets</label>
                 <div class="linked-assets-grid" id="linked-assets-grid">
                     {% for row in linked_asset_rows %}
                     <div class="linked-asset-row">
                         <div>
                             <label>Fixed Asset</label>
+                            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
                             <select name="fixed_asset_ids">
                                 <option value="">-- Select fixed asset --</option>
                                 {% for asset in fixed_assets %}
@@ -69,6 +93,7 @@
                                 </option>
                                 {% endfor %}
                             </select>
+                            <p class="help-text">Duplicates are blocked at form level.</p>
                         </div>
                         <div>
                             <label>Quantity</label>
@@ -79,6 +104,20 @@
                     {% endfor %}
                 </div>
                 <button type="button" id="add-linked-asset">+ Add asset</button>
+            </div>
+            <div class="totals-grid">
+                <div class="panel-lite">
+                    <label>Distinct Assets</label>
+                    <strong id="distinct-assets-total">0</strong>
+                </div>
+                <div class="panel-lite">
+                    <label>Total Quantity</label>
+                    <strong id="quantity-total">0</strong>
+                </div>
+                <div class="panel-lite">
+                    <label>Total Initial Value</label>
+                    <strong id="initial-value-total">0.00</strong>
+                </div>
             </div>
             <div style="display:flex; gap:10px;">
                 <button type="submit">Create</button>
@@ -91,16 +130,18 @@
     <div class="linked-asset-row">
         <div>
             <label>Fixed Asset</label>
+            <input type="text" class="asset-search" placeholder="Search by asset name or category" />
             <select name="fixed_asset_ids">
                 <option value="">-- Select fixed asset --</option>
                 {% for asset in fixed_assets %}
                 <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>
+            <p class="help-text">Duplicates are blocked at form level.</p>
         </div>
         <div>
             <label>Quantity</label>
-            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="1" />
+            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="" />
         </div>
         <button type="button" class="remove-linked-asset">Remove</button>
     </div>
@@ -110,6 +151,85 @@
         const grid = document.getElementById("linked-assets-grid");
         const addButton = document.getElementById("add-linked-asset");
         const template = document.getElementById("linked-asset-row-template");
+        const distinctAssetsTotal = document.getElementById("distinct-assets-total");
+        const quantityTotal = document.getElementById("quantity-total");
+        const initialValueTotal = document.getElementById("initial-value-total");
+        const assetValueById = {
+            {% for asset in fixed_assets %}
+            "{{ asset.id }}": {{ asset.initial_value }},
+            {% endfor %}
+        };
+
+        function formatMoney(value) {
+            return Number(value || 0).toFixed(2);
+        }
+
+        function updateTotals() {
+            const rows = Array.from(grid.querySelectorAll(".linked-asset-row"));
+            const chosenAssetIds = new Set();
+            let qtySum = 0;
+            let valueSum = 0;
+            rows.forEach((row) => {
+                const select = row.querySelector('select[name="fixed_asset_ids"]');
+                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
+                if (!select || !qtyInput) return;
+                const assetId = (select.value || "").trim();
+                const quantity = Math.max(0, Number(qtyInput.value || 0));
+                if (!assetId || !quantity) return;
+                chosenAssetIds.add(assetId);
+                qtySum += quantity;
+                valueSum += (Number(assetValueById[assetId] || 0) * quantity);
+            });
+
+            distinctAssetsTotal.textContent = String(chosenAssetIds.size);
+            quantityTotal.textContent = String(qtySum);
+            initialValueTotal.textContent = formatMoney(valueSum);
+        }
+
+        function selectedAssetIdsExcluding(currentSelect) {
+            const ids = new Set();
+            grid.querySelectorAll('select[name="fixed_asset_ids"]').forEach((select) => {
+                if (select === currentSelect) return;
+                const value = (select.value || "").trim();
+                if (value) ids.add(value);
+            });
+            return ids;
+        }
+
+        function updateDuplicateProtection() {
+            grid.querySelectorAll('select[name="fixed_asset_ids"]').forEach((select) => {
+                const usedByOtherRows = selectedAssetIdsExcluding(select);
+                Array.from(select.options).forEach((option) => {
+                    if (!option.value) {
+                        option.disabled = false;
+                        return;
+                    }
+                    option.disabled = usedByOtherRows.has(option.value) && option.value !== select.value;
+                });
+                if (select.value && usedByOtherRows.has(select.value)) {
+                    select.setCustomValidity("This fixed asset is already selected in another row.");
+                } else {
+                    select.setCustomValidity("");
+                }
+            });
+        }
+
+        function wireSearch(row) {
+            const searchInput = row.querySelector(".asset-search");
+            const select = row.querySelector('select[name="fixed_asset_ids"]');
+            if (!searchInput || !select) return;
+
+            searchInput.addEventListener("input", function () {
+                const term = searchInput.value.trim().toLowerCase();
+                if (!term) return;
+                const options = Array.from(select.options).filter((opt) => opt.value);
+                const match = options.find((opt) => opt.text.toLowerCase().includes(term));
+                if (match) {
+                    select.value = match.value;
+                    select.dispatchEvent(new Event("change"));
+                }
+            });
+        }
 
         function wireRemoveButtons() {
             grid.querySelectorAll(".remove-linked-asset").forEach((button) => {
@@ -118,20 +238,48 @@
                     if (!row) return;
                     if (grid.children.length === 1) {
                         row.querySelector('select[name="fixed_asset_ids"]').value = "";
-                        row.querySelector('input[name="fixed_asset_quantities"]').value = "1";
+                        row.querySelector('input[name="fixed_asset_quantities"]').value = "";
+                        row.querySelector('.asset-search').value = "";
+                        updateDuplicateProtection();
+                        updateTotals();
                         return;
                     }
                     row.remove();
+                    updateDuplicateProtection();
+                    updateTotals();
                 };
+            });
+        }
+
+        function wireChangeEvents() {
+            grid.querySelectorAll('.linked-asset-row').forEach((row) => {
+                const select = row.querySelector('select[name="fixed_asset_ids"]');
+                const qtyInput = row.querySelector('input[name="fixed_asset_quantities"]');
+                if (select) {
+                    select.onchange = function () {
+                        updateDuplicateProtection();
+                        updateTotals();
+                    };
+                }
+                if (qtyInput) {
+                    qtyInput.oninput = updateTotals;
+                }
+                wireSearch(row);
             });
         }
 
         addButton.addEventListener("click", function () {
             const node = template.content.cloneNode(true);
             grid.appendChild(node);
+            wireChangeEvents();
             wireRemoveButtons();
+            updateDuplicateProtection();
+            updateTotals();
         });
 
         wireRemoveButtons();
+        wireChangeEvents();
+        updateDuplicateProtection();
+        updateTotals();
     })();
 </script>

@@ -126,8 +126,61 @@ def initialize_database() -> None:
                 date_from TEXT NOT NULL,
                 date_to TEXT NOT NULL,
                 status TEXT NOT NULL CHECK (status IN ('New', 'Active', 'Completed', 'Cancelled')),
-                responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100)
+                responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100),
+                notes TEXT,
+                completion_reason TEXT,
+                cancellation_reason TEXT,
+                started_at TEXT,
+                completed_at TEXT,
+                cancelled_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_edited_at TEXT,
+                created_by_user_id INTEGER,
+                started_by_user_id INTEGER,
+                completed_by_user_id INTEGER,
+                cancelled_by_user_id INTEGER,
+                last_edited_by_user_id INTEGER,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (started_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (completed_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (cancelled_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (last_edited_by_user_id) REFERENCES users(id)
             )
+            """
+        )
+        inventory_session_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(inventory_sessions)").fetchall()
+        }
+        migration_columns: dict[str, str] = {
+            "notes": "TEXT",
+            "completion_reason": "TEXT",
+            "cancellation_reason": "TEXT",
+            "started_at": "TEXT",
+            "completed_at": "TEXT",
+            "cancelled_at": "TEXT",
+            "created_at": "TEXT",
+            "updated_at": "TEXT",
+            "last_edited_at": "TEXT",
+            "created_by_user_id": "INTEGER",
+            "started_by_user_id": "INTEGER",
+            "completed_by_user_id": "INTEGER",
+            "cancelled_by_user_id": "INTEGER",
+            "last_edited_by_user_id": "INTEGER",
+        }
+        for column_name, column_type in migration_columns.items():
+            if column_name in inventory_session_columns:
+                continue
+            connection.execute(
+                f"ALTER TABLE inventory_sessions ADD COLUMN {column_name} {column_type}"
+            )
+        connection.execute(
+            """
+            UPDATE inventory_sessions
+            SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+                updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP),
+                last_edited_at = COALESCE(last_edited_at, CURRENT_TIMESTAMP)
             """
         )
         connection.execute(
@@ -847,6 +900,14 @@ def list_inventory_sessions(
                 inventory_sessions.date_to,
                 inventory_sessions.status,
                 inventory_sessions.responsible_person,
+                inventory_sessions.started_at,
+                inventory_sessions.completed_at,
+                inventory_sessions.cancelled_at,
+                inventory_sessions.created_at,
+                inventory_sessions.updated_at,
+                inventory_sessions.notes,
+                inventory_sessions.completion_reason,
+                inventory_sessions.cancellation_reason,
                 COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
                 COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
             FROM inventory_sessions
@@ -858,7 +919,15 @@ def list_inventory_sessions(
                 inventory_sessions.date_from,
                 inventory_sessions.date_to,
                 inventory_sessions.status,
-                inventory_sessions.responsible_person
+                inventory_sessions.responsible_person,
+                inventory_sessions.started_at,
+                inventory_sessions.completed_at,
+                inventory_sessions.cancelled_at,
+                inventory_sessions.created_at,
+                inventory_sessions.updated_at,
+                inventory_sessions.notes,
+                inventory_sessions.completion_reason,
+                inventory_sessions.cancellation_reason
             ORDER BY inventory_sessions.date_from DESC, inventory_sessions.date_to DESC
             """,
             params,
@@ -876,9 +945,38 @@ def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
                 inventory_sessions.date_to,
                 inventory_sessions.status,
                 inventory_sessions.responsible_person,
+                inventory_sessions.started_at,
+                inventory_sessions.completed_at,
+                inventory_sessions.cancelled_at,
+                inventory_sessions.created_at,
+                inventory_sessions.updated_at,
+                inventory_sessions.last_edited_at,
+                inventory_sessions.notes,
+                inventory_sessions.completion_reason,
+                inventory_sessions.cancellation_reason,
+                inventory_sessions.created_by_user_id,
+                inventory_sessions.started_by_user_id,
+                inventory_sessions.completed_by_user_id,
+                inventory_sessions.cancelled_by_user_id,
+                inventory_sessions.last_edited_by_user_id,
+                created_by_user.email AS created_by_email,
+                started_by_user.email AS started_by_email,
+                completed_by_user.email AS completed_by_email,
+                cancelled_by_user.email AS cancelled_by_email,
+                last_edited_by_user.email AS last_edited_by_email,
                 COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
                 COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
             FROM inventory_sessions
+            LEFT JOIN users AS created_by_user
+                ON created_by_user.id = inventory_sessions.created_by_user_id
+            LEFT JOIN users AS started_by_user
+                ON started_by_user.id = inventory_sessions.started_by_user_id
+            LEFT JOIN users AS completed_by_user
+                ON completed_by_user.id = inventory_sessions.completed_by_user_id
+            LEFT JOIN users AS cancelled_by_user
+                ON cancelled_by_user.id = inventory_sessions.cancelled_by_user_id
+            LEFT JOIN users AS last_edited_by_user
+                ON last_edited_by_user.id = inventory_sessions.last_edited_by_user_id
             LEFT JOIN inventory_session_fixed_assets
                 ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
             WHERE inventory_sessions.id = ?
@@ -887,7 +985,26 @@ def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
                 inventory_sessions.date_from,
                 inventory_sessions.date_to,
                 inventory_sessions.status,
-                inventory_sessions.responsible_person
+                inventory_sessions.responsible_person,
+                inventory_sessions.started_at,
+                inventory_sessions.completed_at,
+                inventory_sessions.cancelled_at,
+                inventory_sessions.created_at,
+                inventory_sessions.updated_at,
+                inventory_sessions.last_edited_at,
+                inventory_sessions.notes,
+                inventory_sessions.completion_reason,
+                inventory_sessions.cancellation_reason,
+                inventory_sessions.created_by_user_id,
+                inventory_sessions.started_by_user_id,
+                inventory_sessions.completed_by_user_id,
+                inventory_sessions.cancelled_by_user_id,
+                inventory_sessions.last_edited_by_user_id,
+                created_by_user.email,
+                started_by_user.email,
+                completed_by_user.email,
+                cancelled_by_user.email,
+                last_edited_by_user.email
             """,
             (session_id,),
         )
@@ -954,15 +1071,41 @@ def create_inventory_session(
     date_to: str,
     responsible_person: str,
     linked_assets: Sequence[tuple[str, int]] = (),
+    created_by_user_id: int | None = None,
+    notes: str = "",
 ) -> sqlite3.Row:
     session_id = str(uuid.uuid4())
+    now_text = datetime.now(timezone.utc).isoformat()
     with db_session() as connection:
         connection.execute(
             """
-            INSERT INTO inventory_sessions (id, date_from, date_to, status, responsible_person)
-            VALUES (?, ?, ?, 'New', ?)
+            INSERT INTO inventory_sessions (
+                id,
+                date_from,
+                date_to,
+                status,
+                responsible_person,
+                notes,
+                created_at,
+                updated_at,
+                last_edited_at,
+                created_by_user_id,
+                last_edited_by_user_id
+            )
+            VALUES (?, ?, ?, 'New', ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, date_from, date_to, responsible_person.strip()),
+            (
+                session_id,
+                date_from,
+                date_to,
+                responsible_person.strip(),
+                notes.strip(),
+                now_text,
+                now_text,
+                now_text,
+                created_by_user_id,
+                created_by_user_id,
+            ),
         )
         _set_inventory_session_fixed_assets(connection, session_id, linked_assets)
         cursor = connection.execute(
@@ -998,22 +1141,101 @@ def update_inventory_session(
     status: str,
     responsible_person: str,
     linked_assets: Sequence[tuple[str, int]] = (),
+    notes: str = "",
+    completion_reason: str = "",
+    cancellation_reason: str = "",
+    actor_user_id: int | None = None,
 ) -> sqlite3.Row | None:
     if status not in INVENTORY_SESSION_STATUSES:
         raise ValueError(f"Invalid status: {status!r}")
+    now_text = datetime.now(timezone.utc).isoformat()
     with db_session() as connection:
         existing = connection.execute(
-            "SELECT id FROM inventory_sessions WHERE id = ?", (session_id,)
+            """
+            SELECT
+                id,
+                status,
+                started_at,
+                completed_at,
+                cancelled_at,
+                started_by_user_id,
+                completed_by_user_id,
+                cancelled_by_user_id
+            FROM inventory_sessions
+            WHERE id = ?
+            """,
+            (session_id,),
         ).fetchone()
         if existing is None:
             return None
+
+        previous_status = str(existing["status"])
+        started_at = existing["started_at"]
+        completed_at = existing["completed_at"]
+        cancelled_at = existing["cancelled_at"]
+        started_by_user_id = existing["started_by_user_id"]
+        completed_by_user_id = existing["completed_by_user_id"]
+        cancelled_by_user_id = existing["cancelled_by_user_id"]
+
+        if previous_status != status:
+            if status == "Active" and started_at is None:
+                started_at = now_text
+                started_by_user_id = actor_user_id
+            if status == "Completed" and completed_at is None:
+                completed_at = now_text
+                completed_by_user_id = actor_user_id
+            if status == "Cancelled" and cancelled_at is None:
+                cancelled_at = now_text
+                cancelled_by_user_id = actor_user_id
+
+            if previous_status == "Completed" and status != "Completed":
+                completed_at = None
+                completed_by_user_id = None
+            if previous_status == "Cancelled" and status != "Cancelled":
+                cancelled_at = None
+                cancelled_by_user_id = None
+
         connection.execute(
             """
             UPDATE inventory_sessions
-            SET date_from = ?, date_to = ?, status = ?, responsible_person = ?
+            SET
+                date_from = ?,
+                date_to = ?,
+                status = ?,
+                responsible_person = ?,
+                notes = ?,
+                completion_reason = ?,
+                cancellation_reason = ?,
+                started_at = ?,
+                completed_at = ?,
+                cancelled_at = ?,
+                updated_at = ?,
+                last_edited_at = ?,
+                started_by_user_id = ?,
+                completed_by_user_id = ?,
+                cancelled_by_user_id = ?,
+                last_edited_by_user_id = ?
             WHERE id = ?
             """,
-            (date_from, date_to, status, responsible_person.strip(), session_id),
+            (
+                date_from,
+                date_to,
+                status,
+                responsible_person.strip(),
+                notes.strip(),
+                completion_reason.strip(),
+                cancellation_reason.strip(),
+                started_at,
+                completed_at,
+                cancelled_at,
+                now_text,
+                now_text,
+                started_by_user_id,
+                completed_by_user_id,
+                cancelled_by_user_id,
+                actor_user_id,
+                session_id,
+            ),
         )
         _set_inventory_session_fixed_assets(connection, session_id, linked_assets)
         cursor = connection.execute(

@@ -745,6 +745,7 @@ def render_edit_inventory_session_page(
     fixed_assets: list[object],
     linked_asset_rows: list[dict[str, str]],
     is_read_only: bool,
+    is_admin_user: bool = False,
     *,
     error: str | None = None,
     prefill: dict[str, str] | None = None,
@@ -757,6 +758,7 @@ def render_edit_inventory_session_page(
         fixed_assets=fixed_assets,
         linked_asset_rows=linked_asset_rows,
         is_read_only=is_read_only,
+        is_admin_user=is_admin_user,
         error=error,
         prefill=prefill,
     )

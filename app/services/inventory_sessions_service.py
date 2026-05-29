@@ -12,6 +12,7 @@ _ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "Completed": set(),
     "Cancelled": set(),
 }
+ADMIN_EMAILS: set[str] = {"admin@example.com"}
 MAX_TEXT_LEN = 100
 
 
@@ -25,11 +26,22 @@ def can_transition(current_status: str, target_status: str) -> bool:
     return target_status in _ALLOWED_TRANSITIONS.get(current_status, set())
 
 
-def transition_error(current_status: str, target_status: str) -> str | None:
+def is_admin_email(email: str | None) -> bool:
+    return bool(email and email.strip().lower() in ADMIN_EMAILS)
+
+
+def transition_error(
+    current_status: str,
+    target_status: str,
+    *,
+    allow_override: bool = False,
+) -> str | None:
     if current_status not in STATUSES:
         return f"Status must be one of: {', '.join(STATUSES)}."
     if target_status not in STATUSES:
         return f"Status must be one of: {', '.join(STATUSES)}."
+    if allow_override:
+        return None
     if can_transition(current_status, target_status):
         return None
 

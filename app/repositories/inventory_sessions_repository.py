@@ -40,12 +40,16 @@ def create_session(
     date_to: str,
     responsible_person: str,
     linked_assets: list[tuple[str, int]] | tuple[tuple[str, int], ...] = (),
+    created_by_user_id: int | None = None,
+    notes: str = "",
 ) -> sqlite3.Row:
     return create_inventory_session(
         date_from=date_from,
         date_to=date_to,
         responsible_person=responsible_person,
         linked_assets=linked_assets,
+        created_by_user_id=created_by_user_id,
+        notes=notes,
     )
 
 
@@ -56,6 +60,10 @@ def update_session(
     status: str,
     responsible_person: str,
     linked_assets: list[tuple[str, int]] | tuple[tuple[str, int], ...] = (),
+    notes: str = "",
+    completion_reason: str = "",
+    cancellation_reason: str = "",
+    actor_user_id: int | None = None,
 ) -> sqlite3.Row | None:
     return update_inventory_session(
         session_id=session_id,
@@ -64,6 +72,10 @@ def update_session(
         status=status,
         responsible_person=responsible_person,
         linked_assets=linked_assets,
+        notes=notes,
+        completion_reason=completion_reason,
+        cancellation_reason=cancellation_reason,
+        actor_user_id=actor_user_id,
     )
 
 

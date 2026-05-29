@@ -1,17 +1,84 @@
 <style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .page-header h2 {
+        margin: 0;
+    }
+    .page-context {
+        margin: 4px 0 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.85rem;
+    }
+    .page-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .page-actions a {
+        text-decoration: none;
+    }
+    .page-actions button {
+        width: auto;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+    .section-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+    }
+    .section-card h3 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+    }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 760px) {
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .summary-card {
+        border: 1px solid var(--border, #d6cfc7);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
+        padding: 12px;
+    }
+    .summary-card p {
+        margin: 0;
+        color: var(--muted, #6b6055);
+        font-size: 0.82rem;
+    }
+    .summary-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.15rem;
+    }
     .users-filter {
         display: grid;
         gap: 8px;
         margin-bottom: 8px;
-        padding: 10px;
+        padding: 12px;
         border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface-alt);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
     }
 
     .users-filter-row {
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
         align-items: end;
     }
@@ -25,8 +92,8 @@
         max-height: min(58vh, 560px);
         overflow: auto;
         border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
+        border-radius: 12px;
+        background: #fff;
     }
 
     table {
@@ -48,12 +115,16 @@
         position: sticky;
         top: 0;
         z-index: 1;
-        background: #eef2f7;
+        background: var(--table-head-bg, #f5eee2);
         font-weight: 700;
     }
 
     tbody tr:nth-child(even) {
-        background: #f8fafc;
+        background: var(--table-row-alt, #fcfaf6);
+    }
+
+    tbody tr:hover {
+        background: #f7f2e9;
     }
 
     .col-id {
@@ -67,6 +138,13 @@
         font-variant-numeric: tabular-nums;
     }
 
+    .action-links {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+
     tr:last-child td { border-bottom: 0; }
 
     @media (max-width: 640px) {
@@ -77,44 +155,72 @@
 </style>
 <div class="stack">
     <section class="panel wide">
-        <h2>Registered users</h2>
-        <p>Signed in as <strong>{{ current_email }}</strong>.</p>
-        <form method="get" action="/users" class="users-filter">
-            <div class="users-filter-row">
-                <div>
-                    <label for="email_filter">Filter by email</label>
-                    <input
-                        id="email_filter"
-                        name="email"
-                        type="text"
-                        value="{{ email_filter }}"
-                        placeholder="Type part of an email"
-                    />
-                </div>
-                <button type="submit">Apply filter</button>
+        <div class="page-header">
+            <div>
+                <h2>Users</h2>
+                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Browse registered accounts and filter by email.</p>
             </div>
-        </form>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="col-id">ID</th>
-                        <th>Email</th>
-                        <th class="col-created">Created</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                    <tr>
-                        <td class="col-id">{{ user.id }}</td>
-                        <td>{{ user.email }}</td>
-                        <td class="col-created">{{ user.created_at }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="page-actions">
+                <a href="/dashboard"><button type="button">← Dashboard</button></a>
+                <a href="/logout"><button type="button">Log out</button></a>
+            </div>
         </div>
-        <div class="links">
+
+        <div class="summary-grid">
+            <article class="summary-card">
+                <p>Total users</p>
+                <strong>{{ users | length }}</strong>
+            </article>
+            <article class="summary-card">
+                <p>Filter mode</p>
+                <strong>Email search</strong>
+            </article>
+        </div>
+
+        <section class="section-card">
+            <h3>Filter users</h3>
+            <form method="get" action="/users" class="users-filter">
+                <div class="users-filter-row">
+                    <div>
+                        <label for="email_filter">Filter by email</label>
+                        <input
+                            id="email_filter"
+                            name="email"
+                            type="text"
+                            value="{{ email_filter }}"
+                            placeholder="Type part of an email"
+                        />
+                    </div>
+                    <button type="submit">Apply filter</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="section-card">
+            <h3>Registered users</h3>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-id">ID</th>
+                            <th>Email</th>
+                            <th class="col-created">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td class="col-id">{{ user.id }}</td>
+                            <td>{{ user.email }}</td>
+                            <td class="col-created">{{ user.created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="action-links">
             <a href="/dashboard">Back to dashboard</a>
             <a href="/logout">Log out</a>
         </div>

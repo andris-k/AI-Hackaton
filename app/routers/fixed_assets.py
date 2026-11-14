@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Cookie, File, Form, Query, UploadFile
 from fastapi.responses import HTMLResponse
 
+from app import config
 from app.repositories import fixed_assets_repository as assets_repo
 from app.services import auth_service
 from app.services import fixed_assets_service as assets_service
@@ -19,7 +20,7 @@ from app.views.pages import (
 )
 
 router = APIRouter()
-_UPLOADS_ROOT = Path(__file__).resolve().parent.parent / "uploads"
+_UPLOADS_ROOT = config.uploads_dir()
 _FIXED_ASSET_UPLOAD_DIR = _UPLOADS_ROOT / "fixed-assets"
 
 

@@ -8,6 +8,8 @@ from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app import config
+from app.repositories import audit_repository
+from app.services import audit_view_service as audit_view
 from app.repositories import fixed_assets_repository as assets_repo
 
 _TEMPLATES_PATH = Path(__file__).resolve().parent / "templates"
@@ -45,7 +47,7 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
             <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-            <link rel="stylesheet" href="/static/app.css?v=3" />
+            <link rel="stylesheet" href="/static/app.css?v=5" />
 """
 
 _BRAND = """
@@ -61,6 +63,12 @@ def _render_nav(current_email: str, active_nav: str | None) -> str:
             link_parts.append(f'<a class="nav-link active" href="{href}" aria-current="page">{label}</a>')
         else:
             link_parts.append(f'<a class="nav-link" href="{href}">{label}</a>')
+    if audit_view.is_admin(current_email):
+        href = "/audit-log"
+        if active_nav == "audit":
+            link_parts.append(f'<a class="nav-link active" href="{href}" aria-current="page">Audit log</a>')
+        else:
+            link_parts.append(f'<a class="nav-link" href="{href}">Audit log</a>')
     links = "".join(link_parts)
     initials = escape(current_email[:2])
     email = escape(current_email)
@@ -393,6 +401,7 @@ def render_fixed_asset_details_page(
 
     content = _render_template(
         "fixed_asset_details_page.html",
+        **_history(current_email, "asset", str(fixed_asset["id"])),
         current_email=current_email,
         fixed_asset={
             "id": str(fixed_asset["id"]),
@@ -673,6 +682,7 @@ def render_inventory_session_details_page(
 ) -> HTMLResponse:
     content = _render_template(
         "inventory_session_details_page.html",
+        **_history(current_email, "inventory_session", str(inv_session["id"])),
         current_email=current_email,
         inv_session=inv_session,
         linked_assets=linked_assets,
@@ -704,6 +714,7 @@ def render_edit_inventory_session_page(
 ) -> HTMLResponse:
     content = _render_template(
         "inventory_session_edit_page.html",
+        **_history(current_email, "inventory_session", str(inv_session["id"])),
         current_email=current_email,
         inv_session=inv_session,
         statuses=statuses,
@@ -726,3 +737,31 @@ def render_edit_inventory_session_page(
         active_nav="inventory",
     )
 
+
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+def _history(current_email: str, entity_type: str, entity_id: str) -> dict[str, object]:
+    """History rows for one record, only for administrators (None hides the section)."""
+    if not audit_view.is_admin(current_email):
+        return {"history": None, "history_link": ""}
+    rows = audit_repository.list_entity_events(entity_type, entity_id, limit=20)
+    return {
+        "history": [audit_view.present(row) for row in rows],
+        "history_link": f"/audit-log?{urlencode({'entity_type': entity_type, 'entity_id': entity_id})}",
+    }
+
+
+def render_audit_log_page(current_email: str, rows: list[dict[str, object]], **context: object) -> HTMLResponse:
+    content = _render_template("audit_log_page.html", rows=rows, **context)
+    return render_page(
+        "AI Hackaton Audit Log",
+        "Audit log",
+        "Who did what.",
+        content,
+        width="1320px",
+        current_email=current_email,
+        active_nav="audit",
+    )

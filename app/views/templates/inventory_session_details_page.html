@@ -119,6 +119,8 @@
             </section>
             {% endif %}
 
+            {% include "audit_history_section.html" %}
+
             {% if inv_session.status not in ["Completed", "Cancelled"] %}
             <section class="detail-card action-zone">
                 <h3>Actions</h3>

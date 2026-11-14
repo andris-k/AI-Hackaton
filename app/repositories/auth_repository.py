@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from app.repositories.audit_repository import initialize_audit_storage
 from app.db import (
     create_password_reset_token,
     create_session,
@@ -23,6 +24,7 @@ from app.db import (
 
 def initialize_auth_storage() -> None:
     initialize_database()
+    initialize_audit_storage()
     ensure_default_user()
 
 

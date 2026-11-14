@@ -121,6 +121,16 @@ def password_reset_available() -> bool:
     return show_reset_link_on_screen() or smtp_settings() is not None
 
 
+# --- Audit log -----------------------------------------------------------------
+
+def audit_retention_days() -> int:
+    """Delete stored audit events older than this many days at startup. 0 keeps everything."""
+    try:
+        return max(0, int(_env("AUDIT_RETENTION_DAYS") or 0))
+    except ValueError:
+        return 0
+
+
 # --- HTTP ----------------------------------------------------------------------
 
 def session_cookie_secure() -> bool:

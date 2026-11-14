@@ -31,12 +31,16 @@ def _fixed_asset_image_url(image_path: object) -> str | None:
     return f"/uploads/{raw_value}"
 
 
-_NAV_ITEMS = (
+_WORKSPACE_NAV = (
     ("dashboard", "Dashboard", "/dashboard"),
     ("fixed-assets", "Fixed assets", "/fixed-assets"),
     ("categories", "Categories", "/fixed-asset-categories"),
     ("inventory", "Inventory sessions", "/inventory-sessions"),
-    ("users", "Users", "/users"),
+)
+# (key, label, href, admins only)
+_ADMINISTRATION_NAV = (
+    ("users", "Users", "/users", False),
+    ("audit", "Audit log", "/audit-log", True),
 )
 
 _HEAD = """
@@ -47,7 +51,7 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
             <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-            <link rel="stylesheet" href="/static/app.css?v=5" />
+            <link rel="stylesheet" href="/static/app.css?v=6" />
 """
 
 _BRAND = """
@@ -56,26 +60,29 @@ _BRAND = """
 """
 
 
+def _nav_link(key: str, label: str, href: str, active_nav: str | None) -> str:
+    if key == active_nav:
+        return f'<a class="nav-link active" href="{href}" aria-current="page">{label}</a>'
+    return f'<a class="nav-link" href="{href}">{label}</a>'
+
+
 def _render_nav(current_email: str, active_nav: str | None) -> str:
-    link_parts = []
-    for key, label, href in _NAV_ITEMS:
-        if key == active_nav:
-            link_parts.append(f'<a class="nav-link active" href="{href}" aria-current="page">{label}</a>')
-        else:
-            link_parts.append(f'<a class="nav-link" href="{href}">{label}</a>')
-    if audit_view.is_admin(current_email):
-        href = "/audit-log"
-        if active_nav == "audit":
-            link_parts.append(f'<a class="nav-link active" href="{href}" aria-current="page">Audit log</a>')
-        else:
-            link_parts.append(f'<a class="nav-link" href="{href}">Audit log</a>')
-    links = "".join(link_parts)
+    is_admin = audit_view.is_admin(current_email)
+    workspace_links = "".join(_nav_link(key, label, href, active_nav) for key, label, href in _WORKSPACE_NAV)
+    admin_links = "".join(
+        _nav_link(key, label, href, active_nav)
+        for key, label, href, admins_only in _ADMINISTRATION_NAV
+        if is_admin or not admins_only
+    )
+    links = (
+        f'<p class="nav-section">Workspace</p>{workspace_links}'
+        f'<p class="nav-section nav-section-divider">Administration</p>{admin_links}'
+    )
     initials = escape(current_email[:2])
     email = escape(current_email)
     return f"""
             <nav class="app-nav" aria-label="Main">
                 <a class="brand" href="/dashboard">{_BRAND}</a>
-                <p class="nav-section">Workspace</p>
                 {links}
                 <span class="nav-spacer"></span>
                 <div class="nav-user">

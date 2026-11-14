@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.repositories import fixed_assets_repository as assets_repo
 from app.repositories import inventory_sessions_repository as repo
+from app.logging_config import audit
 from app.services import auth_service
 from app.services import inventory_sessions_service as svc
 from app.services import inventory_report_service as report_svc
@@ -21,6 +22,11 @@ from app.views.pages import (
 )
 
 router = APIRouter()
+_STATUS_EVENTS = {
+    "Active": "started",
+    "Completed": "completed",
+    "Cancelled": "cancelled",
+}
 
 
 def _render_edit_page(
@@ -345,6 +351,14 @@ def add_inventory_session(
         created_by_user_id=int(user["id"]),
         notes=notes,
     )
+    audit(
+        "inventory_session.created",
+        session_id=session["id"],
+        date_from=date_from,
+        date_to=date_to,
+        responsible_person=responsible_person,
+        linked_assets=len(linked_assets),
+    )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session['id']}",
         status_code=303,
@@ -390,6 +404,7 @@ def inventory_session_pdf_report(
         # Reports are only for completed sessions; send the user back to the session page.
         return RedirectResponse(url=f"/inventory-sessions/id/{session_id}", status_code=303)
 
+    audit("inventory_session.report_downloaded", session_id=session_id)
     pdf_bytes = report_svc.build_session_report(inv_session, repo.list_linked_assets(session_id))
     filename = report_svc.report_filename(inv_session)
     return Response(
@@ -532,6 +547,24 @@ def edit_inventory_session(
     )
     if updated is None:
         return render_login_page("Inventory session not found.")
+    if target_status != current_status:
+        audit(
+            "inventory_session.reopened" if svc.is_terminal_status(current_status)
+            else f"inventory_session.{_STATUS_EVENTS.get(target_status, 'status_changed')}",
+            session_id=session_id,
+            from_status=current_status,
+            to_status=target_status,
+            admin_override=bool(is_admin_user and admin_override_requested
+                                and svc.transition_error(current_status, target_status)),
+            reason=completion_reason.strip() or cancellation_reason.strip() or None,
+        )
+    audit(
+        "inventory_session.updated",
+        session_id=session_id,
+        status=target_status,
+        linked_assets=len(linked_assets),
+        total_quantity=sum(quantity for _, quantity in linked_assets),
+    )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
@@ -577,6 +610,11 @@ def start_inventory_session(
         actor_user_id=int(user["id"]),
     )
 
+    audit(
+        "inventory_session.started",
+        session_id=session_id,
+        from_status=current_status,
+    )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
@@ -625,6 +663,12 @@ def complete_inventory_session(
         actor_user_id=int(user["id"]),
     )
 
+    audit(
+        "inventory_session.completed",
+        session_id=session_id,
+        from_status=current_status,
+        reason=completion_reason.strip(),
+    )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
@@ -673,6 +717,12 @@ def cancel_inventory_session(
         actor_user_id=int(user["id"]),
     )
 
+    audit(
+        "inventory_session.cancelled",
+        session_id=session_id,
+        from_status=current_status,
+        reason=cancellation_reason.strip(),
+    )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session_id}",
         status_code=303,
@@ -702,4 +752,12 @@ def delete_inventory_session(
         )
 
     repo.delete_session(session_id)
+    audit(
+        "inventory_session.deleted",
+        session_id=session_id,
+        status=str(inv_session["status"]),
+        date_from=inv_session["date_from"],
+        date_to=inv_session["date_to"],
+        responsible_person=inv_session["responsible_person"],
+    )
     return RedirectResponse(url="/inventory-sessions", status_code=303)

@@ -18,6 +18,8 @@ The project now uses a modular monolith layering:
 * `app/repositories/auth_repository.py` - auth/session data access abstraction
 * `app/repositories/fixed_assets_repository.py` - fixed asset and category data access abstraction
 * `app/db.py` - SQLite schema management and lower-level DB operations
+* `app/config.py` - environment-based settings (production mode, storage paths, admin account, email)
+* `app/services/email_service.py` - sends password reset emails over SMTP
 
 Layering rule:
 
@@ -117,3 +119,48 @@ Default login credentials are created automatically for local testing:
 * Password: `password123`
 
 Password reset links are shown on screen after you submit the email address, which keeps the project self-contained without an email service.
+
+Both of these apply to local development only. With `APP_ENV=production` the demo account is not created and reset links are emailed instead (see below).
+
+## Running in production
+
+Set `APP_ENV=production` and run without `--reload`, behind HTTPS (most hosts provide it):
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+```
+
+In production the app:
+
+* does not create the demo account `admin@example.com` / `password123`, and refuses to start if a database still contains that account with the demo password (for example a development `app.db` copied to the server);
+* creates the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` if that user doesn't exist yet (an existing user's password is never overwritten);
+* emails password reset links when SMTP is configured, answering the same way whether or not the email is registered; without SMTP, password reset is turned off;
+* sets `Secure` and `SameSite=Strict` on the session cookie and sends HSTS and other security headers;
+* turns off the API docs at `/docs`, `/redoc` and `/openapi.json`;
+* hides the demo-credentials hint on the login page.
+
+Registration at `/register` stays open to everyone.
+
+### Configuration
+
+All settings are environment variables. None are needed for local development.
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `APP_ENV` | `production` turns on the production behaviour above | development |
+| `DATABASE_PATH` | SQLite file; put it on a persistent disk | `app.db` in the project folder |
+| `UPLOADS_DIR` | Folder for asset images; put it on a persistent disk | `app/uploads` |
+| `ADMIN_EMAIL` | First admin account, created on startup if missing | — |
+| `ADMIN_PASSWORD` | Its password, at least 12 characters | — |
+| `ADMIN_EMAILS` | Comma-separated emails allowed admin-only actions, such as reopening closed inventory sessions | `ADMIN_EMAIL` in production, `admin@example.com` in development |
+| `APP_BASE_URL` | Public URL used in emailed links, e.g. `https://assets.example.com` | — |
+| `SMTP_HOST` | Mail server for password reset emails | — (reset off in production) |
+| `SMTP_PORT` | Mail server port | `587` |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | Mail server login, if required | — |
+| `SMTP_FROM` | Sender, e.g. `Asset Registry <noreply@example.com>` | — |
+| `SMTP_STARTTLS` | Use STARTTLS | `true` |
+| `SESSION_COOKIE_SECURE` | Override the cookie `Secure` flag | `true` in production |
+
+Password reset by email needs `SMTP_HOST`, `SMTP_FROM` and `APP_BASE_URL`.
+
+Back up the database file and the uploads folder: they hold all the data.

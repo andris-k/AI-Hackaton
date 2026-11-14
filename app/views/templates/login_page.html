@@ -16,10 +16,12 @@
     </form>
     <div class="links">
         <a href="/register">Create account</a>
-        <a href="/forgot-password">Reset password</a>
+        {% if password_reset_available %}<a href="/forgot-password">Reset password</a>{% endif %}
     </div>
 
+    {% if show_demo_credentials %}
     <p class="seeded-note">For local testing: <code>admin@example.com</code> / <code>password123</code></p>
+    {% endif %}
 </div>
 
 <script>

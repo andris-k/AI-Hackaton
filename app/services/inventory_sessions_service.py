@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app import config
 from app.db import INVENTORY_SESSION_STATUSES
 
 STATUSES: tuple[str, ...] = INVENTORY_SESSION_STATUSES
@@ -12,7 +13,6 @@ _ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "Completed": set(),
     "Cancelled": set(),
 }
-ADMIN_EMAILS: set[str] = {"admin@example.com"}
 MAX_TEXT_LEN = 100
 
 
@@ -27,7 +27,7 @@ def can_transition(current_status: str, target_status: str) -> bool:
 
 
 def is_admin_email(email: str | None) -> bool:
-    return bool(email and email.strip().lower() in ADMIN_EMAILS)
+    return bool(email and email.strip().lower() in config.admin_emails())
 
 
 def transition_error(

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from html import escape
-import os
 
 from fastapi import APIRouter, Cookie, Form, Query
 from fastapi.responses import HTMLResponse
 
+from app import config
 from app.repositories import auth_repository
-from app.services import auth_service
+from app.services import auth_service, email_service
 from app.views.pages import (
     render_dashboard_page,
     render_forgot_password_page,
@@ -24,24 +24,14 @@ SESSION_COOKIE_NAME = "session_token"
 SESSION_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
-def _is_production() -> bool:
-    env = os.getenv("APP_ENV", "").strip().lower()
-    return env in {"prod", "production"}
-
-
 def _cookie_secure() -> bool:
-    # Explicit override wins; otherwise default to secure cookies only in production.
-    override = os.getenv("SESSION_COOKIE_SECURE", "").strip().lower()
-    if override in {"1", "true", "yes", "on"}:
-        return True
-    if override in {"0", "false", "no", "off"}:
-        return False
-    return _is_production()
+    # SESSION_COOKIE_SECURE overrides; otherwise secure cookies only in production.
+    return config.session_cookie_secure()
 
 
 def _cookie_samesite() -> str:
     # Keep local workflow unchanged in development but tighten default in production.
-    return "strict" if _is_production() else "lax"
+    return config.session_cookie_samesite()
 
 
 def set_session_cookie(response: HTMLResponse, session_token: str) -> HTMLResponse:
@@ -125,9 +115,22 @@ def forgot_password_page() -> HTMLResponse:
 
 @router.post("/forgot-password", response_class=HTMLResponse)
 def forgot_password(email: str = Form(...)) -> HTMLResponse:
+    if not config.password_reset_available():
+        return render_forgot_password_page()
+
     token, error = auth_service.create_password_reset_link(email)
     if error:
         return render_forgot_password_page(error)
+
+    if not config.show_reset_link_on_screen():
+        # Production: email the link and give the same answer whether or not the
+        # account exists, so the form can't be used to discover registered emails.
+        if token is not None:
+            email_service.send_password_reset_email(email, f"/reset-password/{token}")
+        return render_forgot_password_page(
+            notice="If an account exists for that email, we've sent a link to reset the password. "
+            "The link works for 1 hour.",
+        )
 
     if token is None:
         return render_forgot_password_page(

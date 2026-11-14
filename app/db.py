@@ -11,13 +11,16 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-DATABASE_PATH = Path(__file__).resolve().parent.parent / "app.db"
+from app import config
+
 PASSWORD_ITERATIONS = 210000
 SESSION_DURATION_HOURS = 24
 
 
 def get_connection() -> sqlite3.Connection:
-    connection = sqlite3.connect(DATABASE_PATH)
+    database_path = config.database_path()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -277,18 +280,37 @@ def verify_password(password: str, stored_hash: str) -> bool:
 
 
 def ensure_default_user() -> None:
-    default_email = "admin@example.com"
-    default_password = "password123"
+    """Create the bootstrap admin account (see config.bootstrap_admin) if it is missing.
+
+    In production, refuse to start while the demo account still has the demo password,
+    e.g. when a development database was copied to the server.
+    """
+    if config.is_production():
+        with db_session() as connection:
+            row = connection.execute(
+                "SELECT password_hash FROM users WHERE email = ?",
+                (config.DEV_ADMIN_EMAIL,),
+            ).fetchone()
+        if row is not None and verify_password(config.DEV_ADMIN_PASSWORD, row["password_hash"]):
+            raise RuntimeError(
+                f"The demo account {config.DEV_ADMIN_EMAIL} still uses the demo password. "
+                "Delete that user or change its password before running with APP_ENV=production."
+            )
+
+    account = config.bootstrap_admin()
+    if account is None:
+        return
+    email, password = account
 
     with db_session() as connection:
         cursor = connection.execute(
             "SELECT id FROM users WHERE email = ?",
-            (default_email,),
+            (email,),
         )
         if cursor.fetchone() is None:
             connection.execute(
                 "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-                (default_email, hash_password(default_password)),
+                (email, hash_password(password)),
             )
 
 

@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from app import config
 from app.repositories import fixed_assets_repository as assets_repo
 
 _TEMPLATES_PATH = Path(__file__).resolve().parent / "templates"
@@ -124,6 +125,7 @@ def render_page(
         </div>
         """
     else:
+        build_note = "" if config.is_production() else "<small>Local development build</small>"
         body = f"""
         <div class="auth-shell">
             <aside class="auth-aside">
@@ -137,7 +139,7 @@ def render_page(
                         <li>Inventory sessions with counted vs expected quantities</li>
                     </ul>
                 </div>
-                <small>Local development build</small>
+                {build_note}
             </aside>
             <main class="auth-main">
                 <div class="auth-card" style="--card-width: max({width}, 400px);">
@@ -162,7 +164,12 @@ def render_page(
 
 
 def render_login_page(error: str | None = None, email: str = "") -> HTMLResponse:
-    content = _render_template("login_page.html", email=email)
+    content = _render_template(
+        "login_page.html",
+        email=email,
+        show_demo_credentials=config.show_demo_credentials(),
+        password_reset_available=config.password_reset_available(),
+    )
     return render_page(
         "AI Hackaton Login",
         "Log in",
@@ -185,15 +192,37 @@ def render_register_page(error: str | None = None, email: str = "") -> HTMLRespo
     )
 
 
-def render_forgot_password_page(error: str | None = None, email: str = "") -> HTMLResponse:
-    content = _render_template("forgot_password_page.html", email=email)
+def render_forgot_password_page(
+    error: str | None = None,
+    email: str = "",
+    *,
+    notice: str | None = None,
+) -> HTMLResponse:
+    available = config.password_reset_available()
+    content = _render_template(
+        "forgot_password_page.html",
+        email=email,
+        reset_available=available,
+        link_on_screen=config.show_reset_link_on_screen(),
+    )
+    if error:
+        message, message_kind = error, "error"
+    elif notice:
+        message, message_kind = notice, "success"
+    elif not available:
+        message, message_kind = (
+            "Password reset by email isn't set up on this site. Ask an administrator to reset your password.",
+            "info",
+        )
+    else:
+        message, message_kind = None, "info"
     return render_page(
         "AI Hackaton Password Reset",
         "Reset password",
         "Request a reset link for an existing account.",
         content,
-        message=error,
-        message_kind="error" if error else "info",
+        message=message,
+        message_kind=message_kind,
     )
 
 

@@ -1,120 +1,17 @@
-<style>
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-    }
-    .page-header h2 {
-        margin: 0;
-    }
-    .page-context {
-        margin: 4px 0 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.85rem;
-    }
-    .page-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .page-actions a {
-        display: inline-flex;
-        align-items: center;
-        text-decoration: none;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        color: inherit;
-        white-space: nowrap;
-        padding: 8px 12px;
-    }
-    .detail-shell {
-        display: grid;
-        gap: 12px;
-    }
-    .section-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: #fff;
-        padding: 12px;
-    }
-    .section-card h3 {
-        margin: 0 0 10px;
-        font-size: 1rem;
-    }
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-    }
-    @media (max-width: 760px) {
-        .summary-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-    .summary-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
-        padding: 12px;
-    }
-    .summary-card p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.82rem;
-    }
-    .summary-card strong {
-        display: block;
-        margin-top: 4px;
-        font-size: 1.15rem;
-    }
-    .detail-grid {
-        display: grid;
-        grid-template-columns: 220px 1fr;
-        gap: 8px 16px;
-    }
-    .detail-grid dt {
-        font-weight: 600;
-        color: var(--muted, #6b6055);
-    }
-    .detail-grid dd {
-        margin: 0;
-    }
-    .asset-image {
-        margin-top: 12px;
-    }
-    .asset-image img {
-        width: 220px;
-        max-width: 100%;
-        height: auto;
-        border-radius: 12px;
-        border: 1px solid var(--border, #d6cfc7);
-        background: #f8f4ee;
-    }
-</style>
 <div class="stack">
     <section class="panel">
         <div class="page-header">
             <div>
-                <h2>Fixed asset details</h2>
-                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Read-only record view.</p>
+                <h2>{{ fixed_asset.name }}</h2>
+                <p class="page-context">{{ fixed_asset.category }} · registered {{ fixed_asset.registration_date }}</p>
             </div>
             <div class="page-actions">
-                <a href="{{ edit_href }}">Edit fixed asset</a>
-                <a href="{{ back_href }}">← Fixed Assets</a>
+                <a href="{{ back_href }}">← Fixed assets</a>
+                <a class="primary" href="{{ edit_href }}">Edit fixed asset</a>
             </div>
         </div>
 
         <div class="summary-grid">
-            <article class="summary-card">
-                <p>Name</p>
-                <strong>{{ fixed_asset.name }}</strong>
-            </article>
             <article class="summary-card">
                 <p>Category</p>
                 <strong>{{ fixed_asset.category }}</strong>
@@ -127,46 +24,62 @@
                 <p>Initial value</p>
                 <strong>{{ fixed_asset.initial_value }}</strong>
             </article>
+            <article class="summary-card">
+                <p>Responsible person</p>
+                <strong>{{ fixed_asset.responsible_person }}</strong>
+            </article>
         </div>
 
-        <section class="section-card">
-            <h3>Asset details</h3>
-            <dl class="detail-grid">
-                <dt>Id</dt>
-                <dd>{{ fixed_asset.id }}</dd>
-                <dt>Name</dt>
-                <dd>{{ fixed_asset.name }}</dd>
-                <dt>Category</dt>
-                <dd>{{ fixed_asset.category }}</dd>
-                <dt>Quantity</dt>
-                <dd>{{ fixed_asset.quantity }}</dd>
-                <dt>InitialValue</dt>
-                <dd>{{ fixed_asset.initial_value }}</dd>
-                <dt>ResponsiblePerson</dt>
-                <dd>{{ fixed_asset.responsible_person }}</dd>
-                <dt>RegistrationDate</dt>
-                <dd>{{ fixed_asset.registration_date }}</dd>
-            </dl>
-            {% if fixed_asset.image_url %}
-            <div class="asset-image">
-                <p><strong>Image</strong></p>
-                <div><a href="{{ fixed_asset.image_url }}" target="_blank" rel="noopener">Open image</a></div>
-                <img src="{{ fixed_asset.image_url }}" alt="{{ fixed_asset.name }} image" />
-            </div>
-            {% endif %}
-        </section>
+        <div class="detail-layout">
+            <section class="section-card">
+                <h3>Asset details</h3>
+                <dl class="detail-grid">
+                    <dt>Id</dt>
+                    <dd class="mono">{{ fixed_asset.id }}</dd>
+                    <dt>Name</dt>
+                    <dd>{{ fixed_asset.name }}</dd>
+                    <dt>Category</dt>
+                    <dd>{{ fixed_asset.category }}</dd>
+                    <dt>Quantity</dt>
+                    <dd>{{ fixed_asset.quantity }}</dd>
+                    <dt>Initial value</dt>
+                    <dd>{{ fixed_asset.initial_value }}</dd>
+                    <dt>Responsible person</dt>
+                    <dd>{{ fixed_asset.responsible_person }}</dd>
+                    <dt>Registration date</dt>
+                    <dd>{{ fixed_asset.registration_date }}</dd>
+                </dl>
+            </section>
 
-        <form method="post" action="{{ delete_action }}" onsubmit="return confirm('Delete this fixed asset?');" style="margin-top: 12px;">
-            <input type="hidden" name="page" value="{{ page }}" />
-            <input type="hidden" name="page_size" value="{{ page_size }}" />
-            <input type="hidden" name="name_filter" value="{{ filters.name }}" />
-            <input type="hidden" name="category_filter" value="{{ filters.category }}" />
-            <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
-            <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
-            <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />
-            <input type="hidden" name="registration_date_from_filter" value="{{ filters.registration_date_from }}" />
-            <input type="hidden" name="registration_date_to_filter" value="{{ filters.registration_date_to }}" />
-            <button type="submit" style="width: auto; min-width: 180px; background: #b91c1c; border-color: #b91c1c;">Delete fixed asset</button>
-        </form>
+            <section class="section-card">
+                <h3>Image</h3>
+                {% if fixed_asset.image_url %}
+                <div class="asset-image">
+                    <a href="{{ fixed_asset.image_url }}" target="_blank" rel="noopener">
+                        <img src="{{ fixed_asset.image_url }}" alt="{{ fixed_asset.name }} image" />
+                    </a>
+                    <a href="{{ fixed_asset.image_url }}" target="_blank" rel="noopener">Open full size</a>
+                </div>
+                {% else %}
+                <div class="image-placeholder">No image uploaded</div>
+                {% endif %}
+            </section>
+        </div>
+
+        <div class="danger-zone">
+            <p><strong>Delete this fixed asset</strong>The record and its image are removed permanently.</p>
+            <form method="post" action="{{ delete_action }}" onsubmit="return confirm('Delete this fixed asset?');">
+                <input type="hidden" name="page" value="{{ page }}" />
+                <input type="hidden" name="page_size" value="{{ page_size }}" />
+                <input type="hidden" name="name_filter" value="{{ filters.name }}" />
+                <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+                <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
+                <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
+                <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />
+                <input type="hidden" name="registration_date_from_filter" value="{{ filters.registration_date_from }}" />
+                <input type="hidden" name="registration_date_to_filter" value="{{ filters.registration_date_to }}" />
+                <button type="submit" class="btn-danger">Delete fixed asset</button>
+            </form>
+        </div>
     </section>
 </div>

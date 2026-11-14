@@ -12,6 +12,7 @@ The project now uses a modular monolith layering:
 * `app/routers/categories.py` - fixed asset category HTTP routes
 * `app/views/pages.py` - server-rendered HTML page helpers
 * `app/views/templates/` - Jinja2 templates for auth, users, fixed assets, and category pages
+* `app/static/app.css` - shared stylesheet (sidebar layout, design tokens, tables, forms), served at `/static/app.css`
 * `app/services/auth_service.py` - auth/session business logic
 * `app/services/fixed_assets_service.py` - fixed asset business rules (validation, filters, pagination normalization)
 * `app/repositories/auth_repository.py` - auth/session data access abstraction

@@ -80,6 +80,8 @@ def edit_fixed_asset_category_page(
             '<div class="links"><a href="/fixed-asset-categories">Back to categories</a></div>',
             message="Category not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="categories",
         )
 
     return render_edit_fixed_asset_category_page(user["email"], category)
@@ -104,6 +106,8 @@ def edit_fixed_asset_category_route(
             '<div class="links"><a href="/fixed-asset-categories">Back to categories</a></div>',
             message="Category not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="categories",
         )
 
     normalized_name, category_error = assets_service.validate_category_name(name)
@@ -133,6 +137,8 @@ def edit_fixed_asset_category_route(
             '<div class="links"><a href="/fixed-asset-categories">Back to categories</a></div>',
             message="Category not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="categories",
         )
 
     return render_edit_fixed_asset_category_page(

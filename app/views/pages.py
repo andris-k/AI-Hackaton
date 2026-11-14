@@ -28,6 +28,57 @@ def _fixed_asset_image_url(image_path: object) -> str | None:
     return f"/uploads/{raw_value}"
 
 
+_NAV_ITEMS = (
+    ("dashboard", "Dashboard", "/dashboard"),
+    ("fixed-assets", "Fixed assets", "/fixed-assets"),
+    ("categories", "Categories", "/fixed-asset-categories"),
+    ("inventory", "Inventory sessions", "/inventory-sessions"),
+    ("users", "Users", "/users"),
+)
+
+_HEAD = """
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>{title}</title>
+            <link rel="preconnect" href="https://fonts.googleapis.com" />
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+            <link rel="stylesheet" href="/static/app.css?v=1" />
+"""
+
+_BRAND = """
+                <span class="brand-mark" aria-hidden="true">FA</span>
+                <span class="brand-text"><strong>Asset Registry</strong><span>AI Hackaton</span></span>
+"""
+
+
+def _render_nav(current_email: str, active_nav: str | None) -> str:
+    link_parts = []
+    for key, label, href in _NAV_ITEMS:
+        if key == active_nav:
+            link_parts.append(f'<a class="nav-link active" href="{href}" aria-current="page">{label}</a>')
+        else:
+            link_parts.append(f'<a class="nav-link" href="{href}">{label}</a>')
+    links = "".join(link_parts)
+    initials = escape(current_email[:2])
+    email = escape(current_email)
+    return f"""
+            <nav class="app-nav" aria-label="Main">
+                <a class="brand" href="/dashboard">{_BRAND}</a>
+                <p class="nav-section">Workspace</p>
+                {links}
+                <span class="nav-spacer"></span>
+                <div class="nav-user">
+                    <span class="nav-avatar" aria-hidden="true">{initials}</span>
+                    <div class="nav-user-text">
+                        <span title="{email}">{email}</span>
+                        <a href="/logout">Log out</a>
+                    </div>
+                </div>
+            </nav>
+    """
+
+
 def render_page(
     page_title: str,
     heading: str,
@@ -37,239 +88,74 @@ def render_page(
     width: str = "440px",
     message: str | None = None,
     message_kind: str = "info",
+    current_email: str | None = None,
+    active_nav: str | None = None,
 ) -> HTMLResponse:
-    message_block = f'<p class="message {message_kind}">{escape(message)}</p>' if message else ""
+    """Render a full HTML page.
 
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-        <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>{escape(page_title)}</title>
-            <link rel="preconnect" href="https://fonts.googleapis.com" />
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-            <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet" />
-            <style>
-                :root {{
-                    color-scheme: light;
-                    font-family: "Source Sans 3", "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
-                    --bg: radial-gradient(1200px 640px at 15% -10%, #f8f2e7 0%, #f5efe4 58%, #ede7dd 100%);
-                    --surface: #ffffff;
-                    --surface-alt: #faf7f1;
-                    --text: #1f2933;
-                    --muted: #5d6672;
-                    --accent: #26476d;
-                    --accent-hover: #1f3c5d;
-                    --border: #d9cfbf;
-                    --success: #16685d;
-                    --error: #9f2f2a;
-                    --info: #2f4f7f;
-                    --ring: rgba(38, 71, 109, 0.2);
-                    --shadow: 0 14px 28px rgba(54, 39, 23, 0.1);
-                    --table-head-bg: #f5eee2;
-                    --table-row-alt: #fcfaf6;
-                }}
-
-                * {{ box-sizing: border-box; }}
-
-                body {{
-                    margin: 0;
-                    min-height: 100vh;
-                    display: block;
-                    background: var(--bg);
-                    color: var(--text);
-                    padding: 16px;
-                }}
-
-                .card {{
-                    width: min(100%, {width});
-                    margin: 0 auto;
-                    background: var(--surface);
-                    border: 1px solid var(--border);
-                    border-radius: 14px;
-                    box-shadow: var(--shadow);
-                    padding: 22px;
-                }}
-
-                .eyebrow {{
-                    margin: 0 0 9px;
-                    color: var(--accent);
-                    font-size: 0.7rem;
-                    font-weight: 700;
-                    letter-spacing: 0.14em;
-                    text-transform: uppercase;
-                }}
-
-                h1 {{
-                    margin: 0 0 6px;
-                    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
-                    font-size: 1.6rem;
-                    line-height: 1.2;
-                    font-weight: 700;
-                }}
-
-                p.subtitle {{
-                    margin: 0 0 16px;
-                    color: var(--muted);
-                    line-height: 1.5;
-                    font-size: 0.97rem;
-                }}
-
-                .message {{
-                    margin: 0 0 12px;
-                    padding: 9px 12px;
-                    border-radius: 10px;
-                    border: 1px solid transparent;
-                    font-size: 0.88rem;
-                }}
-
-                .message.info {{ background: #eef2fb; color: var(--info); border-color: #ccd9f0; }}
-                .message.success {{ background: #edf8f4; color: var(--success); border-color: #b6ddd3; }}
-                .message.error {{ background: #fdf0ef; color: var(--error); border-color: #efc3c0; }}
-
-                label {{
-                    display: block;
-                    margin: 0 0 5px;
-                    font-size: 0.8rem;
-                    font-weight: 700;
-                    letter-spacing: 0.015em;
-                    color: #334155;
-                }}
-
-                .field {{ margin-bottom: 12px; }}
-
-                input, select {{
-                    width: 100%;
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    padding: 10px 11px;
-                    font-size: 0.9rem;
-                    background: var(--surface-alt);
-                    outline: none;
-                    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-                }}
-
-                input:focus, select:focus {{
-                    border-color: var(--accent);
-                    box-shadow: 0 0 0 3px var(--ring);
-                }}
-
-                button {{
-                    width: 100%;
-                    border: 1px solid var(--accent);
-                    border-radius: 10px;
-                    padding: 10px 12px;
-                    background: var(--accent);
-                    color: white;
-                    font-size: 0.88rem;
-                    font-weight: 700;
-                    cursor: pointer;
-                    transition: background-color 0.15s ease, border-color 0.15s ease;
-                }}
-
-                button:hover {{
-                    background: var(--accent-hover);
-                    border-color: var(--accent-hover);
-                }}
-
-                .links {{
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 10px;
-                    margin-top: 12px;
-                }}
-
-                .links a {{
-                    color: var(--accent);
-                    font-size: 0.87rem;
-                    font-weight: 700;
-                    text-decoration: none;
-                }}
-
-                .links a:hover {{
-                    color: var(--accent-hover);
-                    text-decoration: underline;
-                }}
-
-                .small {{
-                    margin-top: 10px;
-                    color: var(--muted);
-                    font-size: 0.81rem;
-                    line-height: 1.45;
-                }}
-
-                .stack {{ display: grid; gap: 12px; }}
-
-                .panel {{
-                    border: 1px solid var(--border);
-                    border-radius: 12px;
-                    padding: 14px;
-                    background: var(--surface);
-                }}
-
-                .panel h2 {{
-                    margin: 0 0 6px;
-                    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
-                    font-size: 1.08rem;
-                    font-weight: 600;
-                }}
-
-                code {{
-                    display: block;
-                    margin-top: 8px;
-                    padding: 9px 11px;
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    background: var(--surface-alt);
-                    font-size: 0.8rem;
-                    overflow-wrap: anywhere;
-                }}
-
-                table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    border: 1px solid var(--border);
-                    background: var(--surface);
-                }}
-
-                th, td {{
-                    padding: 9px 9px;
-                    text-align: left;
-                    border-bottom: 1px solid var(--border);
-                    font-size: 0.85rem;
-                }}
-
-                th {{
-                    background: var(--table-head-bg);
-                    font-weight: 700;
-                    color: #273548;
-                }}
-
-                tr:last-child td {{ border-bottom: 0; }}
-
-                .dashboard-grid {{
-                    display: grid;
-                    gap: 10px;
-                }}
-
-                @media (min-width: 900px) {{
-                    .dashboard-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-                    .dashboard-grid .wide {{ grid-column: 1 / -1; }}
-                }}
-            </style>
-        </head>
-        <body>
-            <main class="card">
-                <p class="eyebrow">AI Hackaton</p>
-                <h1>{escape(heading)}</h1>
-                <p class="subtitle">{escape(subtitle)}</p>
-                {message_block}
-                {content}
-            </main>
-        </body>
-    </html>
+    Signed-in pages (``current_email`` given) use the app shell with the sidebar;
+    the template content supplies its own page header. Other pages use the
+    split-screen auth layout with ``heading`` and ``subtitle`` above the content.
     """
+    message_block = f'<p class="message {message_kind}">{escape(message)}</p>' if message else ""
+    head = _HEAD.format(title=escape(page_title))
+
+    if current_email:
+        if 'class="page-header"' not in content:
+            content = f"""
+                <div class="page-header">
+                    <div>
+                        <h2>{escape(heading)}</h2>
+                        <p class="page-context">{escape(subtitle)}</p>
+                    </div>
+                </div>
+                <section class="section-card">{content}</section>
+            """
+        body = f"""
+        <div class="app-shell">
+            {_render_nav(current_email, active_nav)}
+            <main class="app-main">
+                <div class="app-content" style="max-width: max({width}, 1080px);">
+                    {message_block}
+                    {content}
+                </div>
+            </main>
+        </div>
+        """
+    else:
+        body = f"""
+        <div class="auth-shell">
+            <aside class="auth-aside">
+                <a class="brand" href="/">{_BRAND}</a>
+                <div>
+                    <h2>Every asset, its owner and its value in one register.</h2>
+                    <p>Register fixed assets, organise them by category and run inventory sessions to check what is really on hand.</p>
+                    <ul>
+                        <li>Fixed asset register with images</li>
+                        <li>Categories and responsible persons</li>
+                        <li>Inventory sessions with counted vs expected quantities</li>
+                    </ul>
+                </div>
+                <small>Local development build</small>
+            </aside>
+            <main class="auth-main">
+                <div class="auth-card" style="--card-width: max({width}, 400px);">
+                    <p class="eyebrow">Asset Registry</p>
+                    <h1>{escape(heading)}</h1>
+                    <p class="subtitle">{escape(subtitle)}</p>
+                    {message_block}
+                    {content}
+                </div>
+            </main>
+        </div>
+        """
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+    <head>{head}</head>
+    <body>{body}</body>
+</html>
+"""
 
     return HTMLResponse(content=html)
 
@@ -342,6 +228,8 @@ def render_dashboard_page(
         width="760px",
         message=message,
         message_kind=message_kind,
+        current_email=user_email,
+        active_nav="dashboard",
     )
 
 
@@ -365,6 +253,8 @@ def render_users_page(current_email: str, users: list[object], email_filter: str
         "List of registered users in the system.",
         table,
         width="860px",
+        current_email=current_email,
+        active_nav="users",
     )
 
 
@@ -446,6 +336,8 @@ def render_fixed_assets_page(
         width="1320px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="fixed-assets",
     )
 
 
@@ -495,6 +387,8 @@ def render_fixed_asset_details_page(
         "Detailed view of a fixed asset.",
         content,
         width="860px",
+        current_email=current_email,
+        active_nav="fixed-assets",
     )
 
 
@@ -555,6 +449,8 @@ def render_edit_fixed_asset_page(
         width="860px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="fixed-assets",
     )
 
 
@@ -610,6 +506,8 @@ def render_add_fixed_asset_page(
         width="760px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="fixed-assets",
     )
 
 
@@ -640,6 +538,8 @@ def render_fixed_asset_categories_page(
         width="980px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="categories",
     )
 
 
@@ -666,6 +566,8 @@ def render_edit_fixed_asset_category_page(
         width="760px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="categories",
     )
 
 
@@ -699,6 +601,8 @@ def render_inventory_sessions_page(
         width="1100px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="inventory",
     )
 
 
@@ -724,6 +628,8 @@ def render_add_inventory_session_page(
         "Create a new inventory session.",
         content,
         width="760px",
+        current_email=current_email,
+        active_nav="inventory",
     )
 
 
@@ -749,6 +655,8 @@ def render_inventory_session_details_page(
         width="760px",
         message=message,
         message_kind=message_kind,
+        current_email=current_email,
+        active_nav="inventory",
     )
 
 
@@ -784,5 +692,7 @@ def render_edit_inventory_session_page(
         width="1120px",
         message=error,
         message_kind="error" if error else "info",
+        current_email=current_email,
+        active_nav="inventory",
     )
 

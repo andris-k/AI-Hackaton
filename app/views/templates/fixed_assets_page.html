@@ -1,265 +1,51 @@
-<style>
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-    }
-    .page-header h2 {
-        margin: 0;
-    }
-    .page-context {
-        margin: 4px 0 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.85rem;
-    }
-    .page-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .page-actions a {
-        display: inline-flex;
-        align-items: center;
-        text-decoration: none;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        color: inherit;
-        white-space: nowrap;
-        padding: 8px 12px;
-    }
-    .section-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: #fff;
-        padding: 12px;
-    }
-    .section-card h3 {
-        margin: 0 0 10px;
-        font-size: 1rem;
-    }
-    .assets-grid {
-        display: grid;
-        gap: 10px;
-    }
-
-    .asset-form-row {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-    }
-
-    .filter-form {
-        display: grid;
-        gap: 8px;
-        margin-bottom: 8px;
-        padding: 12px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
-    }
-
-    .filter-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 2px;
-    }
-
-    .filter-actions button {
-        width: auto;
-        min-width: 110px;
-    }
-
-    .table-wrap {
-        max-height: min(58vh, 560px);
-        overflow: auto;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: #fff;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        border: 0;
-        font-size: 0.93rem;
-        table-layout: fixed;
-    }
-
-    th, td {
-        padding: 7px 8px;
-        text-align: left;
-        border-bottom: 1px solid var(--border);
-        vertical-align: middle;
-        white-space: normal;
-    }
-
-    th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: var(--table-head-bg);
-        font-weight: 700;
-    }
-
-    tbody tr:nth-child(even) {
-        background: var(--table-row-alt);
-    }
-    tbody tr:hover {
-        background: #f7f2e9;
-    }
-
-    .col-id {
-        width: 220px;
-    }
-
-    .col-id a {
-        display: inline-block;
-        max-width: 100%;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-    }
-
-    .col-value {
-        width: 120px;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .col-qty {
-        width: 90px;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .col-date {
-        width: 138px;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-
-    .col-actions {
-        width: 160px;
-        white-space: nowrap;
-    }
-
-    .row-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .row-actions form {
-        margin: 0;
-    }
-
-    .row-actions form button {
-        width: auto;
-        min-width: 88px;
-        padding: 7px 10px;
-    }
-
-    tr:last-child td { border-bottom: 0; }
-
-    @media (max-width: 760px) {
-        .asset-form-row { grid-template-columns: 1fr; }
-        .filter-actions { flex-wrap: wrap; }
-        .table-wrap { max-height: none; }
-    }
-
-    .pager {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 10px;
-        margin-top: 14px;
-        flex-wrap: wrap;
-    }
-
-    .pager .controls {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-    }
-
-    .pager .meta {
-        color: var(--muted);
-        font-size: 0.9rem;
-    }
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-    }
-    @media (max-width: 760px) {
-        .summary-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-    .summary-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
-        padding: 12px;
-    }
-    .summary-card p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.82rem;
-    }
-    .summary-card strong {
-        display: block;
-        margin-top: 4px;
-        font-size: 1.15rem;
-    }
-</style>
+{% set ns = namespace(active=0) %}
+{% for key in ["name", "category", "initial_value_from", "initial_value_to", "responsible_person", "registration_date_from", "registration_date_to"] %}
+    {% if filters[key] %}{% set ns.active = ns.active + 1 %}{% endif %}
+{% endfor %}
 <div class="assets-grid">
     <section class="panel">
         <div class="page-header">
             <div>
-                <h2>Fixed Assets</h2>
-                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Browse, filter, and manage registered assets.</p>
+                <h2>Fixed assets</h2>
+                <p class="page-context">Browse, filter, and manage registered assets.</p>
             </div>
             <div class="page-actions">
-                <a href="{{ add_asset_href }}">+ Add fixed asset</a>
-                <a href="/dashboard">← Dashboard</a>
-                <a href="/logout">Log out</a>
+                <a href="/fixed-asset-categories">Manage categories</a>
+                <a class="primary" href="{{ add_asset_href }}">+ Add fixed asset</a>
             </div>
         </div>
 
         <div class="summary-grid">
             <article class="summary-card">
-                <p>Total assets</p>
+                <p>{% if ns.active %}Matching assets{% else %}Total assets{% endif %}</p>
                 <strong>{{ total_assets }}</strong>
             </article>
             <article class="summary-card">
-                <p>Current page</p>
-                <strong>{{ page }} / {{ total_pages }}</strong>
+                <p>Showing</p>
+                <strong>{{ start_row }}–{{ end_row }}</strong>
             </article>
             <article class="summary-card">
-                <p>Showing</p>
-                <strong>{{ start_row }}-{{ end_row }}</strong>
+                <p>Page</p>
+                <strong>{{ page }} of {{ total_pages }}</strong>
+            </article>
+            <article class="summary-card">
+                <p>Active filters</p>
+                <strong>{{ ns.active }}</strong>
             </article>
         </div>
 
-        <section class="section-card">
-            <h3>Filters</h3>
+        <details class="filter-panel" {% if ns.active %}open{% endif %}>
+            <summary>Filters {% if ns.active %}<span class="filter-count">{{ ns.active }} active</span>{% endif %}</summary>
             <form method="get" action="/fixed-assets" class="filter-form">
                 <input type="hidden" name="page" value="1" />
                 <input type="hidden" name="page_size" value="{{ page_size }}" />
                 <div class="asset-form-row">
                     <div>
                         <label for="filter_name">Name</label>
-                        <input id="filter_name" name="name" type="text" value="{{ filters.name }}" />
+                        <input id="filter_name" name="name" type="search" value="{{ filters.name }}" placeholder="Contains…" />
                     </div>
                     <div>
-                        <label for="filter_category">Category</label>
+                        <label for="filter_category">Category <span class="mono">(Ctrl+click for several)</span></label>
                         <select id="filter_category" name="category" multiple size="4">
                             {% for category_name in category_filter_options %}
                             <option value="{{ category_name }}" {% if category_name in selected_category_filters %}selected{% endif %}>{{ category_name }}</option>
@@ -269,36 +55,36 @@
                 </div>
                 <div class="asset-form-row">
                     <div>
-                        <label for="filter_initial_value_from">InitialValue From</label>
+                        <label for="filter_initial_value_from">Initial value from</label>
                         <input id="filter_initial_value_from" name="initial_value_from" type="number" step="0.01" min="0" value="{{ filters.initial_value_from }}" />
                     </div>
                     <div>
-                        <label for="filter_initial_value_to">InitialValue To</label>
+                        <label for="filter_initial_value_to">Initial value to</label>
                         <input id="filter_initial_value_to" name="initial_value_to" type="number" step="0.01" min="0" value="{{ filters.initial_value_to }}" />
                     </div>
                 </div>
                 <div class="asset-form-row">
                     <div>
-                        <label for="filter_responsible_person">ResponsiblePerson</label>
-                        <input id="filter_responsible_person" name="responsible_person" type="text" value="{{ filters.responsible_person }}" />
+                        <label for="filter_responsible_person">Responsible person</label>
+                        <input id="filter_responsible_person" name="responsible_person" type="search" value="{{ filters.responsible_person }}" />
                     </div>
                     <div>
-                        <label for="filter_registration_date_from">RegistrationDate From</label>
+                        <label for="filter_registration_date_from">Registered from</label>
                         <input id="filter_registration_date_from" name="registration_date_from" type="date" value="{{ filters.registration_date_from }}" />
                     </div>
                 </div>
                 <div class="asset-form-row">
                     <div>
-                        <label for="filter_registration_date_to">RegistrationDate To</label>
+                        <label for="filter_registration_date_to">Registered to</label>
                         <input id="filter_registration_date_to" name="registration_date_to" type="date" value="{{ filters.registration_date_to }}" />
                     </div>
                 </div>
                 <div class="filter-actions">
                     <button type="submit">Apply filters</button>
-                    <a href="{{ clear_filters_href }}">Clear filters</a>
+                    {% if ns.active %}<a href="{{ clear_filters_href }}">Clear filters</a>{% endif %}
                 </div>
             </form>
-        </section>
+        </details>
 
         <section class="section-card">
             <h3>Registered fixed assets</h3>
@@ -306,21 +92,22 @@
                 <table>
                     <thead>
                         <tr>
-                            <th class="col-id">Id</th>
                             <th>Name</th>
                             <th>Category</th>
                             <th class="col-qty">Qty</th>
-                            <th class="col-value">InitialValue</th>
-                            <th>ResponsiblePerson</th>
-                            <th class="col-date">RegistrationDate</th>
-                            <th class="col-actions">Actions</th>
+                            <th class="col-value">Initial value</th>
+                            <th>Responsible person</th>
+                            <th class="col-date">Registered</th>
+                            <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for asset in rows %}
                         <tr>
-                            <td class="col-id"><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.id }}</a></td>
-                            <td><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a></td>
+                            <td>
+                                <a class="asset-name" href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a>
+                                <span class="asset-sub mono" title="{{ asset.id }}">{{ asset.id[:8] }}</span>
+                            </td>
                             <td>{{ asset.category }}</td>
                             <td class="col-qty">{{ asset.quantity }}</td>
                             <td class="col-value">{{ asset.initial_value }}</td>
@@ -344,24 +131,31 @@
                                 </div>
                             </td>
                         </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" style="padding: 28px 12px; text-align: center; color: var(--muted);">
+                                No fixed assets match.{% if ns.active %} <a href="{{ clear_filters_href }}">Clear filters</a>{% endif %}
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </section>
+
         <div class="pager">
-            <div class="meta">Showing {{ start_row }}-{{ end_row }} of {{ total_assets }}</div>
+            <div class="meta">Showing {{ start_row }}–{{ end_row }} of {{ total_assets }}</div>
             <div class="controls">
                 {% if previous_page_href %}
-                <a href="{{ previous_page_href }}">Previous</a>
+                <a href="{{ previous_page_href }}">← Previous</a>
                 {% else %}
-                <span style="color: var(--muted);">Previous</span>
+                <span class="disabled">← Previous</span>
                 {% endif %}
-                <span>Page {{ page }} / {{ total_pages }}</span>
+                <span class="current">Page {{ page }} / {{ total_pages }}</span>
                 {% if next_page_href %}
-                <a href="{{ next_page_href }}">Next</a>
+                <a href="{{ next_page_href }}">Next →</a>
                 {% else %}
-                <span style="color: var(--muted);">Next</span>
+                <span class="disabled">Next →</span>
                 {% endif %}
             </div>
         </div>

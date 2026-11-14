@@ -138,6 +138,8 @@ def fixed_asset_details_page(
             '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="Fixed asset not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     filters = assets_service.build_filters(
@@ -185,6 +187,8 @@ def edit_fixed_asset_page(
             '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="Fixed asset not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     if not assets_repo.list_categories():
@@ -195,6 +199,8 @@ def edit_fixed_asset_page(
             '<div class="links"><a href="/fixed-asset-categories">Manage categories</a><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="No categories found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     filters = assets_service.build_filters(
@@ -249,6 +255,8 @@ def edit_fixed_asset_route(
             '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="Fixed asset not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     if not assets_repo.list_categories():
@@ -259,6 +267,8 @@ def edit_fixed_asset_route(
             '<div class="links"><a href="/fixed-asset-categories">Manage categories</a><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="No categories found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     filters = assets_service.build_filters(
@@ -342,6 +352,8 @@ def edit_fixed_asset_route(
             '<div class="links"><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="Fixed asset not found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     if new_image_path and previous_image_path and new_image_path != previous_image_path:
@@ -393,6 +405,8 @@ def add_fixed_asset_page(
             '<div class="links"><a href="/fixed-asset-categories">Manage categories</a><a href="/fixed-assets">Back to fixed assets</a></div>',
             message="No categories found.",
             message_kind="error",
+            current_email=user["email"],
+            active_nav="fixed-assets",
         )
 
     return render_add_fixed_asset_page(

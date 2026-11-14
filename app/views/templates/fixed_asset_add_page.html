@@ -1,111 +1,13 @@
-<style>
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-    }
-    .page-header h2 {
-        margin: 0;
-    }
-    .page-context {
-        margin: 4px 0 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.85rem;
-    }
-    .page-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .page-actions a {
-        display: inline-flex;
-        align-items: center;
-        text-decoration: none;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        color: inherit;
-        white-space: nowrap;
-        padding: 8px 12px;
-    }
-    .section-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: #fff;
-        padding: 12px;
-    }
-    .section-card h3 {
-        margin: 0 0 10px;
-        font-size: 1rem;
-    }
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-    }
-    @media (max-width: 760px) {
-        .summary-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-    .summary-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
-        padding: 12px;
-    }
-    .summary-card p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.82rem;
-    }
-    .summary-card strong {
-        display: block;
-        margin-top: 4px;
-        font-size: 1.15rem;
-    }
-    .asset-form {
-        display: grid;
-        gap: 12px;
-    }
-
-    .asset-form-row {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-    }
-
-    @media (max-width: 760px) {
-        .asset-form-row { grid-template-columns: 1fr; }
-    }
-</style>
 <div class="stack">
     <section class="panel">
         <div class="page-header">
             <div>
                 <h2>Add fixed asset</h2>
-                <p class="page-context">Signed in as <strong>{{ current_email }}</strong>. Create a new fixed asset and keep the list filtered context.</p>
+                <p class="page-context">All fields except the image are required.</p>
             </div>
             <div class="page-actions">
                 <a href="{{ back_href }}">← Back to fixed assets</a>
-                <a href="/dashboard">← Dashboard</a>
             </div>
-        </div>
-
-        <div class="summary-grid">
-            <article class="summary-card">
-                <p>Current context</p>
-                <strong>New fixed asset</strong>
-            </article>
-            <article class="summary-card">
-                <p>Required fields</p>
-                <strong>Name, Category, Quantity, Value</strong>
-            </article>
         </div>
 
         <section class="section-card">
@@ -125,7 +27,7 @@
                     <input id="name" name="name" type="text" maxlength="100" value="{{ form_data.name }}" required />
                 </div>
                 <div>
-                    <label for="category">Category</label>
+                    <label for="category_id">Category</label>
                     <select id="category_id" name="category_id" required>
                         <option value="">Select category</option>
                         {% for category in categories %}
@@ -149,18 +51,21 @@
                     <label for="responsible_person">Responsible person</label>
                     <input id="responsible_person" name="responsible_person" type="text" maxlength="100" value="{{ form_data.responsible_person }}" required />
                 </div>
-            </div>
-            <div class="asset-form-row">
                 <div>
                     <label for="registration_date">Registration date</label>
                     <input id="registration_date" name="registration_date" type="date" value="{{ form_data.registration_date }}" required />
                 </div>
+            </div>
+            <div class="asset-form-row">
                 <div>
                     <label for="image">Asset image (optional)</label>
                     <input id="image" name="image" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,image/*" />
                 </div>
             </div>
-            <button type="submit">Save fixed asset</button>
+            <div class="actions-bar">
+                <button type="submit">Save fixed asset</button>
+                <a href="{{ back_href }}">Cancel</a>
+            </div>
         </form>
         </section>
     </section>

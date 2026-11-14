@@ -1,42 +1,12 @@
 <style>
-    .page-header {
-        display: flex;
-        gap: 12px;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 10px;
-        flex-wrap: wrap;
-    }
-    .page-header h2 {
-        margin: 0;
-    }
-    .page-context {
-        margin: 4px 0 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.85rem;
-    }
-    .page-actions {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    .top-link-action {
-        display: inline-flex;
-        align-items: center;
-        text-decoration: none;
-        font-size: 0.88rem;
-    }
-
-    .edit-shell {
-        display: grid;
-        gap: 14px;
-    }
+    /* Page-specific styles for the inventory session editor. Shared styles live in /static/app.css. */
+    .edit-shell { display: grid; gap: 16px; }
     .status-header {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: linear-gradient(135deg, #faf6ef 0%, #f6efe4 100%);
-        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow-sm);
+        padding: 16px;
     }
     .status-header-top {
         display: flex;
@@ -45,372 +15,134 @@
         align-items: center;
         justify-content: space-between;
     }
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-size: 0.84rem;
-        font-weight: 700;
-    }
-    .status-new { background: #cfe2ff; color: #0a3678; }
-    .status-active { background: #d1fae5; color: #064e3b; }
-    .status-completed { background: #e0e7ff; color: #3730a3; }
-    .status-cancelled { background: #fee2e2; color: #7f1d1d; }
+    .status-badge { font-size: 0.82rem; padding: 3px 11px; }
     .dirty-pill {
         display: none;
         border-radius: 999px;
-        background: #fef3c7;
-        color: #92400e;
-        padding: 4px 10px;
-        font-size: 0.8rem;
-        font-weight: 700;
+        background: var(--warning-soft);
+        border: 1px solid var(--warning-line);
+        color: var(--warning);
+        padding: 2px 10px;
+        font-size: 0.78rem;
+        font-weight: 600;
     }
     .header-meta {
-        margin-top: 8px;
+        margin-top: 12px;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
+        gap: 12px;
     }
-    .header-meta-item {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        padding: 8px;
-    }
-    .header-meta-item p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.8rem;
-    }
-    .header-meta-item strong {
-        display: block;
-        margin-top: 2px;
-        font-size: 0.92rem;
-    }
+    .header-meta-item p { margin: 0; color: var(--muted); font-size: 0.78rem; }
+    .header-meta-item strong { display: block; margin-top: 2px; font-size: 0.98rem; }
     .session-id-value {
         margin: 0;
-        padding: 10px 11px;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: var(--surface-alt, #faf7f1);
-        font-weight: 700;
+        font-family: var(--font-mono);
+        font-size: 0.85rem;
+        color: var(--muted);
         overflow-wrap: anywhere;
-        word-break: break-word;
     }
     .status-quick-actions {
-        margin-top: 10px;
-        border-top: 1px dashed var(--border, #d6cfc7);
-        padding-top: 10px;
+        margin-top: 14px;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
         display: grid;
-        gap: 6px;
+        gap: 8px;
     }
-    .status-quick-actions p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.8rem;
-    }
-
-    .edit-layout {
-        display: grid;
-        gap: 12px;
-        grid-template-columns: 1fr;
-    }
-    .session-form {
-        display: grid;
-        gap: 12px;
-    }
-    .section-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: #fff;
-        padding: 12px;
-    }
-    .section-title {
-        margin: 0 0 10px;
-        font-weight: 700;
-        font-size: 0.95rem;
-    }
-    .session-form-row {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-    }
+    .status-quick-actions p { margin: 0; color: var(--muted); font-size: 0.78rem; font-weight: 500; }
+    .edit-layout { display: grid; gap: 16px; }
     .current-status-box {
         margin: 0;
-        padding: 10px 11px;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: var(--surface-alt, #faf7f1);
-        font-weight: 700;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface-alt);
+        font-weight: 600;
     }
-
-    .workflow-grid {
-        display: grid;
-        gap: 8px;
-    }
-    .workflow-buttons {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .workflow-buttons button {
-        width: auto;
-        white-space: nowrap;
-    }
-    .workflow-note {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.82rem;
-    }
-    .workflow-primary {
-        background: #16685d;
-        border-color: #16685d;
-        color: #fff;
-    }
-    .workflow-danger {
-        background: #b91c1c;
-        border-color: #b91c1c;
-        color: #fff;
-    }
-    .workflow-neutral {
-        background: #26476d;
-        border-color: #26476d;
-        color: #fff;
-    }
-
-    .reason-helper {
-        margin: 4px 0 0;
-        font-size: 0.8rem;
-        color: #92400e;
-        display: none;
-    }
-
+    .workflow-grid { display: grid; gap: 8px; }
+    .workflow-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .workflow-note { margin: 0; color: var(--muted); font-size: 0.82rem; }
+    .workflow-primary { background: var(--success); border-color: var(--success); color: #fff; }
+    .workflow-primary:hover { background: #0f6340; border-color: #0f6340; }
+    .workflow-danger { background: var(--surface); border-color: var(--danger-line); color: var(--danger); }
+    .workflow-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+    .workflow-neutral { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+    .workflow-neutral:hover { background: var(--surface-alt); border-color: var(--muted); }
+    .reason-helper { margin: 4px 0 0; font-size: 0.8rem; color: var(--warning); display: none; }
     .linked-assets-wrap {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
         overflow: hidden;
-        background: #fff;
+        background: var(--surface);
     }
     .linked-assets-head,
     .linked-asset-row {
         display: grid;
         grid-template-columns: minmax(240px, 1fr) 96px 108px 96px 116px 110px;
-        gap: 8px;
+        gap: 10px;
         align-items: center;
-        padding: 8px 10px;
+        padding: 9px 12px;
     }
     .linked-assets-head {
         position: sticky;
         top: 0;
         z-index: 2;
-        background: var(--table-head-bg, #f5eee2);
-        border-bottom: 1px solid var(--border, #d6cfc7);
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: #334155;
+        background: var(--table-head-bg);
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
     }
-    .linked-assets-grid {
-        display: grid;
-        gap: 0;
-        counter-reset: linked-asset-row;
-    }
+    .linked-assets-grid { display: grid; counter-reset: linked-asset-row; }
     .linked-asset-row {
-        border-bottom: 1px solid var(--border, #d6cfc7);
+        border-bottom: 1px solid var(--line);
         counter-increment: linked-asset-row;
         transition: background 0.15s ease;
     }
-    .linked-asset-row:hover {
-        background: #fcfaf6;
-    }
-    .linked-asset-row:last-child {
-        border-bottom: 0;
-    }
-    .asset-cell {
-        display: grid;
-        gap: 4px;
-    }
-    .help-text {
-        margin: 2px 0 0;
-        font-size: 0.78rem;
-        color: var(--muted, #6b6055);
-    }
+    .linked-asset-row:hover { background: var(--row-hover); }
+    .linked-asset-row:last-child { border-bottom: 0; }
+    .asset-cell { display: grid; gap: 4px; }
+    .help-text { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); }
     .asset-cell::before {
         content: "Row " counter(linked-asset-row);
-        font-size: 0.72rem;
-        color: var(--muted, #6b6055);
-        letter-spacing: 0.02em;
+        font-size: 0.7rem;
+        color: var(--muted);
+        letter-spacing: 0.05em;
         text-transform: uppercase;
     }
-    .duplicate-warning {
-        margin: 2px 0 0;
-        font-size: 0.78rem;
-        color: #b91c1c;
-        display: none;
-    }
-    .quantity-cell input {
-        text-align: right;
-    }
-    .expected-cell,
-    .difference-cell {
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-    }
-    .expected-qty {
-        font-size: 0.86rem;
-        color: #334155;
-    }
-    .diff-value {
-        font-size: 0.86rem;
-        font-weight: 700;
-    }
-    .diff-zero { color: #334155; }
-    .diff-positive { color: #166534; }
-    .diff-negative { color: #b91c1c; }
-    .linked-asset-row.has-discrepancy {
-        background: #fffbeb;
-    }
-    .value-cell {
-        text-align: right;
-    }
-    .line-value {
-        font-weight: 700;
-        font-size: 0.86rem;
-        color: #334155;
-    }
-    .empty-linked-assets {
-        margin: 0;
-        padding: 12px;
-        color: var(--muted, #6b6055);
-        font-size: 0.86rem;
-    }
-
+    .duplicate-warning { margin: 2px 0 0; font-size: 0.78rem; color: var(--danger); display: none; }
+    .quantity-cell input { text-align: right; }
+    .expected-cell, .difference-cell, .value-cell { text-align: right; font-variant-numeric: tabular-nums; }
+    .expected-qty { font-size: 0.86rem; color: var(--ink-soft); }
+    .diff-value { font-size: 0.86rem; font-weight: 600; }
+    .diff-zero { color: var(--muted); }
+    .diff-positive { color: var(--success); }
+    .diff-negative { color: var(--danger); }
+    .linked-asset-row.has-discrepancy { background: var(--warning-soft); }
+    .line-value { font-weight: 600; font-size: 0.86rem; color: var(--ink-soft); }
+    .empty-linked-assets { margin: 0; padding: 14px 12px; color: var(--muted); font-size: 0.86rem; }
     .totals-sticky {
         position: sticky;
         bottom: 0;
         z-index: 3;
-        border-top: 1px solid var(--border, #d6cfc7);
-        background: #fff;
-        padding: 10px;
+        border-top: 1px solid var(--line);
+        background: var(--surface-alt);
+        padding: 10px 12px;
     }
-    .totals-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px;
-    }
-    .totals-item {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 8px;
-        background: var(--table-row-alt, #fcfaf6);
-        padding: 8px;
-    }
-    .totals-item p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.8rem;
-    }
-    .totals-item strong {
-        display: block;
-        margin-top: 2px;
-        font-size: 0.95rem;
-    }
-
-    .record-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .record-actions a {
-        text-decoration: none;
-    }
-    .record-actions button {
-        width: auto;
-    }
-
-    .sidebar {
-        display: grid;
-        gap: 10px;
-        align-content: start;
-    }
-    .sidebar .section-card {
-        position: sticky;
-        top: 12px;
-    }
-    .summary-list {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-        display: grid;
-        gap: 8px;
-    }
-    .summary-list li {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 8px;
-        padding: 8px;
-        background: var(--table-row-alt, #fcfaf6);
-    }
-    .summary-list p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.78rem;
-    }
-    .summary-list strong {
-        display: block;
-        margin-top: 2px;
-        font-size: 0.9rem;
-    }
-    details.audit-details {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 8px;
-        padding: 8px;
-        background: #fff;
-    }
-    details.audit-details summary {
-        cursor: pointer;
-        font-weight: 700;
-    }
-    .audit-list {
-        margin: 8px 0 0;
-        padding: 0 0 0 16px;
-        color: #334155;
-        font-size: 0.84rem;
-        display: grid;
-        gap: 5px;
-    }
-
-    .sticky-action-bar {
-        position: sticky;
-        bottom: 0;
-        z-index: 4;
-        margin-top: 8px;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        padding: 8px;
-        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.06);
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .sticky-action-bar button {
-        width: auto;
-    }
+    .totals-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .totals-item p { margin: 0; color: var(--muted); font-size: 0.76rem; }
+    .totals-item strong { display: block; margin-top: 1px; font-size: 1rem; font-variant-numeric: tabular-nums; }
     .linked-assets-toolbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 10px 10px 0;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
     }
-    .linked-assets-toolbar label {
-        margin: 0;
-        font-size: 0.83rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
+    .linked-assets-toolbar .help-text { margin: 0; }
+    .linked-assets-toolbar label { margin: 0; font-size: 0.83rem; }
     .undo-toast {
         position: fixed;
         right: 16px;
@@ -418,42 +150,22 @@
         z-index: 20;
         display: none;
         align-items: center;
-        gap: 10px;
-        padding: 10px 12px;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+        gap: 12px;
+        padding: 10px 12px 10px 14px;
+        border-radius: var(--radius);
+        background: var(--nav-bg);
+        color: #fff;
+        box-shadow: var(--shadow-md);
     }
-    .undo-toast p {
-        margin: 0;
-        font-size: 0.84rem;
-    }
-    .undo-toast button {
-        width: auto;
-        padding: 6px 10px;
-    }
-
-    @media (min-width: 1024px) {
-        .edit-layout {
-            grid-template-columns: 1fr;
-        }
-    }
+    .undo-toast p { margin: 0; font-size: 0.86rem; }
+    .undo-toast button { padding: 5px 10px; }
     @media (max-width: 980px) {
-        .header-meta {
-            grid-template-columns: 1fr;
-        }
+        .header-meta { grid-template-columns: 1fr; }
+        .linked-assets-head { display: none; }
         .linked-assets-head,
-        .linked-asset-row {
-            grid-template-columns: 1fr;
-            align-items: stretch;
-        }
-        .totals-grid {
-            grid-template-columns: 1fr;
-        }
-        .workflow-buttons button {
-            width: 100%;
-        }
+        .linked-asset-row { grid-template-columns: 1fr; align-items: stretch; }
+        .expected-cell, .difference-cell, .value-cell { text-align: left; }
+        .totals-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 </style>
 
@@ -461,15 +173,16 @@
     <section class="panel">
         <div class="page-header">
             <div>
-                <h2>Edit Inventory Session</h2>
-                <p class="page-context">Session #{{ inv_session.id }}. Signed in as <strong>{{ current_email }}</strong>.</p>
+                <h2>Edit inventory session</h2>
+                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}</p>
             </div>
             <div class="page-actions">
-                <a href="/inventory-sessions" class="top-link-action">&larr; Back to inventories list</a>
+                <a href="/inventory-sessions">&larr; Back to sessions</a>
+                <a href="/inventory-sessions/id/{{ inv_session.id }}">View details</a>
             </div>
         </div>
         {% if is_read_only %}
-        <p style="color: var(--muted, #6b6055); margin: 0;">This session is terminal and read-only.</p>
+        <p class="message info">This session is closed and read-only.</p>
         {% endif %}
 
         <div class="edit-shell">
@@ -517,12 +230,12 @@
                 <div class="edit-layout">
                     <div class="stack">
                         <section class="section-card">
-                            <h3 class="section-title">Session ID</h3>
+                            <h3 class="section-title">Session id</h3>
                             <p class="session-id-value">{{ inv_session.id }}</p>
                         </section>
 
                         <section class="section-card">
-                            <h3 class="section-title">Session Info</h3>
+                            <h3 class="section-title">Session info</h3>
                             {% if is_admin_user %}
                             <div style="margin-bottom: 10px;">
                                 <label>
@@ -558,10 +271,10 @@
                         </section>
 
                         <section class="section-card">
-                            <h3 class="section-title">Notes and Reasons</h3>
+                            <h3 class="section-title">Notes and reasons</h3>
                             <div>
                                 <label for="notes">Session Notes (optional)</label>
-                                <textarea id="notes" name="notes" rows="3" maxlength="1500" style="width:100%; border: 1px solid var(--border, #d6cfc7); border-radius: 10px; padding: 10px 11px;" {% if is_read_only %}disabled{% endif %}>{{ prefill.notes if prefill else (inv_session.notes or '') }}</textarea>
+                                <textarea id="notes" name="notes" rows="3" maxlength="1500" {% if is_read_only %}disabled{% endif %}>{{ prefill.notes if prefill else (inv_session.notes or '') }}</textarea>
                             </div>
                             <div class="session-form-row">
                                 <div>
@@ -578,7 +291,7 @@
                         </section>
 
                         <section class="section-card">
-                            <h3 class="section-title">Linked Assets</h3>
+                            <h3 class="section-title">Linked assets</h3>
                             <div class="linked-assets-wrap">
                                 <div class="linked-assets-head">
                                     <div>Search and Asset</div>
@@ -627,7 +340,7 @@
                                             {% if not is_read_only %}
                                             <button type="button" class="remove-linked-asset workflow-danger">Remove</button>
                                             {% else %}
-                                            <span style="color: var(--muted, #6b6055);">Read-only</span>
+                                            <span style="color: var(--muted);">Read-only</span>
                                             {% endif %}
                                         </div>
                                     </div>

@@ -1,187 +1,32 @@
-<style>
-    .dashboard-shell {
-        display: grid;
-        gap: 12px;
-    }
-    .hero-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: linear-gradient(135deg, #faf6ef 0%, #f7f1e7 100%);
-        padding: 14px;
-    }
-    .hero-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-    .hero-title {
-        margin: 0;
-        font-size: 1.28rem;
-    }
-    .hero-subtitle {
-        margin: 6px 0 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.9rem;
-    }
-    .hero-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .hero-actions a {
-        display: inline-flex;
-        align-items: center;
-        text-decoration: none;
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: #fff;
-        color: inherit;
-        white-space: nowrap;
-        padding: 8px 12px;
-    }
-
-    .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-    }
-    .summary-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: linear-gradient(180deg, #fff 0%, #fcfaf6 100%);
-        padding: 12px;
-    }
-    .summary-card p {
-        margin: 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.82rem;
-    }
-    .summary-card strong {
-        display: block;
-        margin-top: 4px;
-        font-size: 1.1rem;
-    }
-
-    .section-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 12px;
-        background: #fff;
-        padding: 12px;
-    }
-    .section-card h3 {
-        margin: 0 0 10px;
-        font-size: 1rem;
-    }
-
-    .action-cards {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-    }
-    .action-card {
-        border: 1px solid var(--border, #d6cfc7);
-        border-radius: 10px;
-        background: var(--table-row-alt, #fcfaf6);
-        padding: 10px;
-        text-decoration: none;
-        color: inherit;
-        transition: background 0.15s ease, border-color 0.15s ease;
-    }
-    .action-card:hover {
-        background: #f7f2e9;
-        border-color: #c8b9a7;
-    }
-    .action-card h4 {
-        margin: 0;
-        font-size: 0.98rem;
-    }
-    .action-card p {
-        margin: 6px 0 0;
-        color: var(--muted, #6b6055);
-        font-size: 0.84rem;
-    }
-
-    .aux-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-    }
-    .inline-links {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-    .inline-links a {
-        text-decoration: none;
-    }
-
-    @media (max-width: 980px) {
-        .summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        .action-cards,
-        .aux-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-
 <div class="dashboard-shell">
-    <section class="hero-card">
-        <div class="hero-top">
-            <div>
-                <h2 class="hero-title">Operations Dashboard</h2>
-                <p class="hero-subtitle">Welcome back, <strong>{{ user_email }}</strong>. Choose an area to continue operational work.</p>
-            </div>
-            <div class="hero-actions">
-                <a href="/fixed-assets">Fixed Assets</a>
-                <a href="/inventory-sessions">Inventory Sessions</a>
-            </div>
+    <div class="page-header">
+        <div>
+            <h2>Dashboard</h2>
+            <p class="page-context">Welcome back, <strong>{{ user_email }}</strong>. Choose an area to continue.</p>
         </div>
-    </section>
-
-    <section class="summary-grid">
-        <article class="summary-card">
-            <p>Assets</p>
-            <strong>Manage records</strong>
-        </article>
-        <article class="summary-card">
-            <p>Categories</p>
-            <strong>Maintain taxonomy</strong>
-        </article>
-        <article class="summary-card">
-            <p>Sessions</p>
-            <strong>Track lifecycle</strong>
-        </article>
-        <article class="summary-card">
-            <p>Users</p>
-            <strong>Review accounts</strong>
-        </article>
-    </section>
-
-    <section class="section-card">
-        <h3>Workspace Areas</h3>
-        <div class="action-cards">
-            <a class="action-card" href="/fixed-assets">
-                <h4>Fixed Assets</h4>
-                <p>Create, edit, and monitor registered fixed assets.</p>
-            </a>
-            <a class="action-card" href="/fixed-asset-categories">
-                <h4>Fixed Asset Categories</h4>
-                <p>Organize categories and keep asset grouping clean.</p>
-            </a>
-            <a class="action-card" href="/inventory-sessions">
-                <h4>Inventory Sessions</h4>
-                <p>Manage session lifecycle from New to terminal states.</p>
-            </a>
-            <a class="action-card" href="/users">
-                <h4>Users</h4>
-                <p>Browse registered users and filter by email.</p>
-            </a>
+        <div class="page-actions">
+            <a href="/inventory-sessions/add">New inventory session</a>
+            <a class="primary" href="/fixed-assets/add">+ Add fixed asset</a>
         </div>
+    </div>
+
+    <section class="action-cards">
+        <a class="action-card" href="/fixed-assets">
+            <h4>Fixed assets</h4>
+            <p>Create, edit, and monitor registered fixed assets.</p>
+        </a>
+        <a class="action-card" href="/fixed-asset-categories">
+            <h4>Categories</h4>
+            <p>Organize categories and keep asset grouping clean.</p>
+        </a>
+        <a class="action-card" href="/inventory-sessions">
+            <h4>Inventory sessions</h4>
+            <p>Run stock-takes from New through Active to Completed.</p>
+        </a>
+        <a class="action-card" href="/users">
+            <h4>Users</h4>
+            <p>Browse registered users and filter by email.</p>
+        </a>
     </section>
 
     <section class="aux-grid">
@@ -196,7 +41,7 @@
 
         <section class="section-card">
             <h3>System</h3>
-            <p style="margin: 0; color: var(--muted, #6b6055);">This dashboard is protected and available only to authenticated users.</p>
+            <p style="margin: 0; color: var(--muted);">This dashboard is protected and available only to authenticated users.</p>
         </section>
     </section>
 </div>

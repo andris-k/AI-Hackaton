@@ -12,6 +12,7 @@ from app.services import auth_service
 app = FastAPI(title="AI Hackaton")
 _UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @app.on_event("startup")
@@ -23,4 +24,5 @@ app.include_router(auth_router)
 app.include_router(fixed_assets_router)
 app.include_router(categories_router)
 app.include_router(inventory_sessions_router)
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")

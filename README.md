@@ -20,6 +20,7 @@ The project now uses a modular monolith layering:
 * `app/db.py` - SQLite schema management and lower-level DB operations
 * `app/config.py` - environment-based settings (production mode, storage paths, admin account, email)
 * `app/services/email_service.py` - sends password reset emails over SMTP
+* `app/logging_config.py` - logging setup, request context and the `audit()` helper
 
 Layering rule:
 
@@ -160,7 +161,27 @@ All settings are environment variables. None are needed for local development.
 | `SMTP_FROM` | Sender, e.g. `Asset Registry <noreply@example.com>` | — |
 | `SMTP_STARTTLS` | Use STARTTLS | `true` |
 | `SESSION_COOKIE_SECURE` | Override the cookie `Secure` flag | `true` in production |
+| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING` or `ERROR` | `INFO` |
+| `LOG_FORMAT` | `text` (readable) or `json` (one JSON object per line, for log services) | `text`, `json` in production |
 
 Password reset by email needs `SMTP_HOST`, `SMTP_FROM` and `APP_BASE_URL`.
 
 Back up the database file and the uploads folder: they hold all the data.
+
+## Logging
+
+All logs go to the console (stdout); hosting platforms collect it automatically. Setup is in `app/logging_config.py`.
+
+* **Requests** (`app.request`): one line per request with method, path, status, duration and user. Static files are skipped. Each request gets an ID, shown in every log line it produces and returned in the `X-Request-ID` response header.
+* **Errors** (`app.error`): unhandled exceptions are logged with their traceback. The user sees a "Something went wrong" page with the request ID as a reference.
+* **Audit** (`audit`): who did what. Covers logins (including failed ones), logout, registration, password reset requests and completions; asset create/update/delete (updates list changed fields as `[old, new]`); category create/rename/delete; and inventory session create/update/start/complete/cancel/reopen/delete and PDF report downloads.
+
+Passwords, session cookies and password reset tokens are never logged; reset links appear as `/reset-password/***`. Audit lines contain user emails and responsible-person names, which are personal data: keep logs only as long as you need them.
+
+To add an audit event in new code:
+
+```python
+from app.logging_config import audit
+
+audit("asset.transferred", asset_id=asset_id, to_person=new_person)
+```

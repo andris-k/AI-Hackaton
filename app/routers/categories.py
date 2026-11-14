@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Cookie, Form
 from fastapi.responses import HTMLResponse
 
+from app.logging_config import audit
 from app.repositories import fixed_assets_repository as assets_repo
 from app.services import auth_service
 from app.services import fixed_assets_service as assets_service
@@ -45,7 +46,7 @@ def create_fixed_asset_category_route(
         )
 
     try:
-        assets_repo.create_category(normalized_name)
+        created = assets_repo.create_category(normalized_name)
     except Exception:
         return render_fixed_asset_categories_page(
             user["email"],
@@ -54,6 +55,7 @@ def create_fixed_asset_category_route(
             message_kind="error",
         )
 
+    audit("category.created", category_id=created["id"], name=created["name"])
     return render_fixed_asset_categories_page(
         user["email"],
         assets_repo.list_categories_with_usage(),
@@ -141,6 +143,8 @@ def edit_fixed_asset_category_route(
             active_nav="categories",
         )
 
+    if category["name"] != updated["name"]:
+        audit("category.renamed", category_id=category_id, changes={"name": [category["name"], updated["name"]]})
     return render_edit_fixed_asset_category_page(
         user["email"],
         updated,
@@ -158,6 +162,7 @@ def delete_fixed_asset_category_route(
     if user is None:
         return render_login_page("Please log in to manage fixed asset categories.")
 
+    category_before_delete = assets_repo.get_category_by_id(category_id)
     deleted = assets_repo.delete_category(category_id)
     if not deleted:
         return render_fixed_asset_categories_page(
@@ -167,6 +172,11 @@ def delete_fixed_asset_category_route(
             message_kind="error",
         )
 
+    audit(
+        "category.deleted",
+        category_id=category_id,
+        name=category_before_delete["name"] if category_before_delete is not None else None,
+    )
     return render_fixed_asset_categories_page(
         user["email"],
         assets_repo.list_categories_with_usage(),

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Cookie, File, Form, Query, UploadFile
 from fastapi.responses import HTMLResponse
 
 from app import config
+from app.logging_config import audit, diff_fields
 from app.repositories import fixed_assets_repository as assets_repo
 from app.services import auth_service
 from app.services import fixed_assets_service as assets_service
@@ -20,6 +21,9 @@ from app.views.pages import (
 )
 
 router = APIRouter()
+_AUDITED_ASSET_FIELDS = (
+    "name", "category", "quantity", "initial_value", "responsible_person", "registration_date",
+)
 _UPLOADS_ROOT = config.uploads_dir()
 _FIXED_ASSET_UPLOAD_DIR = _UPLOADS_ROOT / "fixed-assets"
 
@@ -360,6 +364,14 @@ def edit_fixed_asset_route(
     if new_image_path and previous_image_path and new_image_path != previous_image_path:
         _delete_uploaded_image(previous_image_path)
 
+    audit(
+        "asset.updated",
+        asset_id=fixed_asset_id,
+        name=updated["name"],
+        changes=diff_fields(fixed_asset, updated, _AUDITED_ASSET_FIELDS),
+        image_replaced=bool(new_image_path),
+    )
+
     return render_edit_fixed_asset_page(
         user["email"],
         updated,
@@ -506,7 +518,7 @@ def create_fixed_asset_route(
             )
 
     try:
-        assets_repo.create_asset(
+        created = assets_repo.create_asset(
             name=name.strip(),
             category_id=category_id.strip(),
             quantity=quantity,
@@ -535,6 +547,16 @@ def create_fixed_asset_route(
             message="Selected category does not exist.",
             message_kind="error",
         )
+    audit(
+        "asset.created",
+        asset_id=created["id"],
+        name=created["name"],
+        category=created["category"],
+        quantity=created["quantity"],
+        initial_value=created["initial_value"],
+        responsible_person=created["responsible_person"],
+        has_image=bool(uploaded_image_path),
+    )
     updated_total_assets = assets_repo.count_assets(filters)
     _, _, updated_total_pages = assets_service.normalize_paging(current_page, safe_page_size, updated_total_assets)
     target_page = updated_total_pages
@@ -582,6 +604,14 @@ def delete_fixed_asset_route(
     deleted = assets_repo.delete_asset(fixed_asset_id)
     if deleted and asset_before_delete is not None:
         _delete_uploaded_image(str(asset_before_delete["image_path"] or "").strip() or None)
+        audit(
+            "asset.deleted",
+            asset_id=fixed_asset_id,
+            name=asset_before_delete["name"],
+            category=asset_before_delete["category"],
+            quantity=asset_before_delete["quantity"],
+            initial_value=asset_before_delete["initial_value"],
+        )
     total_assets = assets_repo.count_assets(filters)
     current_page, safe_page_size, _ = assets_service.normalize_paging(page, page_size, total_assets)
     assets = assets_repo.list_assets(current_page, safe_page_size, filters)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from app.logging_config import audit, set_request_user
 from app.repositories import auth_repository
 
 
@@ -12,7 +13,10 @@ def initialize_defaults() -> None:
 def current_user(session_token: str | None) -> sqlite3.Row | None:
     if not session_token:
         return None
-    return auth_repository.find_user_by_session_token(session_token)
+    user = auth_repository.find_user_by_session_token(session_token)
+    if user is not None:
+        set_request_user(user["id"], user["email"])
+    return user
 
 
 def login_user(email: str, password: str) -> tuple[sqlite3.Row | None, str | None, str | None]:
@@ -21,9 +25,12 @@ def login_user(email: str, password: str) -> tuple[sqlite3.Row | None, str | Non
 
     user = auth_repository.find_user_by_email(email)
     if user is None or not auth_repository.verify_user_password(password, user["password_hash"]):
+        audit("auth.login_failed", actor=email, reason="unknown email" if user is None else "wrong password")
         return None, None, "Invalid email or password."
 
     session_token, _ = auth_repository.create_user_session(user["id"])
+    set_request_user(user["id"], user["email"])
+    audit("auth.login", user_id=user["id"])
     return user, session_token, None
 
 
@@ -43,6 +50,8 @@ def register_user(
 
     user = auth_repository.create_user_account(email, password)
     session_token, _ = auth_repository.create_user_session(user["id"])
+    set_request_user(user["id"], user["email"])
+    audit("auth.registered", user_id=user["id"])
     return user, session_token, None
 
 
@@ -52,9 +61,11 @@ def create_password_reset_link(email: str) -> tuple[str | None, str | None]:
 
     user = auth_repository.find_user_by_email(email)
     if user is None:
+        audit("auth.password_reset_requested", actor=email, account_exists=False)
         return None, None
 
     token, _ = auth_repository.create_reset_token(user["id"])
+    audit("auth.password_reset_requested", actor=email, account_exists=True, user_id=user["id"])
     return token, None
 
 
@@ -79,6 +90,7 @@ def reset_password(
     auth_repository.mark_reset_token_used(token)
 
     user = auth_repository.find_user_by_id(user_id)
+    audit("auth.password_reset_completed", actor=user["email"] if user else None, user_id=user_id)
     if user is None:
         return None, "Password updated, but the account could not be reloaded.", False
 
@@ -92,7 +104,10 @@ def create_session_for_user(user_id: int) -> str:
 
 def logout_user(session_token: str | None) -> None:
     if session_token:
+        user = auth_repository.find_user_by_session_token(session_token)
         auth_repository.delete_user_session(session_token)
+        if user is not None:
+            audit("auth.logout", actor=user["email"], user_id=user["id"])
 
 
 def list_users(email_filter: str = "") -> list[sqlite3.Row]:

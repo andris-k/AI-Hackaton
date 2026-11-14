@@ -1,0 +1,14 @@
+{# History section for a single record. Expects `history` (list of presented rows) and `history_link`. #}
+{% if history is not none %}
+<section class="section-card">
+    <h3>History {% if history %}<span class="filter-count">{{ history | length }}{% if history | length >= 20 %}+{% endif %}</span>{% endif %}</h3>
+    {% if history %}
+    {% with rows = history, compact = true %}{% include "audit_events_table.html" %}{% endwith %}
+    {% if history | length >= 20 %}
+    <p class="small" style="margin: 10px 0 0;">Showing the latest 20 events. <a href="{{ history_link }}">Open the audit log</a> for older ones.</p>
+    {% endif %}
+    {% else %}
+    <p style="margin: 0; color: var(--muted);">No recorded changes yet. Changes made from now on will appear here.</p>
+    {% endif %}
+</section>
+{% endif %}

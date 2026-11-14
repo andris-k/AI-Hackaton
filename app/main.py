@@ -13,10 +13,12 @@ from app.logging_config import configure_logging, mask_path, start_request_conte
 
 configure_logging()
 
-from app.routers.auth import router as auth_router  # noqa: E402  (logging is configured first)
+from app.routers.audit import router as audit_router  # noqa: E402  (logging is configured first)
+from app.routers.auth import router as auth_router  # noqa: E402
 from app.routers.categories import router as categories_router
 from app.routers.fixed_assets import router as fixed_assets_router
 from app.routers.inventory_sessions import router as inventory_sessions_router
+from app.repositories import audit_repository  # noqa: E402
 from app.services import auth_service
 
 _IS_PRODUCTION = config.is_production()
@@ -51,6 +53,11 @@ def startup() -> None:
     # module (e.g. uvicorn.run(app)), this restores ours. The setup is idempotent.
     configure_logging()
     auth_service.initialize_defaults()
+    retention_days = config.audit_retention_days()
+    if retention_days:
+        removed = audit_repository.delete_events_older_than(retention_days)
+        if removed:
+            _logger.info("Removed old audit events", extra={"removed": removed, "retention_days": retention_days})
     _logger.info(
         "Application started",
         extra={
@@ -120,5 +127,6 @@ app.include_router(auth_router)
 app.include_router(fixed_assets_router)
 app.include_router(categories_router)
 app.include_router(inventory_sessions_router)
+app.include_router(audit_router)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")

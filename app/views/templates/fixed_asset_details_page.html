@@ -66,6 +66,8 @@
             </section>
         </div>
 
+        {% include "audit_history_section.html" %}
+
         <div class="danger-zone">
             <p><strong>Delete this fixed asset</strong>The record and its image are removed permanently.</p>
             <form method="post" action="{{ delete_action }}" onsubmit="return confirm('Delete this fixed asset?');">

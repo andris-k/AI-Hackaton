@@ -985,3 +985,28 @@ button.show-password:hover { background: var(--accent-soft); }
     clip: rect(0 0 0 0);
     white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ */
+/* Audit log                                                           */
+/* ------------------------------------------------------------------ */
+
+.audit-table td { vertical-align: top; }
+.audit-table .col-time { width: 160px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.audit-actor { max-width: 220px; overflow-wrap: anywhere; }
+.audit-details { font-size: 0.84rem; color: var(--ink-soft); min-width: 220px; }
+.audit-details div + div { margin-top: 2px; }
+
+.event-badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background: #eef0f3;
+    color: var(--ink-soft);
+}
+.event-badge.tone-success { background: var(--success-soft); color: var(--success); }
+.event-badge.tone-danger { background: var(--danger-soft); color: var(--danger); }
+.event-badge.tone-warning { background: var(--warning-soft); color: var(--warning); }
+.audit-filters { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }

@@ -70,10 +70,17 @@ def audit(event: str, *, actor: str | None = None, **fields: Any) -> None:
     Never pass passwords, tokens or cookies.
     """
     context = current_request_context()
-    _AUDIT_LOGGER.info(
-        event,
-        extra={"event": event, "actor": actor or context.get("user_email"), "fields": fields},
-    )
+    acting_user = actor or context.get("user_email")
+    _AUDIT_LOGGER.info(event, extra={"event": event, "actor": acting_user, "fields": fields})
+    try:
+        # Imported here: the repository depends on the database layer, which must not
+        # be imported while logging is being configured.
+        from app.repositories import audit_repository
+
+        audit_repository.record_event(event, acting_user, context.get("request_id"), fields)
+    except Exception:
+        # Never let audit storage break the user's action; the log line above still exists.
+        logging.getLogger("app.error").exception("Could not store audit event", extra={"audit_event": event})
 
 
 def diff_fields(before: Any, after: Any, names: tuple[str, ...]) -> dict[str, list[Any]]:

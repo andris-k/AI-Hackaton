@@ -1,0 +1,32 @@
+{# Shared by the audit log page and the History sections. Expects `rows`; `compact` hides the item column. #}
+<div class="table-wrap">
+    <table class="audit-table">
+        <thead>
+            <tr>
+                <th class="col-time">Time (UTC)</th>
+                <th>User</th>
+                <th>Event</th>
+                {% if not compact %}<th>Item</th>{% endif %}
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="col-time" title="Request {{ row.request_id }}">{{ row.time }}</td>
+                <td class="audit-actor">{{ row.actor }}</td>
+                <td><span class="event-badge tone-{{ row.tone }}">{{ row.label }}</span></td>
+                {% if not compact %}
+                <td>
+                    {% if row.item_link %}<a href="{{ row.item_link }}">{{ row.item_label }}</a>
+                    {% elif row.item_label %}{{ row.item_label }}{% else %}<span style="color: var(--muted);">—</span>{% endif %}
+                </td>
+                {% endif %}
+                <td class="audit-details">
+                    {% for line in row.details %}<div>{{ line }}</div>{% else %}<span style="color: var(--muted);">—</span>{% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

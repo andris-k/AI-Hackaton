@@ -1,0 +1,82 @@
+{% set active_filters = (filters.area ~ filters.event ~ filters.actor ~ filters.date_from ~ filters.date_to ~ filters.entity_id) | length > 0 %}
+<div class="stack">
+    <section class="panel">
+        <div class="page-header">
+            <div>
+                <h2>Audit log</h2>
+                <p class="page-context">Who did what, newest first. Times are in UTC.</p>
+            </div>
+        </div>
+
+        {% if filters.entity_id %}
+        <p class="message info">Showing the history of one record ({{ filters.entity_type | replace("_", " ") }} <span class="mono">{{ filters.entity_id[:8] }}</span>). <a href="/audit-log">Show all events</a></p>
+        {% endif %}
+        <form method="get" action="/audit-log" class="filter-form inventory-filters audit-filters">
+            {% if filters.entity_id %}
+            <input type="hidden" name="entity_type" value="{{ filters.entity_type }}" />
+            <input type="hidden" name="entity_id" value="{{ filters.entity_id }}" />
+            {% endif %}
+            <div>
+                <label for="area">Area</label>
+                <select id="area" name="area">
+                    <option value="">All areas</option>
+                    {% for key, label in areas.items() %}
+                    <option value="{{ key }}" {% if filters.area == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="event">Event</label>
+                <select id="event" name="event">
+                    <option value="">All events</option>
+                    {% for group in event_choices %}
+                    <optgroup label="{{ group.label }}">
+                        {% for value, text in group.events %}
+                        <option value="{{ value }}" {% if filters.event == value %}selected{% endif %}>{{ text }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="actor">User</label>
+                <input id="actor" name="actor" type="search" value="{{ filters.actor }}" placeholder="Email contains…" />
+            </div>
+            <div>
+                <label for="date_from">From</label>
+                <input id="date_from" name="date_from" type="date" value="{{ filters.date_from }}" />
+            </div>
+            <div>
+                <label for="date_to">To</label>
+                <input id="date_to" name="date_to" type="date" value="{{ filters.date_to }}" />
+            </div>
+            <div class="filter-actions">
+                <button type="submit">Filter</button>
+                {% if active_filters %}<a href="/audit-log">Clear</a>{% endif %}
+            </div>
+        </form>
+
+        <section class="section-card">
+            <h3>Events <span class="filter-count">{{ total }}</span></h3>
+            {% if rows %}
+            {% include "audit_events_table.html" %}
+            {% else %}
+            <p style="margin: 0; color: var(--muted);">
+                {% if active_filters %}No events match these filters. <a href="/audit-log">Clear filters</a>
+                {% else %}No events recorded yet. Actions such as logins and asset changes will appear here.{% endif %}
+            </p>
+            {% endif %}
+        </section>
+
+        {% if rows %}
+        <div class="pager">
+            <div class="meta">Showing {{ start_row }}–{{ end_row }} of {{ total }}</div>
+            <div class="controls">
+                {% if previous_href %}<a href="{{ previous_href }}">← Newer</a>{% else %}<span class="disabled">← Newer</span>{% endif %}
+                <span class="current">Page {{ page }} / {{ total_pages }}</span>
+                {% if next_href %}<a href="{{ next_href }}">Older →</a>{% else %}<span class="disabled">Older →</span>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>

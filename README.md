@@ -21,6 +21,9 @@ The project now uses a modular monolith layering:
 * `app/config.py` - environment-based settings (production mode, storage paths, admin account, email)
 * `app/services/email_service.py` - sends password reset emails over SMTP
 * `app/logging_config.py` - logging setup, request context and the `audit()` helper
+* `app/repositories/audit_repository.py` - `audit_events` table: storing, filtering and retention
+* `app/services/audit_view_service.py` - readable event names and details for the audit log UI
+* `app/routers/audit.py` - audit log page (`/audit-log`)
 
 Layering rule:
 
@@ -161,6 +164,7 @@ All settings are environment variables. None are needed for local development.
 | `SMTP_FROM` | Sender, e.g. `Asset Registry <noreply@example.com>` | — |
 | `SMTP_STARTTLS` | Use STARTTLS | `true` |
 | `SESSION_COOKIE_SECURE` | Override the cookie `Secure` flag | `true` in production |
+| `AUDIT_RETENTION_DAYS` | Delete stored audit events older than this many days, at startup; `0` keeps everything | `0` |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING` or `ERROR` | `INFO` |
 | `LOG_FORMAT` | `text` (readable) or `json` (one JSON object per line, for log services) | `text`, `json` in production |
 
@@ -177,6 +181,13 @@ All logs go to the console (stdout); hosting platforms collect it automatically.
 * **Audit** (`audit`): who did what. Covers logins (including failed ones), logout, registration, password reset requests and completions; asset create/update/delete (updates list changed fields as `[old, new]`); category create/rename/delete; and inventory session create/update/start/complete/cancel/reopen/delete and PDF report downloads.
 
 Passwords, session cookies and password reset tokens are never logged; reset links appear as `/reset-password/***`. Audit lines contain user emails and responsible-person names, which are personal data: keep logs only as long as you need them.
+
+Audit events are also stored in the `audit_events` database table, so administrators can review them in the app:
+
+* **Audit log** page (`/audit-log`, in the sidebar for administrators): all events, newest first, 50 per page. Filter by area, event, user and date range. Field changes are shown as `old → new` and affected items are linked.
+* **History** section on each fixed asset and inventory session page: the latest 20 events for that record, with a link to its full history in the audit log.
+
+Only administrators (`ADMIN_EMAILS`) can see the audit log and History sections, because they contain personal data. Set `AUDIT_RETENTION_DAYS` to delete old records automatically. If storing an event fails, the user's action still completes and the error is logged.
 
 To add an audit event in new code:
 

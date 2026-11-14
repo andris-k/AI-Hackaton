@@ -1053,6 +1053,7 @@ def list_fixed_assets_for_inventory_session(session_id: str) -> list[sqlite3.Row
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
+                fixed_assets.quantity AS total_quantity,
                 inventory_session_fixed_assets.quantity
             FROM inventory_session_fixed_assets
             JOIN fixed_assets ON fixed_assets.id = inventory_session_fixed_assets.fixed_asset_id

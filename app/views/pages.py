@@ -43,11 +43,12 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.googleapis.com" />
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-            <link rel="stylesheet" href="/static/app.css?v=1" />
+            <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+            <link rel="stylesheet" href="/static/app.css?v=3" />
 """
 
 _BRAND = """
-                <span class="brand-mark" aria-hidden="true">FA</span>
+                <img class="brand-mark" src="/static/favicon.svg" alt="" width="28" height="28" />
                 <span class="brand-text"><strong>Asset Registry</strong><span>AI Hackaton</span></span>
 """
 

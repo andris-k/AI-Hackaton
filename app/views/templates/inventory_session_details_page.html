@@ -7,6 +7,9 @@
             </div>
             <div class="page-actions">
                 <a href="/inventory-sessions">← Back to sessions</a>
+                {% if inv_session.status == "Completed" %}
+                <a class="primary" href="/inventory-sessions/id/{{ inv_session.id }}/report.pdf">Download PDF report</a>
+                {% endif %}
                 {% if inv_session.status not in ["Completed", "Cancelled"] %}
                 <a class="primary" href="/inventory-sessions/id/{{ inv_session.id }}/edit">Edit session</a>
                 {% endif %}

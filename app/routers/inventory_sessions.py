@@ -11,6 +11,7 @@ from app.repositories import fixed_assets_repository as assets_repo
 from app.repositories import inventory_sessions_repository as repo
 from app.services import auth_service
 from app.services import inventory_sessions_service as svc
+from app.services import inventory_report_service as report_svc
 from app.views.pages import (
     render_add_inventory_session_page,
     render_edit_inventory_session_page,
@@ -371,6 +372,33 @@ def inventory_session_details_page(
         inv_session=inv_session,
         current_email=user["email"],
         linked_assets=linked_assets,
+    )
+
+
+@router.get("/inventory-sessions/id/{session_id}/report.pdf")
+def inventory_session_pdf_report(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+) -> Response:
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to download inventory reports.")
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return Response("Inventory session not found.", status_code=404, media_type="text/plain")
+    if str(inv_session["status"]) != "Completed":
+        # Reports are only for completed sessions; send the user back to the session page.
+        return RedirectResponse(url=f"/inventory-sessions/id/{session_id}", status_code=303)
+
+    pdf_bytes = report_svc.build_session_report(inv_session, repo.list_linked_assets(session_id))
+    filename = report_svc.report_filename(inv_session)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from pathlib import Path
@@ -18,6 +19,12 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 @app.on_event("startup")
 def startup() -> None:
     auth_service.initialize_defaults()
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    # Browsers request /favicon.ico on their own; serve the SVG icon there too.
+    return FileResponse(_STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
 
 
 app.include_router(auth_router)

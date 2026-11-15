@@ -178,7 +178,10 @@
             </div>
             <div class="page-actions">
                 <a href="/inventory-sessions">&larr; Back to sessions</a>
+                {% if inv_session.status != "Active" %}
+                {# Details redirects Active sessions back here, so the link would be a no-op. #}
                 <a href="/inventory-sessions/id/{{ inv_session.id }}">View details</a>
+                {% endif %}
             </div>
         </div>
         {% if is_read_only %}

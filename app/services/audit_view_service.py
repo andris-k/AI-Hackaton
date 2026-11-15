@@ -25,6 +25,7 @@ EVENT_LABELS: dict[str, str] = {
     "asset.created": "Asset created",
     "asset.updated": "Asset updated",
     "asset.deleted": "Asset deleted",
+    "asset.report_downloaded": "Assets PDF report downloaded",
     "category.created": "Category created",
     "category.renamed": "Category renamed",
     "category.deleted": "Category deleted",

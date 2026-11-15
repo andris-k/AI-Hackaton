@@ -4,12 +4,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Cookie, File, Form, Query, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from app import config
 from app.logging_config import audit, diff_fields
 from app.repositories import fixed_assets_repository as assets_repo
 from app.services import auth_service
+from app.services import fixed_assets_report_service as assets_report_svc
 from app.services import fixed_assets_service as assets_service
 from app.views.pages import (
     render_add_fixed_asset_page,
@@ -113,6 +114,24 @@ def fixed_assets_page(
         page_size=safe_page_size,
         total_assets=total_assets,
         filters=filters,
+    )
+
+
+@router.get("/fixed-assets/report.pdf")
+def fixed_assets_pdf_report(session_token: str | None = Cookie(default=None)) -> Response:
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to download fixed asset reports.")
+
+    assets = assets_repo.list_assets()
+    audit("asset.report_downloaded", asset_count=len(assets))
+    return Response(
+        content=assets_report_svc.build_fixed_assets_report(assets),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{assets_report_svc.report_filename()}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

@@ -4,23 +4,22 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from fpdf import FPDF
 from fpdf.fonts import FontFace
 
-_FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
-_LOGO = Path(__file__).resolve().parent.parent / "static" / "favicon.svg"
-_FONT = "PlexSans"
-
-# Colours match the app's Slate Ledger palette.
-_INK = (20, 32, 44)
-_MUTED = (100, 114, 131)
-_LINE = (226, 231, 236)
-_HEAD_BG = (244, 246, 248)
-_SUCCESS = (20, 121, 79)
-_DANGER = (196, 53, 43)
+from app.services.pdf_report_base import (
+    DANGER as _DANGER,
+    FONT as _FONT,
+    HEAD_BG as _HEAD_BG,
+    INK as _INK,
+    LINE as _LINE,
+    MUTED as _MUTED,
+    SUCCESS as _SUCCESS,
+    ReportPDF as _ReportPDF,
+    fmt_money as _fmt_money,
+    utc_now_label,
+)
 
 
 def report_filename(inv_session: Mapping[str, Any]) -> str:
@@ -42,50 +41,12 @@ def _fmt_timestamp(value: object) -> str:
     return parsed.strftime("%Y-%m-%d %H:%M")
 
 
-def _fmt_money(value: float) -> str:
-    return f"{value:,.2f}".replace(",", " ")
-
-
 def _fmt_diff(value: int) -> str:
     return f"+{value}" if value > 0 else str(value)
 
 
-class _ReportPDF(FPDF):
-    def __init__(self, title: str, generated: str) -> None:
-        super().__init__(orientation="P", unit="mm", format="A4")
-        self.report_title = title
-        self.generated = generated
-        self.add_font(_FONT, "", str(_FONT_DIR / "IBMPlexSans-Regular.ttf"))
-        self.add_font(_FONT, "B", str(_FONT_DIR / "IBMPlexSans-SemiBold.ttf"))
-        self.set_margins(15, 15, 15)
-        self.set_auto_page_break(auto=True, margin=18)
-        self.set_title(title)
-        self.set_creator("Asset Registry")
-
-    def header(self) -> None:
-        self.image(str(_LOGO), x=15, y=10.8, w=6.4, h=6.4)
-        self.set_xy(23, 10.6)
-        self.set_font(_FONT, "B", 10)
-        self.set_text_color(*_INK)
-        self.cell(80, 7, "Asset Registry")
-        self.set_font(_FONT, "", 8)
-        self.set_text_color(*_MUTED)
-        self.set_xy(105, 10.6)
-        self.cell(90, 7, self.report_title, align="R")
-        self.set_draw_color(*_LINE)
-        self.line(15, 19.5, 195, 19.5)
-        self.set_y(24)
-
-    def footer(self) -> None:
-        self.set_y(-12)
-        self.set_font(_FONT, "", 7.5)
-        self.set_text_color(*_MUTED)
-        self.cell(90, 5, f"Generated {self.generated}")
-        self.cell(90, 5, f"Page {self.page_no()} of {{nb}}", align="R")
-
-
 def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence[Mapping[str, Any]]) -> bytes:
-    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    generated = utc_now_label()
     running_title = (
         f"Inventory session {inv_session['date_from']} to {inv_session['date_to']}"
         f"  ·  {inv_session['responsible_person']}"

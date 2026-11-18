@@ -419,6 +419,7 @@ def render_fixed_asset_details_page(
             "responsible_person": str(fixed_asset["responsible_person"]),
             "registration_date": str(fixed_asset["registration_date"]),
             "image_url": _fixed_asset_image_url(fixed_asset["image_path"]),
+            "deleted_at": fixed_asset["deleted_at"],
         },
         page=page,
         page_size=page_size,

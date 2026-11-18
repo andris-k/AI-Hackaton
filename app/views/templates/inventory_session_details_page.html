@@ -101,7 +101,10 @@
                             {% for asset in linked_assets %}
                             {% set diff = (asset.quantity | int) - (asset.total_quantity | int) %}
                             <tr>
-                                <td><a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a></td>
+                                <td>
+                                    <a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a>
+                                    {% if asset.deleted_at %}<span class="badge badge-deleted" title="Deleted {{ asset.deleted_at }}">Deleted</span>{% endif %}
+                                </td>
                                 <td>{{ asset.category }}</td>
                                 <td class="numeric-cell">{{ asset.total_quantity }}</td>
                                 <td class="numeric-cell">{{ asset.quantity }}</td>

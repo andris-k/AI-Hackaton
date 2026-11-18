@@ -74,8 +74,9 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
         total_qty = int(asset["total_quantity"] or 0)
         session_qty = int(asset["quantity"] or 0)
         unit_value = float(asset["initial_value"] or 0)
+        is_deleted = "deleted_at" in asset.keys() and bool(asset["deleted_at"])
         rows.append({
-            "name": str(asset["name"]),
+            "name": str(asset["name"]) + (" (deleted)" if is_deleted else ""),
             "category": str(asset["category"] or "-"),
             "total": total_qty,
             "session": session_qty,

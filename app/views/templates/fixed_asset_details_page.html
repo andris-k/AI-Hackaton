@@ -7,9 +7,18 @@
             </div>
             <div class="page-actions">
                 <a href="{{ back_href }}">← Fixed assets</a>
+                {% if not fixed_asset.deleted_at %}
                 <a class="primary" href="{{ edit_href }}">Edit fixed asset</a>
+                {% endif %}
             </div>
         </div>
+
+        {% if fixed_asset.deleted_at %}
+        <div class="overview-top" style="margin-bottom: 16px;">
+            <span class="badge badge-deleted">Deleted</span>
+            <div class="read-only-banner">This fixed asset was deleted on {{ fixed_asset.deleted_at }}. It is kept read-only for inventory session history.</div>
+        </div>
+        {% endif %}
 
         <div class="summary-grid">
             <article class="summary-card">
@@ -68,8 +77,9 @@
 
         {% include "audit_history_section.html" %}
 
+        {% if not fixed_asset.deleted_at %}
         <div class="danger-zone">
-            <p><strong>Delete this fixed asset</strong>The record and its image are removed permanently.</p>
+            <p><strong>Delete this fixed asset</strong>The asset is removed from the fixed assets list and can no longer be added to inventory sessions. Sessions it already belongs to keep showing it.</p>
             <form method="post" action="{{ delete_action }}" onsubmit="return confirm('Delete this fixed asset?');">
                 <input type="hidden" name="page" value="{{ page }}" />
                 <input type="hidden" name="page_size" value="{{ page_size }}" />
@@ -83,5 +93,6 @@
                 <button type="submit" class="btn-danger">Delete fixed asset</button>
             </form>
         </div>
+        {% endif %}
     </section>
 </div>

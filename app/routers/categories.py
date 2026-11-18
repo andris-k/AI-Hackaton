@@ -163,6 +163,13 @@ def delete_fixed_asset_category_route(
         return render_login_page("Please log in to manage fixed asset categories.")
 
     category_before_delete = assets_repo.get_category_by_id(category_id)
+    if category_before_delete is None:
+        return render_fixed_asset_categories_page(
+            user["email"],
+            assets_repo.list_categories_with_usage(),
+            message="Category not found or already deleted.",
+            message_kind="error",
+        )
     deleted = assets_repo.delete_category(category_id)
     if not deleted:
         return render_fixed_asset_categories_page(

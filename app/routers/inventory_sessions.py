@@ -29,6 +29,39 @@ _STATUS_EVENTS = {
 }
 
 
+def _asset_options_for_session(session_id: str) -> list[dict[str, object]]:
+    """Assets that can be picked on the session edit page.
+
+    All fixed assets that are not deleted, plus deleted ones that are already
+    linked to this session, so saving the form keeps those links intact.
+    """
+    options: list[dict[str, object]] = [
+        {
+            "id": str(asset["id"]),
+            "name": str(asset["name"]),
+            "category": str(asset["category"]),
+            "quantity": int(asset["quantity"]),
+            "initial_value": float(asset["initial_value"]),
+            "is_deleted": False,
+        }
+        for asset in assets_repo.list_assets()
+    ]
+    for asset in repo.list_linked_assets(session_id):
+        if asset["deleted_at"] is None:
+            continue
+        options.append(
+            {
+                "id": str(asset["id"]),
+                "name": str(asset["name"]),
+                "category": str(asset["category"]),
+                "quantity": int(asset["total_quantity"]),
+                "initial_value": float(asset["initial_value"]),
+                "is_deleted": True,
+            }
+        )
+    return options
+
+
 def _render_edit_page(
     *,
     user_email: str,
@@ -44,7 +77,7 @@ def _render_edit_page(
         inv_session=inv_session,
         current_email=user_email,
         statuses=statuses,
-        fixed_assets=assets_repo.list_assets(),
+        fixed_assets=_asset_options_for_session(str(inv_session["id"])),
         linked_asset_rows=linked_asset_rows,
         is_read_only=svc.is_terminal_status(current_status) and not is_admin_user,
         is_admin_user=is_admin_user,

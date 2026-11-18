@@ -64,6 +64,20 @@ def _delete_uploaded_image(image_path: str | None) -> None:
         target_path.unlink()
 
 
+def _render_deleted_asset_not_editable(current_email: str, fixed_asset_id: str) -> HTMLResponse:
+    return render_page(
+        "AI Hackaton Edit Fixed Asset",
+        "Fixed Asset Deleted",
+        "Deleted fixed assets are kept for inventory session history and cannot be edited.",
+        f'<div class="links"><a href="/fixed-assets/id/{fixed_asset_id}">View fixed asset</a>'
+        '<a href="/fixed-assets">Back to fixed assets</a></div>',
+        message="This fixed asset has been deleted.",
+        message_kind="error",
+        current_email=current_email,
+        active_nav="fixed-assets",
+    )
+
+
 @router.get("/fixed-assets", response_class=HTMLResponse)
 def fixed_assets_page(
     session_token: str | None = Cookie(default=None),
@@ -214,6 +228,8 @@ def edit_fixed_asset_page(
             current_email=user["email"],
             active_nav="fixed-assets",
         )
+    if fixed_asset["deleted_at"] is not None:
+        return _render_deleted_asset_not_editable(user["email"], fixed_asset_id)
 
     if not assets_repo.list_categories():
         return render_page(
@@ -282,6 +298,8 @@ def edit_fixed_asset_route(
             current_email=user["email"],
             active_nav="fixed-assets",
         )
+    if fixed_asset["deleted_at"] is not None:
+        return _render_deleted_asset_not_editable(user["email"], fixed_asset_id)
 
     if not assets_repo.list_categories():
         return render_page(
@@ -622,7 +640,8 @@ def delete_fixed_asset_route(
     asset_before_delete = assets_repo.get_asset_by_id(fixed_asset_id)
     deleted = assets_repo.delete_asset(fixed_asset_id)
     if deleted and asset_before_delete is not None:
-        _delete_uploaded_image(str(asset_before_delete["image_path"] or "").strip() or None)
+        # Logical delete: the image is kept so the asset can still be viewed
+        # from the inventory sessions it belongs to.
         audit(
             "asset.deleted",
             asset_id=fixed_asset_id,

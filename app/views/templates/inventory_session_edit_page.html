@@ -319,9 +319,11 @@
                                             <select name="fixed_asset_ids" {% if is_read_only %}disabled{% endif %}>
                                                 <option value="">-- Select fixed asset --</option>
                                                 {% for asset in fixed_assets %}
+                                                {% if not asset.is_deleted or asset.id == row.fixed_asset_id %}
                                                 <option value="{{ asset.id }}" {% if asset.id == row.fixed_asset_id %}selected{% endif %}>
-                                                    {{ asset.name }} ({{ asset.category }})
+                                                    {{ asset.name }} ({{ asset.category }}){% if asset.is_deleted %} [deleted]{% endif %}
                                                 </option>
+                                                {% endif %}
                                                 {% endfor %}
                                             </select>
                                             <p class="help-text">Asset can be selected only once.</p>
@@ -412,7 +414,7 @@
         <div class="asset-cell">
             <select name="fixed_asset_ids">
                 <option value="">-- Select fixed asset --</option>
-                {% for asset in fixed_assets %}
+                {% for asset in fixed_assets if not asset.is_deleted %}
                 <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>

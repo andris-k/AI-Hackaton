@@ -17,6 +17,10 @@ PASSWORD_ITERATIONS = 210000
 SESSION_DURATION_HOURS = 24
 
 
+def _utc_now_text() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def get_connection() -> sqlite3.Connection:
     database_path = config.database_path()
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,12 +90,23 @@ def initialize_database() -> None:
             """
             CREATE TABLE IF NOT EXISTS fixed_asset_categories (
                 id TEXT PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE CHECK (length(name) <= 100)
+                name TEXT NOT NULL CHECK (length(name) <= 100),
+                deleted_at TEXT
             )
             """
         )
+        _migrate_fixed_asset_categories_for_soft_delete(connection)
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_fixed_asset_categories_name ON fixed_asset_categories(name)"
+        )
+        # Names only need to be unique among categories that are not deleted, so a
+        # deleted category's name can be reused.
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_fixed_asset_categories_active_name
+            ON fixed_asset_categories(lower(name))
+            WHERE deleted_at IS NULL
+            """
         )
         connection.execute(
             """
@@ -105,6 +120,7 @@ def initialize_database() -> None:
                 responsible_person TEXT NOT NULL CHECK (length(responsible_person) <= 100),
                 registration_date TEXT NOT NULL,
                 image_path TEXT,
+                deleted_at TEXT,
                 FOREIGN KEY (category_id) REFERENCES fixed_asset_categories(id)
             )
             """
@@ -125,9 +141,14 @@ def initialize_database() -> None:
             )
         if "image_path" not in columns:
             connection.execute("ALTER TABLE fixed_assets ADD COLUMN image_path TEXT")
+        if "deleted_at" not in columns:
+            connection.execute("ALTER TABLE fixed_assets ADD COLUMN deleted_at TEXT")
 
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_fixed_assets_category_id ON fixed_assets(category_id)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fixed_assets_deleted_at ON fixed_assets(deleted_at)"
         )
 
         connection.execute(
@@ -248,6 +269,61 @@ def initialize_database() -> None:
                 """,
                 (category_id, category_name),
             )
+
+
+def _migrate_fixed_asset_categories_for_soft_delete(connection: sqlite3.Connection) -> None:
+    """Add ``deleted_at`` and drop the table-level UNIQUE(name) constraint.
+
+    Older databases declared ``name`` as UNIQUE, which would stop a deleted
+    category's name from being reused. SQLite cannot drop a constraint in place,
+    so the table is rebuilt; uniqueness is then enforced by a partial index that
+    only covers categories that are not deleted.
+    """
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(fixed_asset_categories)").fetchall()
+    }
+    has_unique_name = any(
+        row["origin"] == "u"
+        for row in connection.execute("PRAGMA index_list(fixed_asset_categories)").fetchall()
+    )
+    if not has_unique_name:
+        if "deleted_at" not in columns:
+            connection.execute("ALTER TABLE fixed_asset_categories ADD COLUMN deleted_at TEXT")
+        return
+
+    deleted_at_source = "deleted_at" if "deleted_at" in columns else "NULL"
+    # PRAGMA foreign_keys cannot change inside a transaction, and dropping the
+    # parent table with foreign keys on would fail, so commit and turn them off.
+    connection.commit()
+    connection.execute("PRAGMA foreign_keys = OFF")
+    try:
+        connection.execute("BEGIN")
+        connection.execute(
+            """
+            CREATE TABLE fixed_asset_categories_new (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL CHECK (length(name) <= 100),
+                deleted_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            f"""
+            INSERT INTO fixed_asset_categories_new (id, name, deleted_at)
+            SELECT id, name, {deleted_at_source} FROM fixed_asset_categories
+            """
+        )
+        connection.execute("DROP TABLE fixed_asset_categories")
+        connection.execute(
+            "ALTER TABLE fixed_asset_categories_new RENAME TO fixed_asset_categories"
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -463,7 +539,7 @@ def mark_password_reset_token_used(token: str) -> None:
 def _get_or_create_fixed_asset_category_id(connection: sqlite3.Connection, category_name: str) -> str:
     normalized_name = category_name.strip()
     cursor = connection.execute(
-        "SELECT id FROM fixed_asset_categories WHERE lower(name) = lower(?)",
+        "SELECT id FROM fixed_asset_categories WHERE lower(name) = lower(?) AND deleted_at IS NULL",
         (normalized_name,),
     )
     row = cursor.fetchone()
@@ -481,7 +557,7 @@ def _get_or_create_fixed_asset_category_id(connection: sqlite3.Connection, categ
 def list_fixed_asset_categories() -> list[sqlite3.Row]:
     with db_session() as connection:
         cursor = connection.execute(
-            "SELECT id, name FROM fixed_asset_categories ORDER BY name ASC"
+            "SELECT id, name FROM fixed_asset_categories WHERE deleted_at IS NULL ORDER BY name ASC"
         )
         return cursor.fetchall()
 
@@ -495,7 +571,10 @@ def list_fixed_asset_categories_with_usage() -> list[sqlite3.Row]:
                 fixed_asset_categories.name,
                 COUNT(fixed_assets.id) AS assets_count
             FROM fixed_asset_categories
-            LEFT JOIN fixed_assets ON fixed_assets.category_id = fixed_asset_categories.id
+            LEFT JOIN fixed_assets
+                ON fixed_assets.category_id = fixed_asset_categories.id
+               AND fixed_assets.deleted_at IS NULL
+            WHERE fixed_asset_categories.deleted_at IS NULL
             GROUP BY fixed_asset_categories.id, fixed_asset_categories.name
             ORDER BY fixed_asset_categories.name ASC
             """
@@ -506,7 +585,7 @@ def list_fixed_asset_categories_with_usage() -> list[sqlite3.Row]:
 def get_fixed_asset_category_by_id(category_id: str) -> sqlite3.Row | None:
     with db_session() as connection:
         cursor = connection.execute(
-            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
         )
         return cursor.fetchone()
@@ -517,7 +596,7 @@ def create_fixed_asset_category(name: str) -> sqlite3.Row:
     with db_session() as connection:
         category_id = _get_or_create_fixed_asset_category_id(connection, normalized_name)
         cursor = connection.execute(
-            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
         )
         return cursor.fetchone()
@@ -527,14 +606,14 @@ def update_fixed_asset_category(category_id: str, name: str) -> sqlite3.Row | No
     normalized_name = name.strip()
     with db_session() as connection:
         existing = connection.execute(
-            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
         ).fetchone()
         if existing is None:
             return None
 
         conflict = connection.execute(
-            "SELECT id FROM fixed_asset_categories WHERE lower(name) = lower(?) AND id <> ?",
+            "SELECT id FROM fixed_asset_categories WHERE lower(name) = lower(?) AND id <> ? AND deleted_at IS NULL",
             (normalized_name, category_id),
         ).fetchone()
         if conflict is not None:
@@ -549,23 +628,32 @@ def update_fixed_asset_category(category_id: str, name: str) -> sqlite3.Row | No
             (normalized_name, category_id),
         )
         cursor = connection.execute(
-            "SELECT id, name FROM fixed_asset_categories WHERE id = ?",
+            "SELECT id, name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
         )
         return cursor.fetchone()
 
 
 def delete_fixed_asset_category(category_id: str) -> bool:
+    """Logically delete a category.
+
+    The row is kept so that deleted fixed assets (and the inventory sessions
+    they appear in) still resolve their category name. A category cannot be
+    deleted while fixed assets that are not deleted still use it.
+    """
     with db_session() as connection:
         usage = connection.execute(
-            "SELECT COUNT(1) AS total FROM fixed_assets WHERE category_id = ?",
+            "SELECT COUNT(1) AS total FROM fixed_assets WHERE category_id = ? AND deleted_at IS NULL",
             (category_id,),
         ).fetchone()
         if usage and int(usage["total"]) > 0:
             return False
 
-        connection.execute("DELETE FROM fixed_asset_categories WHERE id = ?", (category_id,))
-        return True
+        cursor = connection.execute(
+            "UPDATE fixed_asset_categories SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+            (_utc_now_text(), category_id),
+        )
+        return cursor.rowcount > 0
 
 
 def create_fixed_asset(
@@ -580,7 +668,7 @@ def create_fixed_asset(
     fixed_asset_id = str(uuid.uuid4())
     with db_session() as connection:
         category = connection.execute(
-            "SELECT name FROM fixed_asset_categories WHERE id = ?",
+            "SELECT name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
         ).fetchone()
         if category is None:
@@ -623,7 +711,8 @@ def create_fixed_asset(
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
-                fixed_assets.image_path
+                fixed_assets.image_path,
+                fixed_assets.deleted_at
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             WHERE fixed_assets.id = ?
@@ -646,7 +735,8 @@ def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
-                fixed_assets.image_path
+                fixed_assets.image_path,
+                fixed_assets.deleted_at
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             WHERE fixed_assets.id = ?
@@ -668,7 +758,7 @@ def update_fixed_asset(
 ) -> sqlite3.Row | None:
     with db_session() as connection:
         category = connection.execute(
-            "SELECT name FROM fixed_asset_categories WHERE id = ?",
+            "SELECT name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
         ).fetchone()
         if category is None:
@@ -686,7 +776,7 @@ def update_fixed_asset(
                 responsible_person = ?,
                 registration_date = ?,
                 image_path = ?
-            WHERE id = ?
+            WHERE id = ? AND deleted_at IS NULL
             """,
             (
                 name,
@@ -711,7 +801,8 @@ def update_fixed_asset(
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
-                fixed_assets.image_path
+                fixed_assets.image_path,
+                fixed_assets.deleted_at
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             WHERE fixed_assets.id = ?
@@ -722,20 +813,24 @@ def update_fixed_asset(
 
 
 def delete_fixed_asset(fixed_asset_id: str) -> bool:
+    """Logically delete a fixed asset.
+
+    The row is kept (with ``deleted_at`` set) so that inventory sessions that
+    reference it keep their history. Deleted assets are hidden from the fixed
+    assets list, reports and the asset pickers for inventory sessions.
+    """
     with db_session() as connection:
         cursor = connection.execute(
-            "DELETE FROM fixed_assets WHERE id = ?",
-            (fixed_asset_id,),
+            "UPDATE fixed_assets SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+            (_utc_now_text(), fixed_asset_id),
         )
         return cursor.rowcount > 0
 
 
 def _fixed_assets_filter_clause(filters: dict[str, Any] | None = None) -> tuple[str, list[Any]]:
-    if not filters:
-        return "", []
-
-    conditions: list[str] = []
+    conditions: list[str] = ["fixed_assets.deleted_at IS NULL"]
     params: list[Any] = []
+    filters = filters or {}
 
     if filters.get("name"):
         conditions.append("lower(fixed_assets.name) LIKE lower(?)")
@@ -779,9 +874,6 @@ def _fixed_assets_filter_clause(filters: dict[str, Any] | None = None) -> tuple[
         conditions.append("fixed_assets.registration_date <= ?")
         params.append(filters["registration_date_to"])
 
-    if not conditions:
-        return "", params
-
     return " WHERE " + " AND ".join(conditions), params
 
 
@@ -820,7 +912,8 @@ def list_fixed_assets(
                     fixed_assets.responsible_person,
                     fixed_assets.registration_date,
                     fixed_assets.category_id,
-                    fixed_assets.image_path
+                    fixed_assets.image_path,
+                    fixed_assets.deleted_at
                 FROM fixed_assets
                 LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
                 {where_clause}
@@ -843,7 +936,8 @@ def list_fixed_assets(
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
-                fixed_assets.image_path
+                fixed_assets.image_path,
+                fixed_assets.deleted_at
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
             {where_clause}
@@ -889,9 +983,21 @@ def _set_inventory_session_fixed_assets(
     if normalized_assets:
         candidate_ids = [asset_id for asset_id, _ in normalized_assets]
         placeholders = ",".join("?" for _ in candidate_ids)
+        # Deleted assets cannot be newly linked, but ones already linked to this
+        # session stay linked so its history is preserved.
         cursor = connection.execute(
-            f"SELECT id FROM fixed_assets WHERE id IN ({placeholders})",
-            candidate_ids,
+            f"""
+            SELECT id FROM fixed_assets
+            WHERE id IN ({placeholders})
+              AND (
+                deleted_at IS NULL
+                OR id IN (
+                    SELECT fixed_asset_id FROM inventory_session_fixed_assets
+                    WHERE inventory_session_id = ?
+                )
+              )
+            """,
+            [*candidate_ids, session_id],
         )
         valid_ids = {str(row["id"]) for row in cursor.fetchall()}
         valid_assets = [
@@ -1076,6 +1182,7 @@ def list_fixed_assets_for_inventory_session(session_id: str) -> list[sqlite3.Row
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
                 fixed_assets.quantity AS total_quantity,
+                fixed_assets.deleted_at,
                 inventory_session_fixed_assets.quantity
             FROM inventory_session_fixed_assets
             JOIN fixed_assets ON fixed_assets.id = inventory_session_fixed_assets.fixed_asset_id

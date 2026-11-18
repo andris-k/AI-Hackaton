@@ -674,6 +674,7 @@ td a { font-weight: 500; }
 .badge-active, .status-active { background: var(--success-soft); color: var(--success); }
 .badge-completed, .status-completed { background: #eef0f3; color: var(--ink-soft); }
 .badge-cancelled, .status-cancelled { background: var(--danger-soft); color: var(--danger); }
+.badge-deleted { background: var(--danger-soft); color: var(--danger); }
 
 /* ------------------------------------------------------------------ */
 /* Filters                                                             */

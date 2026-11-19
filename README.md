@@ -31,6 +31,53 @@ Layering rule:
 * Services contain business logic and input normalization.
 * Repositories isolate persistence calls.
 
+## How it works
+
+Every page is rendered on the server. A request goes through the same layers each time: the router checks the session cookie, a service validates the input, a repository reads or writes SQLite, the action is recorded in the audit log, and a Jinja2 template is rendered back to the browser.
+
+The diagram shows this for deleting a fixed asset. Deletion is logical: the row is kept with `deleted_at` set, so inventory sessions that include the asset still show it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Browser
+    participant Router as Router<br/>app/routers/fixed_assets.py
+    participant Auth as auth_service
+    participant Repo as fixed_assets_repository
+    participant DB as SQLite<br/>app/db.py
+    participant Audit as audit()
+    participant View as views/pages.py
+
+    User->>Browser: Click "Delete fixed asset"
+    Browser->>Router: POST /fixed-assets/id/{id}/delete<br/>with session_token cookie
+    Router->>Auth: current_user(session_token)
+    Auth->>DB: Look up session and user
+    DB-->>Auth: User row, or none
+    alt Not logged in
+        Auth-->>Router: None
+        Router->>View: render_login_page()
+        View-->>Browser: Login page
+    else Logged in
+        Auth-->>Router: User
+        Router->>Repo: get_asset_by_id(id)
+        Repo->>DB: SELECT asset
+        DB-->>Repo: Asset row
+        Router->>Repo: delete_asset(id)
+        Repo->>DB: UPDATE fixed_assets SET deleted_at = now
+        DB-->>Repo: Rows changed
+        Repo-->>Router: True or False
+        Router->>Audit: asset.deleted
+        Audit->>DB: INSERT INTO audit_events
+        Router->>Repo: count_assets() and list_assets()
+        Repo->>DB: SELECT assets WHERE deleted_at IS NULL
+        DB-->>Repo: Remaining assets
+        Router->>View: render_fixed_assets_page()
+        View-->>Browser: Fixed assets page with a success message
+    end
+    Browser-->>User: Updated list
+```
+
 ## Run
 
 1. Create and activate a virtual environment.
@@ -96,6 +143,10 @@ The app creates `app.db` automatically on startup and stores:
 * password reset tokens
 * fixed assets
 * fixed asset categories
+* inventory sessions and the assets linked to them
+* audit events
+
+See [docs/DATABASE.md](docs/DATABASE.md) for the tables, columns, relationships, logical deletion and how the schema is migrated.
 
 ## FixedAsset entity
 
@@ -143,10 +194,6 @@ In production the app:
 * turns off the API docs at `/docs`, `/redoc` and `/openapi.json`;
 * hides the demo-credentials hint on the login page.
 
-* inventory sessions and the assets linked to them
-* audit events
-
-See [docs/DATABASE.md](docs/DATABASE.md) for the tables, columns, relationships, logical deletion and how the schema is migrated.
 Registration at `/register` stays open to everyone.
 
 ### Configuration

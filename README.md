@@ -143,6 +143,10 @@ In production the app:
 * turns off the API docs at `/docs`, `/redoc` and `/openapi.json`;
 * hides the demo-credentials hint on the login page.
 
+* inventory sessions and the assets linked to them
+* audit events
+
+See [docs/DATABASE.md](docs/DATABASE.md) for the tables, columns, relationships, logical deletion and how the schema is migrated.
 Registration at `/register` stays open to everyone.
 
 ### Configuration

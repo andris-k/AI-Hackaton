@@ -71,29 +71,29 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
     # --- Totals --------------------------------------------------------------
     rows = []
     for asset in linked_assets:
-        total_qty = int(asset["total_quantity"] or 0)
-        session_qty = int(asset["quantity"] or 0)
+        expected_qty = int(asset["expected_quantity"] or 0)
+        counted_qty = int(asset["quantity"] or 0)
         unit_value = float(asset["initial_value"] or 0)
         is_deleted = "deleted_at" in asset.keys() and bool(asset["deleted_at"])
         rows.append({
             "name": str(asset["name"]) + (" (deleted)" if is_deleted else ""),
             "category": str(asset["category"] or "-"),
-            "total": total_qty,
-            "session": session_qty,
-            "diff": session_qty - total_qty,
+            "expected": expected_qty,
+            "counted": counted_qty,
+            "diff": counted_qty - expected_qty,
             "unit": unit_value,
-            "line": unit_value * session_qty,
+            "line": unit_value * counted_qty,
         })
 
-    sum_total = sum(r["total"] for r in rows)
-    sum_session = sum(r["session"] for r in rows)
+    sum_expected = sum(r["expected"] for r in rows)
+    sum_counted = sum(r["counted"] for r in rows)
     sum_line = sum(r["line"] for r in rows)
     discrepancies = sum(1 for r in rows if r["diff"] != 0)
 
     tiles = [
         ("Assets in session", str(len(rows))),
-        ("Total quantity", str(sum_total)),
-        ("Session quantity", str(sum_session)),
+        ("Expected quantity", str(sum_expected)),
+        ("Counted quantity", str(sum_counted)),
         ("Rows with difference", str(discrepancies)),
     ]
     tile_w, gap, top = 42, 4, pdf.get_y()
@@ -165,15 +165,15 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
             padding=(1.2, 1.5),
         ) as table:
             head = table.row()
-            for text in ("#", "Asset", "Category", "Total qty", "Session qty", "Difference", "Unit value", "Line value"):
+            for text in ("#", "Asset", "Category", "Expected", "Counted", "Difference", "Unit value", "Line value"):
                 head.cell(text)
             for index, r in enumerate(rows, start=1):
                 row = table.row()
                 row.cell(str(index))
                 row.cell(r["name"])
                 row.cell(r["category"])
-                row.cell(str(r["total"]))
-                row.cell(str(r["session"]))
+                row.cell(str(r["expected"]))
+                row.cell(str(r["counted"]))
                 diff_color = _SUCCESS if r["diff"] > 0 else _DANGER if r["diff"] < 0 else _MUTED
                 row.cell(_fmt_diff(r["diff"]), style=FontFace(color=diff_color, emphasis="BOLD" if r["diff"] else None))
                 row.cell(_fmt_money(r["unit"]))
@@ -181,9 +181,9 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
             total_style = FontFace(emphasis="BOLD", fill_color=_HEAD_BG)
             total = table.row()
             total.cell("Total", colspan=3, style=total_style, align="LEFT")
-            total.cell(str(sum_total), style=total_style)
-            total.cell(str(sum_session), style=total_style)
-            total.cell(_fmt_diff(sum_session - sum_total), style=total_style)
+            total.cell(str(sum_expected), style=total_style)
+            total.cell(str(sum_counted), style=total_style)
+            total.cell(_fmt_diff(sum_counted - sum_expected), style=total_style)
             total.cell("", style=total_style)
             total.cell(_fmt_money(sum_line), style=total_style)
 
@@ -192,8 +192,8 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
         pdf.set_text_color(*_MUTED)
         pdf.multi_cell(
             0, 4,
-            "Total qty is the quantity registered on the fixed asset record when this report was generated. "
-            "Difference = session qty - total qty. Line value = unit value × session qty.",
+            "Expected is the quantity on the fixed asset record when the session started. "
+            "Difference = counted - expected. Line value = unit value × counted.",
             new_x="LMARGIN", new_y="NEXT",
         )
 

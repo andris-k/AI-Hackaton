@@ -71,7 +71,8 @@ erDiagram
     inventory_session_fixed_assets {
         TEXT inventory_session_id PK, FK
         TEXT fixed_asset_id PK, FK
-        INTEGER quantity
+        INTEGER quantity "counted"
+        INTEGER expected_quantity
     }
     audit_events {
         INTEGER id PK
@@ -182,15 +183,23 @@ Deleting an inventory session removes the row, and its asset links are removed w
 
 ### `inventory_session_fixed_assets`
 
-Links assets to inventory sessions.
+Links assets to inventory sessions, with how many of each were expected and counted.
 
 | Column | Type | Notes |
 |---|---|---|
 | `inventory_session_id` | TEXT | → `inventory_sessions.id`, `ON DELETE CASCADE` |
 | `fixed_asset_id` | TEXT | → `fixed_assets.id`, `ON DELETE CASCADE` |
-| `quantity` | INTEGER | Default 1, must be > 0 |
+| `quantity` | INTEGER | Counted quantity. Default 1, must be ≥ 0. 0 means the asset was not found |
+| `expected_quantity` | INTEGER | The asset's quantity when the session started, must be ≥ 0. `NULL` while the session is New |
 
-The primary key is (`inventory_session_id`, `fixed_asset_id`), and both columns are indexed. When a session is saved, all its links are deleted and inserted again. Duplicate assets are merged by adding their quantities, and links with a quantity of 0 or less are dropped. A deleted asset cannot be newly linked, but an asset already linked to the session stays linked.
+The primary key is (`inventory_session_id`, `fixed_asset_id`), and both columns are indexed. When a session is saved, all its links are deleted and inserted again. Duplicate assets are merged by adding their quantities, and links with a negative quantity are dropped. A deleted asset cannot be newly linked, but an asset already linked to the session stays linked.
+
+Expected quantities are saved so that a session's results don't change when an asset is edited later:
+
+* While a session is New, `expected_quantity` is `NULL`, and pages show the asset's current quantity.
+* When a session is saved in any other status, each link keeps the expected quantity it already has. A link without one gets the asset's current quantity. This happens when the session starts, and when an asset is added to an Active session.
+* Reopening a session keeps its expected quantities. An asset that is removed and added again gets the current quantity.
+* Queries read `COALESCE(expected_quantity, fixed_assets.quantity) AS expected_quantity`.
 
 ### `audit_events`
 
@@ -233,7 +242,8 @@ Users and inventory sessions are deleted for real.
 There is no migration tool. On startup, `auth_service.initialize_defaults()` runs:
 
 1. `initialize_database()` (`app/db.py`). Creates missing tables and indexes with `CREATE ... IF NOT EXISTS`, then brings older databases up to date:
-   * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`; the audit and reason columns of `inventory_sessions`; `inventory_session_fixed_assets.quantity`;
+   * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`; the audit and reason columns of `inventory_sessions`;
+   * rebuilds `inventory_session_fixed_assets` to add `expected_quantity` and allow a quantity of 0 (`_migrate_inventory_session_fixed_assets_for_counts`). Links in sessions that were already started get the asset's quantity at the time of the migration as their expected quantity, because the quantity when they started was never stored;
    * fills empty `created_at`, `updated_at` and `last_edited_at` on inventory sessions;
    * rebuilds `fixed_asset_categories` without its old `UNIQUE(name)` constraint, which SQLite cannot drop in place (`_migrate_fixed_asset_categories_for_soft_delete`);
    * creates a category for each free-text `fixed_assets.category` value and sets `category_id` where it is missing.

@@ -378,6 +378,15 @@ def render_fixed_assets_page(
         return f"/fixed-assets?{urlencode(query)}"
 
     add_asset_query = {**base_query, "page": str(page)}
+    labels_query = [
+        ("name", filters.get("name", "")),
+        *(("category", value) for value in selected_category_filters),
+        *(("location", value) for value in selected_location_filters),
+        *((key, filters.get(key, "")) for key in (
+            "initial_value_from", "initial_value_to", "responsible_person",
+            "registration_date_from", "registration_date_to",
+        )),
+    ]
     content = _render_template(
         "fixed_assets_page.html",
         current_email=current_email,
@@ -394,6 +403,7 @@ def render_fixed_assets_page(
         start_row=start_row,
         end_row=end_row,
         add_asset_href=f"/fixed-assets/add?{urlencode(add_asset_query)}",
+        labels_href=f"/fixed-assets/labels.pdf?{urlencode([(k, v) for k, v in labels_query if v])}",
         clear_filters_href=f"/fixed-assets?page=1&page_size={page_size}",
         previous_page_href=page_link(previous_page) if page > 1 else None,
         next_page_href=page_link(next_page) if page < total_pages else None,
@@ -418,6 +428,9 @@ def render_fixed_asset_details_page(
     page: int,
     page_size: int,
     filters: dict[str, object],
+    count_sessions: list[object] | None = None,
+    message: str | None = None,
+    message_kind: str = "info",
 ) -> HTMLResponse:
     back_query = {
         "page": str(page),
@@ -452,6 +465,16 @@ def render_fixed_asset_details_page(
         page_size=page_size,
         filters=filters,
         delete_action=f"/fixed-assets/id/{fixed_asset['id']}/delete",
+        label_href=f"/fixed-assets/id/{fixed_asset['id']}/label.pdf",
+        count_sessions=[
+            {
+                "id": str(row["id"]),
+                "label": f"{row['date_from']} – {row['date_to']} · {row['responsible_person']}",
+                "location": str(row["location"] or "All locations"),
+                "quantity": row["quantity"],
+            }
+            for row in (count_sessions or [])
+        ],
         edit_href=f"/fixed-assets/id/{fixed_asset['id']}/edit?{urlencode(back_query)}",
         back_href=f"/fixed-assets?{urlencode(back_query)}",
     )
@@ -461,6 +484,8 @@ def render_fixed_asset_details_page(
         "Detailed view of a fixed asset.",
         content,
         width="860px",
+        message=message,
+        message_kind=message_kind,
         current_email=current_email,
         active_nav="fixed-assets",
     )
@@ -794,6 +819,48 @@ def render_inventory_session_details_page(
         "View inventory session details.",
         content,
         width="760px",
+        message=message,
+        message_kind=message_kind,
+        current_email=current_email,
+        active_nav="inventory",
+    )
+
+
+def render_inventory_session_count_page(
+    current_email: str,
+    inv_session: object,
+    linked_assets: list[object],
+    *,
+    highlight_asset_id: str = "",
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    rows = [
+        {
+            "id": str(asset["id"]),
+            "name": str(asset["name"]),
+            "category": str(asset["category"]),
+            "location": str(asset["location"] or ""),
+            "other_location": bool(inv_session["location_id"]) and asset["location_id"] != inv_session["location_id"],
+            "expected": int(asset["expected_quantity"]),
+            "counted": int(asset["quantity"]),
+            "deleted": bool(asset["deleted_at"]),
+        }
+        for asset in linked_assets
+    ]
+    content = _render_template(
+        "inventory_session_count_page.html",
+        inv_session=inv_session,
+        rows=rows,
+        highlight_asset_id=highlight_asset_id,
+        matching=sum(1 for row in rows if row["counted"] == row["expected"]),
+    )
+    return render_page(
+        "AI Hackaton Count Inventory",
+        "Count inventory",
+        "Count assets by scanning their labels.",
+        content,
+        width="720px",
         message=message,
         message_kind=message_kind,
         current_email=current_email,

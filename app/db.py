@@ -1491,16 +1491,152 @@ def list_fixed_assets_for_inventory_session(session_id: str) -> list[sqlite3.Row
                     fixed_assets.quantity
                 ) AS expected_quantity,
                 fixed_assets.deleted_at,
+                fixed_assets.location_id,
+                locations.name AS location,
                 inventory_session_fixed_assets.quantity
             FROM inventory_session_fixed_assets
             JOIN fixed_assets ON fixed_assets.id = inventory_session_fixed_assets.fixed_asset_id
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
             WHERE inventory_session_fixed_assets.inventory_session_id = ?
             ORDER BY fixed_assets.name ASC
             """,
             (session_id,),
         )
         return cursor.fetchall()
+
+
+def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> dict[str, Any]:
+    """Add ``delta`` (may be negative) to one asset's counted quantity in an Active session.
+
+    Used for counting by scanning labels. An asset that is not in the session yet
+    is added with a count of ``delta`` and its current quantity as expected, even
+    if it is at another location (``other_location`` is then True): it was found
+    here, so it is counted. Counts never go below 0. The session's ``updated_at``
+    is bumped, so an edit page opened earlier can tell its rows are out of date.
+
+    Returns a dict whose ``result`` is one of ``counted``, ``added``,
+    ``session_not_found``, ``not_active``, ``asset_not_found``, ``asset_deleted``
+    or ``not_linked`` (a negative delta for an asset that is not in the session).
+    """
+    with db_session() as connection:
+        session = connection.execute(
+            "SELECT status, location_id FROM inventory_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if session is None:
+            return {"result": "session_not_found"}
+        if session["status"] != "Active":
+            return {"result": "not_active"}
+
+        asset = connection.execute(
+            "SELECT id, name, quantity, location_id, deleted_at FROM fixed_assets WHERE id = ?",
+            (fixed_asset_id,),
+        ).fetchone()
+        if asset is None:
+            return {"result": "asset_not_found"}
+        was_linked = connection.execute(
+            """
+            SELECT 1 FROM inventory_session_fixed_assets
+            WHERE inventory_session_id = ? AND fixed_asset_id = ?
+            """,
+            (session_id, fixed_asset_id),
+        ).fetchone() is not None
+        base = {"name": asset["name"], "asset_id": asset["id"]}
+        if not was_linked and asset["deleted_at"] is not None:
+            return {**base, "result": "asset_deleted"}
+        if not was_linked and delta <= 0:
+            return {**base, "result": "not_linked"}
+
+        if was_linked:
+            connection.execute(
+                """
+                UPDATE inventory_session_fixed_assets
+                SET quantity = MAX(0, quantity + ?)
+                WHERE inventory_session_id = ? AND fixed_asset_id = ?
+                """,
+                (delta, session_id, fixed_asset_id),
+            )
+        else:
+            # Another scan may add the same asset at the same moment; then add to its count.
+            connection.execute(
+                """
+                INSERT INTO inventory_session_fixed_assets (
+                    inventory_session_id, fixed_asset_id, quantity, expected_quantity
+                )
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (inventory_session_id, fixed_asset_id)
+                DO UPDATE SET quantity = MAX(0, quantity + excluded.quantity)
+                """,
+                (session_id, fixed_asset_id, delta, asset["quantity"]),
+            )
+        connection.execute(
+            "UPDATE inventory_sessions SET updated_at = ? WHERE id = ?",
+            (_utc_now_text(), session_id),
+        )
+        link = connection.execute(
+            """
+            SELECT quantity, COALESCE(expected_quantity, ?) AS expected_quantity
+            FROM inventory_session_fixed_assets
+            WHERE inventory_session_id = ? AND fixed_asset_id = ?
+            """,
+            (asset["quantity"], session_id, fixed_asset_id),
+        ).fetchone()
+        return {
+            **base,
+            "result": "counted" if was_linked else "added",
+            "quantity": int(link["quantity"]),
+            "expected_quantity": int(link["expected_quantity"]),
+            "other_location": session["location_id"] is not None
+            and asset["location_id"] != session["location_id"],
+        }
+
+
+def find_fixed_asset_ids_by_prefix(prefix: str, limit: int = 2) -> list[str]:
+    """Ids of assets that are not deleted and whose id starts with ``prefix``
+    (the short id printed on labels)."""
+    with db_session() as connection:
+        rows = connection.execute(
+            """
+            SELECT id FROM fixed_assets
+            WHERE deleted_at IS NULL AND substr(id, 1, ?) = lower(?)
+            LIMIT ?
+            """,
+            (len(prefix), prefix, limit),
+        ).fetchall()
+        return [str(row["id"]) for row in rows]
+
+
+def list_active_sessions_for_asset(fixed_asset_id: str) -> list[sqlite3.Row]:
+    """Active sessions this asset can be counted in: those it is already in,
+    those for its location and those for all locations. ``quantity`` is its
+    count in the session, or NULL if it is not in it yet."""
+    with db_session() as connection:
+        return connection.execute(
+            """
+            SELECT
+                inventory_sessions.id,
+                inventory_sessions.date_from,
+                inventory_sessions.date_to,
+                inventory_sessions.responsible_person,
+                locations.name AS location,
+                links.quantity
+            FROM inventory_sessions
+            JOIN fixed_assets ON fixed_assets.id = ?
+            LEFT JOIN locations ON locations.id = inventory_sessions.location_id
+            LEFT JOIN inventory_session_fixed_assets AS links
+                ON links.inventory_session_id = inventory_sessions.id
+               AND links.fixed_asset_id = fixed_assets.id
+            WHERE inventory_sessions.status = 'Active'
+              AND (
+                links.fixed_asset_id IS NOT NULL
+                OR inventory_sessions.location_id IS NULL
+                OR inventory_sessions.location_id = fixed_assets.location_id
+              )
+            ORDER BY inventory_sessions.date_from DESC
+            """,
+            (fixed_asset_id,),
+        ).fetchall()
 
 
 def list_linked_fixed_asset_ids_for_inventory_session(session_id: str) -> list[str]:

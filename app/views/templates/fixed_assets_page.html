@@ -12,6 +12,7 @@
             <div class="page-actions">
                 <a href="/fixed-asset-categories">Manage categories</a>
                 <a href="/fixed-assets/report.pdf">Download PDF report</a>
+                <a href="{{ labels_href }}" title="QR labels for the assets that match the filters, 21 per A4 sheet">Print QR labels{% if ns.active %} ({{ total_assets }}){% endif %}</a>
                 <a class="primary" href="{{ add_asset_href }}">+ Add fixed asset</a>
             </div>
         </div>

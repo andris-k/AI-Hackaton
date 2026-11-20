@@ -9,6 +9,7 @@ from app.db import (
     create_fixed_asset_category,
     delete_fixed_asset,
     delete_fixed_asset_category,
+    find_fixed_asset_ids_by_prefix,
     get_fixed_asset_by_id,
     get_fixed_asset_category_by_id,
     list_fixed_asset_categories,
@@ -107,3 +108,7 @@ def update_category(category_id: str, name: str) -> sqlite3.Row | None:
 
 def delete_category(category_id: str) -> bool:
     return delete_fixed_asset_category(category_id)
+
+
+def find_ids_by_prefix(prefix: str, limit: int = 2) -> list[str]:
+    return find_fixed_asset_ids_by_prefix(prefix, limit)

@@ -5,10 +5,12 @@ import sqlite3
 from app.db import (
     INVENTORY_SESSION_STATUSES,
     KEEP_LOCATION,
+    adjust_inventory_count,
     create_inventory_session,
     delete_inventory_session,
     get_inventory_session_by_id,
     list_fixed_assets_for_inventory_session,
+    list_active_sessions_for_asset,
     list_inventory_sessions,
     list_linked_fixed_asset_ids_for_inventory_session,
     list_linked_fixed_assets_for_inventory_session,
@@ -100,3 +102,11 @@ def list_linked_asset_ids(session_id: str) -> list[str]:
 
 def list_linked_assets_with_quantity(session_id: str) -> list[tuple[str, int]]:
     return list_linked_fixed_assets_for_inventory_session(session_id)
+
+
+def adjust_count(session_id: str, fixed_asset_id: str, delta: int) -> dict[str, object]:
+    return adjust_inventory_count(session_id, fixed_asset_id, delta)
+
+
+def list_active_for_asset(fixed_asset_id: str) -> list[sqlite3.Row]:
+    return list_active_sessions_for_asset(fixed_asset_id)

@@ -29,13 +29,18 @@ def fmt_money(value: float) -> str:
     return f"{value:,.2f}".replace(",", " ")
 
 
+def register_fonts(pdf: FPDF) -> None:
+    """Add the app's fonts to a PDF as FONT (regular) and FONT "B" (semibold)."""
+    pdf.add_font(FONT, "", str(_FONT_DIR / "IBMPlexSans-Regular.ttf"))
+    pdf.add_font(FONT, "B", str(_FONT_DIR / "IBMPlexSans-SemiBold.ttf"))
+
+
 class ReportPDF(FPDF):
     def __init__(self, title: str, generated: str) -> None:
         super().__init__(orientation="P", unit="mm", format="A4")
         self.report_title = title
         self.generated = generated
-        self.add_font(FONT, "", str(_FONT_DIR / "IBMPlexSans-Regular.ttf"))
-        self.add_font(FONT, "B", str(_FONT_DIR / "IBMPlexSans-SemiBold.ttf"))
+        register_fonts(self)
         self.set_margins(15, 15, 15)
         self.set_auto_page_break(auto=True, margin=18)
         self.set_title(title)

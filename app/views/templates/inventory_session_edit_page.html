@@ -178,6 +178,9 @@
             </div>
             <div class="page-actions">
                 <a href="/inventory-sessions">&larr; Back to sessions</a>
+                {% if inv_session.status == "Active" %}
+                <a class="primary" href="/inventory-sessions/id/{{ inv_session.id }}/count">Count by scanning</a>
+                {% endif %}
                 {% if inv_session.status != "Active" %}
                 {# Details redirects Active sessions back here, so the link would be a no-op. #}
                 <a href="/inventory-sessions/id/{{ inv_session.id }}">View details</a>
@@ -233,6 +236,8 @@
 
             <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/edit" class="session-form" id="edit-session-form">
                 <input id="status-action" name="status" type="hidden" value="{{ prefill.status if prefill else inv_session.status }}" />
+                {# Lets the server refuse a save that would overwrite counts made elsewhere since this page loaded. #}
+                <input type="hidden" name="loaded_updated_at" value="{{ inv_session.updated_at or '' }}" />
 
                 <div class="edit-layout">
                     <div class="stack">

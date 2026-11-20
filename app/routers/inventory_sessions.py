@@ -4,8 +4,10 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, Cookie, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Cookie, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.repositories import fixed_assets_repository as assets_repo
 from app.repositories import inventory_sessions_repository as repo
@@ -18,6 +20,7 @@ from app.services import inventory_report_service as report_svc
 from app.views.pages import (
     render_add_inventory_session_page,
     render_edit_inventory_session_page,
+    render_inventory_session_count_page,
     render_inventory_session_details_page,
     render_inventory_sessions_page,
     render_login_page,
@@ -495,6 +498,134 @@ def inventory_session_pdf_report(
     )
 
 
+_COUNT_RESULTS = {
+    "counted", "added", "not_active", "asset_not_found", "asset_deleted", "not_linked", "ambiguous",
+}
+
+
+def _resolve_asset_code(code: str) -> tuple[str | None, str | None]:
+    """(asset id, None), or (None, error result) for a scanned or typed code."""
+    asset_id, prefix = svc.parse_asset_code(code)
+    if asset_id:
+        return asset_id, None
+    if prefix:
+        matches = assets_repo.find_ids_by_prefix(prefix)
+        if len(matches) == 1:
+            return matches[0], None
+        return None, "ambiguous" if matches else "asset_not_found"
+    return None, "asset_not_found"
+
+
+def _count_outcome(session_id: str, asset_id: str, result: str) -> dict[str, object]:
+    """Rebuild a count result after a redirect, from the current data."""
+    outcome: dict[str, object] = {"result": result if result in _COUNT_RESULTS else "asset_not_found"}
+    inv_session = repo.get_session_by_id(session_id)
+    for asset in repo.list_linked_assets(session_id):
+        if str(asset["id"]) == asset_id:
+            outcome.update(
+                name=asset["name"],
+                quantity=int(asset["quantity"]),
+                expected_quantity=int(asset["expected_quantity"]),
+                other_location=bool(inv_session and inv_session["location_id"])
+                and asset["location_id"] != inv_session["location_id"],
+            )
+            return outcome
+    asset = assets_repo.get_asset_by_id(asset_id) if asset_id else None
+    if asset is not None:
+        outcome["name"] = asset["name"]
+    return outcome
+
+
+@router.get("/inventory-sessions/id/{session_id}/count", response_class=HTMLResponse)
+def count_inventory_session_page(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    asset: str = Query(default=""),
+    result: str = Query(default=""),
+) -> HTMLResponse:
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to count inventory sessions.")
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return render_login_page("Inventory session not found.")
+    if str(inv_session["status"]) != "Active":
+        return _render_details_with_message(
+            user_email=str(user["email"]),
+            session_id=session_id,
+            message="Counting is only possible while the session is Active.",
+        )
+
+    message, message_kind = (None, "info")
+    if result:
+        message, message_kind = svc.count_message(_count_outcome(session_id, asset, result))
+    return render_inventory_session_count_page(
+        current_email=str(user["email"]),
+        inv_session=inv_session,
+        linked_assets=repo.list_linked_assets(session_id),
+        highlight_asset_id=asset,
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+@router.post("/inventory-sessions/id/{session_id}/count")
+def count_inventory_session(
+    request: Request,
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    code: str = Form(default=""),
+    delta: int = Form(default=1),
+    back: str = Form(default="count"),
+) -> Response:
+    """Add one (or ``delta``) to an asset's count. Used by the counting page (form
+    posts, and fetch from the camera scanner, which asks for JSON) and by the
+    Count button on an asset's page (``back=asset``)."""
+    wants_json = "application/json" in request.headers.get("accept", "")
+    user = auth_service.current_user(session_token)
+    if user is None:
+        if wants_json:
+            return JSONResponse({"result": "login_required", "message": "Please log in again."}, status_code=401)
+        return render_login_page("Please log in to count inventory sessions.")
+
+    delta = max(-1000, min(delta, 1000))
+    asset_id, error_result = _resolve_asset_code(code)
+    outcome: dict[str, object]
+    if asset_id is None:
+        outcome = {"result": error_result}
+    else:
+        outcome = repo.adjust_count(session_id, asset_id, delta)
+        if outcome.get("result") in {"counted", "added"}:
+            audit(
+                "inventory_session.count_changed",
+                session_id=session_id,
+                asset_id=asset_id,
+                name=outcome.get("name"),
+                delta=delta,
+                quantity=outcome.get("quantity"),
+                added_to_session=outcome.get("result") == "added",
+            )
+
+    message, kind = svc.count_message(outcome)
+    if wants_json:
+        payload = {
+            key: outcome.get(key)
+            for key in ("result", "asset_id", "name", "quantity", "expected_quantity", "other_location")
+        }
+        if outcome.get("result") == "added" and asset_id:
+            asset = assets_repo.get_asset_by_id(asset_id)
+            payload["category"] = asset["category"] if asset else ""
+            payload["location"] = (asset["location"] or "") if asset else ""
+        return JSONResponse({**payload, "message": message, "kind": kind})
+
+    result = str(outcome.get("result") or "asset_not_found")
+    if back == "asset" and asset_id:
+        query = urlencode({"count_session": session_id, "count_result": result})
+        return RedirectResponse(url=f"/fixed-assets/id/{asset_id}?{query}", status_code=303)
+    query = urlencode({"asset": asset_id or "", "result": result})
+    return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count?{query}", status_code=303)
+
+
 @router.get("/inventory-sessions/id/{session_id}/edit", response_class=HTMLResponse)
 def edit_inventory_session_page(
     session_id: str,
@@ -534,6 +665,7 @@ def edit_inventory_session(
     completion_reason: str = Form(default=""),
     cancellation_reason: str = Form(default=""),
     location_id: str = Form(default=""),
+    loaded_updated_at: str = Form(default=""),
     admin_override: str = Form(default=""),
     fixed_asset_ids: list[str] = Form(default=[]),
     fixed_asset_quantities: list[str] = Form(default=[]),
@@ -563,6 +695,23 @@ def edit_inventory_session(
             linked_asset_rows=linked_asset_rows,
             is_admin_user=is_admin_user,
             error="Terminal sessions are read-only.",
+        )
+
+    if svc.is_stale(loaded_updated_at, inv_session["updated_at"]):
+        # Saving would overwrite counts made since the page was opened (for
+        # example on a phone), so show the latest version instead.
+        return _render_edit_page(
+            user_email=str(user["email"]),
+            inv_session=inv_session,
+            linked_asset_rows=[
+                {"fixed_asset_id": fixed_asset_id, "quantity": str(quantity)}
+                for fixed_asset_id, quantity in repo.list_linked_assets_with_quantity(session_id)
+            ],
+            is_admin_user=is_admin_user,
+            error=(
+                "This session was changed after you opened this page, for example by counting on a phone. "
+                "Your changes were not saved. The latest counts are shown below; make your changes again."
+            ),
         )
 
     error = svc.validate_session_form(

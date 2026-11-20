@@ -3,15 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Cookie, File, Form, Query, UploadFile
+from fastapi import APIRouter, Cookie, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from app import config
 from app.logging_config import audit, diff_fields
 from app.repositories import fixed_assets_repository as assets_repo
+from app.repositories import inventory_sessions_repository as sessions_repo
+from app.services import asset_labels_service as labels_svc
 from app.services import auth_service
 from app.services import fixed_assets_report_service as assets_report_svc
 from app.services import fixed_assets_service as assets_service
+from app.services import inventory_sessions_service as sessions_svc
 from app.views.pages import (
     render_add_fixed_asset_page,
     render_edit_fixed_asset_page,
@@ -156,6 +159,71 @@ def fixed_assets_pdf_report(session_token: str | None = Cookie(default=None)) ->
     )
 
 
+def _public_base_url(request: Request) -> str:
+    """Base URL printed in label QR codes: APP_BASE_URL if set, else the URL
+    this request came in on (behind a proxy, run uvicorn with --proxy-headers)."""
+    return config.app_base_url() or str(request.base_url).rstrip("/")
+
+
+def _labels_response(assets: list[object], request: Request) -> Response:
+    audit("asset.labels_downloaded", asset_count=len(assets))
+    return Response(
+        content=labels_svc.build_labels_pdf(assets, _public_base_url(request)),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{labels_svc.labels_filename()}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/fixed-assets/labels.pdf")
+def fixed_asset_labels_pdf(
+    request: Request,
+    session_token: str | None = Cookie(default=None),
+    name: str = Query(default=""),
+    category: list[str] = Query(default=[]),
+    location: list[str] = Query(default=[]),
+    initial_value_from: str = Query(default=""),
+    initial_value_to: str = Query(default=""),
+    responsible_person: str = Query(default=""),
+    registration_date_from: str = Query(default=""),
+    registration_date_to: str = Query(default=""),
+) -> Response:
+    """QR labels for every asset matching the list filters."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to print asset labels.")
+    filters = assets_service.build_filters(
+        name=name,
+        category=category,
+        location=location,
+        initial_value_from=initial_value_from,
+        initial_value_to=initial_value_to,
+        responsible_person=responsible_person,
+        registration_date_from=registration_date_from,
+        registration_date_to=registration_date_to,
+    )
+    if assets_service.validate_list_filters(filters):
+        filters = assets_service.build_filters(category=category, location=location, name=name)
+    return _labels_response(assets_repo.list_assets(filters=filters), request)
+
+
+@router.get("/fixed-assets/id/{fixed_asset_id}/label.pdf")
+def fixed_asset_label_pdf(
+    fixed_asset_id: str,
+    request: Request,
+    session_token: str | None = Cookie(default=None),
+) -> Response:
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to print asset labels.")
+    fixed_asset = assets_repo.get_asset_by_id(fixed_asset_id)
+    if fixed_asset is None or fixed_asset["deleted_at"] is not None:
+        return Response("Fixed asset not found.", status_code=404, media_type="text/plain")
+    return _labels_response([fixed_asset], request)
+
+
 @router.get("/fixed-assets/id/{fixed_asset_id}", response_class=HTMLResponse)
 def fixed_asset_details_page(
     fixed_asset_id: str,
@@ -170,6 +238,8 @@ def fixed_asset_details_page(
     responsible_person: str = Query(default=""),
     registration_date_from: str = Query(default=""),
     registration_date_to: str = Query(default=""),
+    count_session: str = Query(default=""),
+    count_result: str = Query(default=""),
 ) -> HTMLResponse:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -198,12 +268,30 @@ def fixed_asset_details_page(
         registration_date_from=registration_date_from,
         registration_date_to=registration_date_to,
     )
+    count_sessions = (
+        sessions_repo.list_active_for_asset(fixed_asset_id) if fixed_asset["deleted_at"] is None else []
+    )
+    message, message_kind = None, "info"
+    if count_session and count_result:
+        # Shown after the Count button below redirects back here.
+        outcome: dict[str, object] = {"result": count_result, "name": fixed_asset["name"]}
+        linked = next(
+            (row for row in sessions_repo.list_linked_assets(count_session) if str(row["id"]) == fixed_asset_id),
+            None,
+        )
+        if linked is not None:
+            outcome.update(quantity=int(linked["quantity"]), expected_quantity=int(linked["expected_quantity"]))
+        if count_result not in {"counted", "added"} or linked is not None:
+            message, message_kind = sessions_svc.count_message(outcome)
     return render_fixed_asset_details_page(
         user["email"],
         fixed_asset,
         page=page,
         page_size=page_size,
         filters=filters,
+        count_sessions=count_sessions,
+        message=message,
+        message_kind=message_kind,
     )
 
 

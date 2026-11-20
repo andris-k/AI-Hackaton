@@ -1,0 +1,291 @@
+<style>
+    .count-page { max-width: 640px; margin: 0 auto; }
+    .count-scan { display: grid; gap: 10px; }
+    .count-scan-row { display: flex; gap: 8px; }
+    .count-scan-row input { flex: 1; min-width: 0; font-size: 1.1rem; padding: 12px; }
+    .count-scan-row button, .count-camera-button { min-height: 48px; padding: 0 18px; font-size: 1rem; }
+    .count-help { margin: 0; color: var(--muted); font-size: 0.85rem; }
+    .count-video-wrap { display: none; position: relative; border-radius: var(--radius); overflow: hidden; background: #000; }
+    .count-video-wrap.active { display: block; }
+    .count-video-wrap video { display: block; width: 100%; max-height: 50vh; object-fit: cover; }
+    .count-video-wrap button { position: absolute; right: 8px; bottom: 8px; }
+    .count-progress { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0 10px; color: var(--muted); font-size: 0.9rem; }
+    .count-list { display: grid; gap: 8px; }
+    .count-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); transition: background 0.4s; }
+    .count-row.flash { background: var(--accent-soft); }
+    .count-row.differs .count-numbers strong { color: var(--warning); }
+    .count-row.matches .count-numbers strong { color: var(--success, #14794f); }
+    .count-name { font-weight: 600; overflow-wrap: anywhere; }
+    .count-meta { color: var(--muted); font-size: 0.82rem; }
+    .count-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); font-size: 0.75rem; }
+    .count-controls { display: flex; align-items: center; gap: 6px; }
+    .count-controls form { margin: 0; }
+    .count-controls button { min-width: 48px; min-height: 48px; font-size: 1.3rem; padding: 0; }
+    .count-numbers { min-width: 64px; text-align: center; line-height: 1.1; }
+    .count-numbers strong { display: block; font-size: 1.4rem; }
+    .count-numbers span { color: var(--muted); font-size: 0.75rem; }
+    .count-toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; display: none; max-width: calc(100% - 32px); padding: 10px 14px; border-radius: var(--radius); background: var(--nav-bg); color: #fff; box-shadow: var(--shadow-md); font-size: 0.9rem; }
+    .count-toast.error { background: var(--danger, #c4352b); }
+    .count-toast.visible { display: block; }
+</style>
+
+<div class="stack count-page">
+    <section class="panel">
+        <div class="page-header">
+            <div>
+                <h2>Count inventory</h2>
+                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }} · {{ inv_session.location or "All locations" }}</p>
+            </div>
+            <div class="page-actions">
+                <a href="/inventory-sessions/id/{{ inv_session.id }}/edit">&larr; Session</a>
+            </div>
+        </div>
+
+        <section class="section-card count-scan">
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form" id="scan-form">
+                <label for="code">Scan a label or type its short id</label>
+                <div class="count-scan-row">
+                    <input id="code" name="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. 3f2a9c1b" autofocus required />
+                    <button type="submit">+1</button>
+                </div>
+            </form>
+            <button type="button" id="camera-start" class="count-camera-button workflow-neutral" hidden>Scan with camera</button>
+            <div class="count-video-wrap" id="camera-wrap">
+                <video id="camera-video" playsinline muted></video>
+                <button type="button" id="camera-stop" class="workflow-neutral">Stop camera</button>
+            </div>
+            <p class="count-help" id="camera-help">A handheld barcode scanner types into the box above. On a phone, you can also scan a label with the camera app: the asset page it opens has a +1 button for this session.</p>
+        </section>
+
+        <div class="count-progress">
+            <span><strong id="matching-count">{{ matching }}</strong> of <strong id="row-count">{{ rows | length }}</strong> match the expected quantity</span>
+        </div>
+
+        <div class="count-list" id="count-list">
+            {% for row in rows %}
+            <article class="count-row {% if row.counted == row.expected %}matches{% else %}differs{% endif %}{% if row.id == highlight_asset_id %} flash{% endif %}" data-asset-id="{{ row.id }}">
+                <div>
+                    <div class="count-name">{{ row.name }}{% if row.deleted %}<span class="count-tag">deleted</span>{% endif %}{% if row.other_location %}<span class="count-tag">other location</span>{% endif %}</div>
+                    <div class="count-meta">{{ row.category }}{% if row.location %} · {{ row.location }}{% endif %} · <span class="mono">{{ row.id[:8] }}</span></div>
+                </div>
+                <div class="count-controls">
+                    <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
+                        <input type="hidden" name="code" value="{{ row.id }}" />
+                        <input type="hidden" name="delta" value="-1" />
+                        <button type="submit" class="workflow-neutral" aria-label="One less {{ row.name }}">&minus;</button>
+                    </form>
+                    <div class="count-numbers">
+                        <strong data-role="counted">{{ row.counted }}</strong>
+                        <span>of <span data-role="expected">{{ row.expected }}</span></span>
+                    </div>
+                    <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
+                        <input type="hidden" name="code" value="{{ row.id }}" />
+                        <button type="submit" aria-label="One more {{ row.name }}">+</button>
+                    </form>
+                </div>
+            </article>
+            {% else %}
+            <p id="count-empty" style="margin: 0; color: var(--muted);">No assets in this session yet. Scanning a label adds its asset.</p>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+
+<div class="count-toast" id="count-toast" role="status" aria-live="polite"></div>
+
+<template id="count-row-template">
+    <article class="count-row" data-asset-id="">
+        <div>
+            <div class="count-name"><span data-role="name"></span><span class="count-tag" data-role="other" hidden>other location</span></div>
+            <div class="count-meta"><span data-role="meta"></span> · <span class="mono" data-role="short"></span></div>
+        </div>
+        <div class="count-controls">
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
+                <input type="hidden" name="code" value="" />
+                <input type="hidden" name="delta" value="-1" />
+                <button type="submit" class="workflow-neutral" aria-label="One less">&minus;</button>
+            </form>
+            <div class="count-numbers">
+                <strong data-role="counted">0</strong>
+                <span>of <span data-role="expected">0</span></span>
+            </div>
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
+                <input type="hidden" name="code" value="" />
+                <button type="submit" aria-label="One more">+</button>
+            </form>
+        </div>
+    </article>
+</template>
+
+<script>
+    (function () {
+        const list = document.getElementById("count-list");
+        const toast = document.getElementById("count-toast");
+        const codeInput = document.getElementById("code");
+        const rowTemplate = document.getElementById("count-row-template");
+        let toastTimer = null;
+
+        function showToast(message, kind) {
+            toast.textContent = message;
+            toast.classList.toggle("error", kind === "error");
+            toast.classList.add("visible");
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove("visible"), 3500);
+        }
+
+        function updateProgress() {
+            const rows = Array.from(list.querySelectorAll(".count-row"));
+            const matching = rows.filter((row) => row.classList.contains("matches")).length;
+            document.getElementById("matching-count").textContent = String(matching);
+            document.getElementById("row-count").textContent = String(rows.length);
+        }
+
+        function rowFor(data) {
+            let row = list.querySelector('.count-row[data-asset-id="' + CSS.escape(data.asset_id) + '"]');
+            if (row) return row;
+            const node = rowTemplate.content.firstElementChild.cloneNode(true);
+            node.dataset.assetId = data.asset_id;
+            node.querySelector('[data-role="name"]').textContent = data.name || "";
+            node.querySelector('[data-role="meta"]').textContent =
+                [data.category, data.location].filter(Boolean).join(" · ");
+            node.querySelector('[data-role="short"]').textContent = data.asset_id.slice(0, 8);
+            node.querySelector('[data-role="other"]').hidden = !data.other_location;
+            node.querySelectorAll('input[name="code"]').forEach((input) => { input.value = data.asset_id; });
+            node.querySelectorAll("form.count-form").forEach(wireForm);
+            const empty = document.getElementById("count-empty");
+            if (empty) empty.remove();
+            list.prepend(node);
+            return node;
+        }
+
+        function applyResult(data) {
+            if (data.result !== "counted" && data.result !== "added") return;
+            const row = rowFor(data);
+            row.querySelector('[data-role="counted"]').textContent = String(data.quantity);
+            row.querySelector('[data-role="expected"]').textContent = String(data.expected_quantity);
+            const matches = data.quantity === data.expected_quantity;
+            row.classList.toggle("matches", matches);
+            row.classList.toggle("differs", !matches);
+            row.classList.remove("flash");
+            void row.offsetWidth;  // restart the highlight
+            row.classList.add("flash");
+            setTimeout(() => row.classList.remove("flash"), 900);
+            updateProgress();
+        }
+
+        async function submitCount(form, code) {
+            const body = new FormData(form);
+            if (code !== undefined) body.set("code", code);
+            let response;
+            try {
+                response = await fetch(form.action, {
+                    method: "POST",
+                    body: body,
+                    headers: { "Accept": "application/json" },
+                    credentials: "same-origin",
+                });
+            } catch (error) {
+                showToast("Could not reach the server. Check the connection and try again.", "error");
+                return null;
+            }
+            if (response.status === 401) {
+                window.location.reload();
+                return null;
+            }
+            const data = await response.json();
+            applyResult(data);
+            showToast(data.message, data.kind);
+            return data;
+        }
+
+        function wireForm(form) {
+            form.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                await submitCount(form);
+                if (form.id === "scan-form") {
+                    codeInput.value = "";
+                    codeInput.focus();
+                }
+            });
+        }
+
+        document.querySelectorAll("form.count-form").forEach(wireForm);
+
+        // Camera scanning, where the browser can read QR codes itself (for
+        // example Chrome on Android). Elsewhere the camera app works instead.
+        const startButton = document.getElementById("camera-start");
+        const stopButton = document.getElementById("camera-stop");
+        const wrap = document.getElementById("camera-wrap");
+        const video = document.getElementById("camera-video");
+        const scanForm = document.getElementById("scan-form");
+        if (!("BarcodeDetector" in window) || !navigator.mediaDevices || !window.isSecureContext) return;
+
+        let detector = null;
+        let stream = null;
+        let lastCode = "";
+        let lastCodeAt = 0;
+        let busy = false;
+
+        BarcodeDetector.getSupportedFormats().then((formats) => {
+            if (!formats.includes("qr_code")) return;
+            detector = new BarcodeDetector({ formats: ["qr_code"] });
+            startButton.hidden = false;
+        }).catch(() => {});
+
+        async function scanFrame() {
+            if (!stream) return;
+            if (!busy && video.readyState >= 2) {
+                try {
+                    const codes = await detector.detect(video);
+                    const value = codes.length ? codes[0].rawValue : "";
+                    const now = Date.now();
+                    // The same label stays in view for many frames; count it once
+                    // unless it is scanned again after a pause.
+                    if (value && (value !== lastCode || now - lastCodeAt > 2500)) {
+                        lastCode = value;
+                        lastCodeAt = now;
+                        busy = true;
+                        if (navigator.vibrate) navigator.vibrate(60);
+                        await submitCount(scanForm, value);
+                        busy = false;
+                    } else if (value) {
+                        lastCodeAt = now;
+                    }
+                } catch (error) {
+                    busy = false;
+                }
+            }
+            setTimeout(scanFrame, 250);
+        }
+
+        startButton.addEventListener("click", async function () {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false,
+                });
+            } catch (error) {
+                showToast("The camera could not be opened. Allow camera access for this site and try again.", "error");
+                return;
+            }
+            video.srcObject = stream;
+            await video.play();
+            wrap.classList.add("active");
+            startButton.hidden = true;
+            scanFrame();
+        });
+
+        function stopCamera() {
+            if (stream) stream.getTracks().forEach((track) => track.stop());
+            stream = null;
+            video.srcObject = null;
+            wrap.classList.remove("active");
+            startButton.hidden = false;
+        }
+
+        stopButton.addEventListener("click", stopCamera);
+        document.addEventListener("visibilitychange", function () {
+            if (document.hidden) stopCamera();
+        });
+    })();
+</script>

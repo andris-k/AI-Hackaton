@@ -228,6 +228,12 @@ Expected quantities are saved so that a session's results don't change when an a
 * Reopening a session keeps its expected quantities. An asset that is removed and added again gets the current quantity.
 * Queries read `COALESCE(expected_quantity, fixed_assets.quantity) AS expected_quantity`.
 
+Counting by scanning labels (`adjust_inventory_count`) changes one link at a time, only in Active sessions:
+
+* It adds to `quantity` in one statement (never below 0), so two phones counting the same asset don't lose a count.
+* Scanning an asset that is not in the session adds it, with its current quantity as expected, even if it is at another location.
+* It sets the session's `updated_at`. The edit page sends the `updated_at` it was loaded with, and a save is refused if the session changed since, because saving replaces all links and would overwrite the counts.
+
 ### `audit_events`
 
 Who did what. Written through `audit()` in `app/logging_config.py`. See [Logging](../README.md#logging).

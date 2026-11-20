@@ -117,6 +117,9 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/fixed-assets/id/{fixed_asset_id}/edit` - fixed asset edit page
 * `/fixed-asset-categories` - fixed asset category management page
 * `/fixed-asset-categories/{category_id}/edit` - fixed asset category edit page
+* `/fixed-assets/labels.pdf` - QR labels for the assets matching the list filters (A4, 3 × 7 labels of 63.5 × 38.1 mm)
+* `/fixed-assets/id/{fixed_asset_id}/label.pdf` - QR label for one asset
+* `/inventory-sessions/id/{session_id}/count` - phone-friendly counting page for an Active session
 * `/locations` - location management page
 * `/locations/{location_id}/edit` - location edit page
 * `/logout` - clear the active session
@@ -214,7 +217,7 @@ All settings are environment variables. None are needed for local development.
 | `ADMIN_EMAIL` | First admin account, created on startup if missing | — |
 | `ADMIN_PASSWORD` | Its password, at least 12 characters | — |
 | `ADMIN_EMAILS` | Comma-separated emails allowed admin-only actions, such as reopening closed inventory sessions | `ADMIN_EMAIL` in production, `admin@example.com` in development |
-| `APP_BASE_URL` | Public URL used in emailed links, e.g. `https://assets.example.com` | — |
+| `APP_BASE_URL` | Public URL used in emailed links and in the QR codes on asset labels, e.g. `https://assets.example.com` | — (labels use the URL the page was opened on) |
 | `SMTP_HOST` | Mail server for password reset emails | — (reset off in production) |
 | `SMTP_PORT` | Mail server port | `587` |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | Mail server login, if required | — |
@@ -226,6 +229,8 @@ All settings are environment variables. None are needed for local development.
 | `LOG_FORMAT` | `text` (readable) or `json` (one JSON object per line, for log services) | `text`, `json` in production |
 
 Password reset by email needs `SMTP_HOST`, `SMTP_FROM` and `APP_BASE_URL`.
+
+Set `APP_BASE_URL` before printing labels in production, so the QR codes keep working if the site is reached under another address. Scanning labels with a phone camera needs the site on HTTPS (or `localhost`) for the in-browser scanner; the camera app works with any address the phone can reach.
 
 Back up the database file and the uploads folder: they hold all the data.
 

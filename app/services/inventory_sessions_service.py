@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from app import config
@@ -128,3 +129,60 @@ def parse_linked_assets(
 
     linked_assets = [(asset_id, quantity) for asset_id, quantity in aggregated.items()]
     return linked_assets, None
+
+
+# ---------------------------------------------------------------------------
+# Counting by scanning labels
+# ---------------------------------------------------------------------------
+
+_ASSET_ID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+# The short id printed on labels is the first 8 characters; allow a few more or less.
+_SHORT_ID_RE = re.compile(r"^[0-9a-f][0-9a-f-]{5,34}$", re.IGNORECASE)
+
+
+def parse_asset_code(code: str) -> tuple[str | None, str | None]:
+    """Read a scanned or typed asset code.
+
+    Returns (full id, None) when the code contains an asset id, as the label's
+    URL does; (None, prefix) for a short id typed by hand; (None, None) otherwise.
+    """
+    text = (code or "").strip()
+    match = _ASSET_ID_RE.search(text)
+    if match:
+        return match.group(0).lower(), None
+    if _SHORT_ID_RE.match(text):
+        return None, text.lower()
+    return None, None
+
+
+def count_message(outcome: dict[str, object]) -> tuple[str, str]:
+    """(message, kind) to show after a scan or a +/- tap."""
+    result = outcome.get("result")
+    name = str(outcome.get("name") or "This asset")
+    if result == "counted":
+        return f"{name}: counted {outcome['quantity']} of {outcome['expected_quantity']}.", "success"
+    if result == "added":
+        if outcome.get("other_location"):
+            return (
+                f"{name} was not in this session and is registered at another location. "
+                f"It was added with a count of {outcome['quantity']}.",
+                "info",
+            )
+        return f"{name} was added to the session with a count of {outcome['quantity']}.", "success"
+    if result == "not_active":
+        return "Counting is only possible while the session is Active.", "error"
+    if result == "asset_deleted":
+        return f"{name} has been deleted and cannot be added.", "error"
+    if result == "not_linked":
+        return f"{name} is not in this session.", "error"
+    if result == "ambiguous":
+        return "More than one asset starts with that code. Type more characters or scan the label.", "error"
+    if result == "session_not_found":
+        return "Inventory session not found.", "error"
+    return "No asset found for that code.", "error"
+
+
+def is_stale(loaded_updated_at: str, current_updated_at: object) -> bool:
+    """True when a form was loaded before the session last changed, e.g. by a
+    count from a phone. Forms without the field (older pages) are not checked."""
+    return bool(loaded_updated_at) and loaded_updated_at != str(current_updated_at or "")

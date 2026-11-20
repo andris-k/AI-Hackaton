@@ -8,6 +8,7 @@
             <div class="page-actions">
                 <a href="{{ back_href }}">← Fixed assets</a>
                 {% if not fixed_asset.deleted_at %}
+                <a href="{{ label_href }}">Print QR label</a>
                 <a class="primary" href="{{ edit_href }}">Edit fixed asset</a>
                 {% endif %}
             </div>
@@ -18,6 +19,31 @@
             <span class="badge badge-deleted">Deleted</span>
             <div class="read-only-banner">This fixed asset was deleted on {{ fixed_asset.deleted_at }}. It is kept read-only for inventory session history.</div>
         </div>
+        {% endif %}
+
+        {% if count_sessions %}
+        <section class="section-card count-box">
+            <h3>Count in an active inventory session</h3>
+            {% for s in count_sessions %}
+            <form method="post" action="/inventory-sessions/id/{{ s.id }}/count" class="count-box-row">
+                <input type="hidden" name="code" value="{{ fixed_asset.id }}" />
+                <input type="hidden" name="back" value="asset" />
+                <div>
+                    <strong>{{ s.label }}</strong>
+                    <span>{{ s.location }} · {% if s.quantity is none %}not in this session yet{% else %}counted {{ s.quantity }}{% endif %}</span>
+                </div>
+                <button type="submit" class="count-box-button">+1</button>
+            </form>
+            {% endfor %}
+        </section>
+        <style>
+            .count-box { margin-bottom: 16px; border-color: var(--accent-line); }
+            .count-box h3 { margin-top: 0; }
+            .count-box-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+            .count-box-row:first-of-type { border-top: 0; }
+            .count-box-row span { display: block; color: var(--muted); font-size: 0.85rem; }
+            .count-box-button { min-width: 72px; min-height: 48px; font-size: 1.1rem; }
+        </style>
         {% endif %}
 
         <div class="summary-grid">

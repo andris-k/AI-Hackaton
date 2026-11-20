@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2>{{ fixed_asset.name }}</h2>
-                <p class="page-context">{{ fixed_asset.category }} · registered {{ fixed_asset.registration_date }}</p>
+                <p class="page-context">{{ fixed_asset.category }}{% if fixed_asset.location %} · {{ fixed_asset.location }}{% endif %} · registered {{ fixed_asset.registration_date }}</p>
             </div>
             <div class="page-actions">
                 <a href="{{ back_href }}">← Fixed assets</a>
@@ -49,6 +49,8 @@
                     <dd>{{ fixed_asset.name }}</dd>
                     <dt>Category</dt>
                     <dd>{{ fixed_asset.category }}</dd>
+                    <dt>Location</dt>
+                    <dd>{{ fixed_asset.location or "—" }}</dd>
                     <dt>Quantity</dt>
                     <dd>{{ fixed_asset.quantity }}</dd>
                     <dt>Initial value</dt>
@@ -85,6 +87,7 @@
                 <input type="hidden" name="page_size" value="{{ page_size }}" />
                 <input type="hidden" name="name_filter" value="{{ filters.name }}" />
                 <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+                <input type="hidden" name="location_filter" value="{{ filters.location }}" />
                 <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
                 <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
                 <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />

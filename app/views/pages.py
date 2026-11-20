@@ -11,6 +11,8 @@ from app import config
 from app.repositories import audit_repository
 from app.services import audit_view_service as audit_view
 from app.repositories import fixed_assets_repository as assets_repo
+from app.repositories import locations_repository
+from app.db import NO_LOCATION_FILTER
 
 _TEMPLATES_PATH = Path(__file__).resolve().parent / "templates"
 _TEMPLATE_ENV = Environment(
@@ -35,6 +37,7 @@ _WORKSPACE_NAV = (
     ("dashboard", "Dashboard", "/dashboard"),
     ("fixed-assets", "Fixed assets", "/fixed-assets"),
     ("categories", "Categories", "/fixed-asset-categories"),
+    ("locations", "Locations", "/locations"),
     ("inventory", "Inventory sessions", "/inventory-sessions"),
 )
 # (key, label, href, admins only)
@@ -303,6 +306,15 @@ def render_users_page(current_email: str, users: list[object], email_filter: str
     )
 
 
+def _location_choices(current_id: object = None, current_name: object = None) -> list[dict[str, str]]:
+    """Locations for a dropdown. A record may keep a location that was deleted
+    later, so that one is added if it is not in the list."""
+    choices = [{"id": str(row["id"]), "name": str(row["name"])} for row in locations_repository.list_all()]
+    if current_id and all(choice["id"] != str(current_id) for choice in choices):
+        choices.append({"id": str(current_id), "name": f"{current_name or 'Unknown'} (deleted)"})
+    return choices
+
+
 def render_fixed_assets_page(
     current_email: str,
     fixed_assets: list[object],
@@ -320,11 +332,21 @@ def render_fixed_assets_page(
         for value in str(filters.get("category", "")).split(",")
         if value.strip()
     ]
+    location_filter_options = [
+        (NO_LOCATION_FILTER, "No location"),
+        *((str(location["name"]), str(location["name"])) for location in locations_repository.list_all()),
+    ]
+    selected_location_filters = [
+        value.strip()
+        for value in str(filters.get("location", "")).split(",")
+        if value.strip()
+    ]
     rows = [
         {
             "id": str(asset["id"]),
             "name": str(asset["name"]),
             "category": str(asset["category"]),
+            "location": str(asset["location"] or ""),
             "quantity": str(asset["quantity"]),
             "initial_value": "{:.2f}".format(float(asset["initial_value"])),
             "responsible_person": str(asset["responsible_person"]),
@@ -343,6 +365,7 @@ def render_fixed_assets_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
+        "location": filters.get("location", ""),
         "initial_value_from": filters.get("initial_value_from", ""),
         "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
@@ -364,6 +387,8 @@ def render_fixed_assets_page(
         filters=filters,
         category_filter_options=category_filter_options,
         selected_category_filters=selected_category_filters,
+        location_filter_options=location_filter_options,
+        selected_location_filters=selected_location_filters,
         total_assets=total_assets,
         total_pages=total_pages,
         start_row=start_row,
@@ -399,6 +424,7 @@ def render_fixed_asset_details_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
+        "location": filters.get("location", ""),
         "initial_value_from": filters.get("initial_value_from", ""),
         "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
@@ -414,6 +440,7 @@ def render_fixed_asset_details_page(
             "id": str(fixed_asset["id"]),
             "name": str(fixed_asset["name"]),
             "category": str(fixed_asset["category"]),
+            "location": str(fixed_asset["location"] or ""),
             "quantity": str(fixed_asset["quantity"]),
             "initial_value": "{:.2f}".format(float(fixed_asset["initial_value"])),
             "responsible_person": str(fixed_asset["responsible_person"]),
@@ -461,6 +488,7 @@ def render_edit_fixed_asset_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
+        "location": filters.get("location", ""),
         "initial_value_from": filters.get("initial_value_from", ""),
         "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
@@ -485,6 +513,8 @@ def render_edit_fixed_asset_page(
         filters=filters,
         categories=[{"id": str(category["id"]), "name": str(category["name"])} for category in categories],
         selected_category_id=selected_category_id,
+        locations=_location_choices(fixed_asset["location_id"], fixed_asset["location"]),
+        selected_location_id=str(fixed_asset["location_id"] or ""),
         details_href=f"/fixed-assets/id/{fixed_asset['id']}?{urlencode(back_query)}",
         back_href=f"/fixed-assets?{urlencode(back_query)}",
     )
@@ -520,6 +550,7 @@ def render_add_fixed_asset_page(
         "page_size": str(page_size),
         "name": filters.get("name", ""),
         "category": filters.get("category", ""),
+        "location": filters.get("location", ""),
         "initial_value_from": filters.get("initial_value_from", ""),
         "initial_value_to": filters.get("initial_value_to", ""),
         "responsible_person": filters.get("responsible_person", ""),
@@ -543,6 +574,8 @@ def render_add_fixed_asset_page(
         },
         categories=[{"id": str(category["id"]), "name": str(category["name"])} for category in categories],
         selected_category_id=selected_category_id,
+        locations=_location_choices(),
+        selected_location_id=form_data.get("location_id", ""),
         back_href=f"/fixed-assets?{urlencode(back_query)}",
     )
     return render_page(
@@ -618,6 +651,62 @@ def render_edit_fixed_asset_category_page(
     )
 
 
+def render_locations_page(
+    current_email: str,
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    content = _render_template(
+        "locations_page.html",
+        locations=[
+            {
+                "id": str(location["id"]),
+                "name": str(location["name"]),
+                "assets_count": int(location["assets_count"]),
+                "sessions_count": int(location["sessions_count"]),
+                "assets_href": f"/fixed-assets?{urlencode({'location': str(location['name'])})}",
+            }
+            for location in locations_repository.list_with_usage()
+        ],
+    )
+    return render_page(
+        "AI Hackaton Locations",
+        "Locations",
+        "Create and manage asset locations.",
+        content,
+        width="980px",
+        message=message,
+        message_kind=message_kind,
+        current_email=current_email,
+        active_nav="locations",
+    )
+
+
+def render_edit_location_page(
+    current_email: str,
+    location: object,
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    content = _render_template(
+        "location_edit_page.html",
+        location={"id": str(location["id"]), "name": str(location["name"])},
+    )
+    return render_page(
+        "AI Hackaton Edit Location",
+        "Edit Location",
+        "Update location name.",
+        content,
+        width="760px",
+        message=message,
+        message_kind=message_kind,
+        current_email=current_email,
+        active_nav="locations",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Inventory Sessions
 # ---------------------------------------------------------------------------
@@ -629,6 +718,7 @@ def render_inventory_sessions_page(
     filters: dict[str, str],
     summary: dict[str, object] | None = None,
     *,
+    locations: list[dict[str, str]] | None = None,
     message: str | None = None,
     message_kind: str = "info",
 ) -> HTMLResponse:
@@ -639,6 +729,7 @@ def render_inventory_sessions_page(
         statuses=statuses,
         filters=filters,
         summary=summary,
+        locations=locations or [],
     )
     return render_page(
         "AI Hackaton Inventory Sessions",
@@ -658,6 +749,7 @@ def render_add_inventory_session_page(
     fixed_assets: list[object],
     linked_asset_rows: list[dict[str, str]],
     *,
+    locations: list[dict[str, str]] | None = None,
     error: str | None = None,
     prefill: dict[str, str] | None = None,
 ) -> HTMLResponse:
@@ -668,6 +760,7 @@ def render_add_inventory_session_page(
         prefill=prefill,
         fixed_assets=fixed_assets,
         linked_asset_rows=linked_asset_rows,
+        locations=locations or [],
     )
     return render_page(
         "AI Hackaton New Inventory Session",
@@ -717,11 +810,13 @@ def render_edit_inventory_session_page(
     is_read_only: bool,
     is_admin_user: bool = False,
     *,
+    locations: list[dict[str, str]] | None = None,
     error: str | None = None,
     prefill: dict[str, str] | None = None,
 ) -> HTMLResponse:
     content = _render_template(
         "inventory_session_edit_page.html",
+        locations=locations or [],
         **_history(current_email, "inventory_session", str(inv_session["id"])),
         current_email=current_email,
         inv_session=inv_session,

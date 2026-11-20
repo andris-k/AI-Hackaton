@@ -1,0 +1,27 @@
+<div class="stack">
+    <section class="panel">
+        <div class="page-header">
+            <div>
+                <h2>Edit location</h2>
+                <p class="page-context">Renaming a location changes it on every asset and inventory session at it.</p>
+            </div>
+            <div class="page-actions">
+                <a href="/locations">← Back to locations</a>
+            </div>
+        </div>
+
+        <section class="section-card">
+            <form method="post" action="/locations/{{ location.id }}/edit">
+                <div class="field">
+                    <label for="location_name">Location name</label>
+                    <input id="location_name" name="name" type="text" maxlength="100" value="{{ location.name }}" required />
+                </div>
+                <p class="mono" style="margin: 0 0 14px;">Id {{ location.id }}</p>
+                <div class="button-row">
+                    <button type="submit">Save location</button>
+                    <a href="/locations">Cancel</a>
+                </div>
+            </form>
+        </section>
+    </section>
+</div>

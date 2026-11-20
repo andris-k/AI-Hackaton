@@ -4,6 +4,7 @@ import sqlite3
 
 from app.db import (
     INVENTORY_SESSION_STATUSES,
+    KEEP_LOCATION,
     create_inventory_session,
     delete_inventory_session,
     get_inventory_session_by_id,
@@ -22,12 +23,14 @@ def list_sessions(
     responsible_person: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    location_id: str | None = None,
 ) -> list[sqlite3.Row]:
     return list_inventory_sessions(
         status=status or None,
         responsible_person=responsible_person or None,
         date_from=date_from or None,
         date_to=date_to or None,
+        location_id=location_id or None,
     )
 
 
@@ -42,6 +45,7 @@ def create_session(
     linked_assets: list[tuple[str, int]] | tuple[tuple[str, int], ...] = (),
     created_by_user_id: int | None = None,
     notes: str = "",
+    location_id: str | None = None,
 ) -> sqlite3.Row:
     return create_inventory_session(
         date_from=date_from,
@@ -50,6 +54,7 @@ def create_session(
         linked_assets=linked_assets,
         created_by_user_id=created_by_user_id,
         notes=notes,
+        location_id=location_id,
     )
 
 
@@ -64,6 +69,7 @@ def update_session(
     completion_reason: str = "",
     cancellation_reason: str = "",
     actor_user_id: int | None = None,
+    location_id: str | None | object = KEEP_LOCATION,
 ) -> sqlite3.Row | None:
     return update_inventory_session(
         session_id=session_id,
@@ -76,6 +82,7 @@ def update_session(
         completion_reason=completion_reason,
         cancellation_reason=cancellation_reason,
         actor_user_id=actor_user_id,
+        location_id=location_id,
     )
 
 

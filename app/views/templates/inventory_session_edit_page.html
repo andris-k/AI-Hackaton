@@ -29,7 +29,7 @@
     .header-meta {
         margin-top: 12px;
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 12px;
     }
     .header-meta-item p { margin: 0; color: var(--muted); font-size: 0.78rem; }
@@ -207,6 +207,10 @@
                         <p>Responsible Person</p>
                         <strong>{{ prefill.responsible_person if prefill else inv_session.responsible_person }}</strong>
                     </article>
+                    <article class="header-meta-item">
+                        <p>Location</p>
+                        <strong>{{ inv_session.location or "All locations" }}</strong>
+                    </article>
                 </div>
                 {% if not is_read_only %}
                 <div class="status-quick-actions">
@@ -271,6 +275,17 @@
                                            {% if is_read_only %}disabled{% endif %} required />
                                 </div>
                             </div>
+                            {% set selected_location_id = prefill.location_id if prefill else (inv_session.location_id or "") %}
+                            <div>
+                                <label for="location_id">Location</label>
+                                <select id="location_id" name="location_id" {% if is_read_only %}disabled{% endif %}>
+                                    <option value="">All locations</option>
+                                    {% for location in locations %}
+                                    <option value="{{ location.id }}" {% if location.id == selected_location_id %}selected{% endif %}>{{ location.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <p class="help-text">With a location, only assets at it can be added. After changing it, save to update the asset list.</p>
+                            </div>
                         </section>
 
                         <section class="section-card">
@@ -319,9 +334,9 @@
                                             <select name="fixed_asset_ids" {% if is_read_only %}disabled{% endif %}>
                                                 <option value="">-- Select fixed asset --</option>
                                                 {% for asset in fixed_assets %}
-                                                {% if not asset.is_deleted or asset.id == row.fixed_asset_id %}
+                                                {% if asset.selectable or asset.id == row.fixed_asset_id %}
                                                 <option value="{{ asset.id }}" {% if asset.id == row.fixed_asset_id %}selected{% endif %}>
-                                                    {{ asset.name }} ({{ asset.category }}){% if asset.is_deleted %} [deleted]{% endif %}
+                                                    {{ asset.name }} ({{ asset.category }}){% if asset.note %} [{{ asset.note }}]{% endif %}
                                                 </option>
                                                 {% endif %}
                                                 {% endfor %}
@@ -375,6 +390,9 @@
                             {% if not is_read_only %}
                             <div style="margin-top: 10px; display:flex; gap:8px; flex-wrap: wrap;">
                                 <button type="button" id="add-linked-asset">+ Add asset</button>
+                                {% if inv_session.location_id %}
+                                <button type="button" id="add-location-assets" class="workflow-neutral" title="Adds a row with a count of 0 for every asset at {{ inv_session.location }} that is not listed yet">+ Add all assets at {{ inv_session.location }}</button>
+                                {% endif %}
                                 <button type="button" id="clear-linked-assets" class="workflow-neutral">Clear all rows</button>
                             </div>
                             {% endif %}
@@ -414,7 +432,7 @@
         <div class="asset-cell">
             <select name="fixed_asset_ids">
                 <option value="">-- Select fixed asset --</option>
-                {% for asset in fixed_assets if not asset.is_deleted %}
+                {% for asset in fixed_assets if asset.selectable %}
                 <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>
@@ -846,6 +864,40 @@
                 const row = button.closest(".linked-asset-row");
                 if (!row) return;
                 removeLinkedAssetRow(row);
+            });
+        }
+
+        const addLocationAssetsButton = document.getElementById("add-location-assets");
+        if (addLocationAssetsButton && template && grid) {
+            addLocationAssetsButton.addEventListener("click", function () {
+                // Every asset the new-row picker offers is at the session's location.
+                const templateSelect = template.content.querySelector('select[name="fixed_asset_ids"]');
+                if (!templateSelect) return;
+                const listed = new Set(
+                    Array.from(grid.querySelectorAll('select[name="fixed_asset_ids"]'))
+                        .map((select) => (select.value || "").trim())
+                        .filter(Boolean)
+                );
+                // Fill empty rows first, then add rows for the rest.
+                const emptySelects = Array.from(grid.querySelectorAll('select[name="fixed_asset_ids"]'))
+                    .filter((select) => !select.value);
+                Array.from(templateSelect.options).forEach((option) => {
+                    if (!option.value || listed.has(option.value)) return;
+                    let select = emptySelects.shift();
+                    if (!select) {
+                        const row = appendLinkedAssetRow();
+                        select = row ? row.querySelector('select[name="fixed_asset_ids"]') : null;
+                    }
+                    if (!select) return;
+                    select.value = option.value;
+                    const qtyInput = select.closest(".linked-asset-row").querySelector('input[name="fixed_asset_quantities"]');
+                    if (qtyInput) qtyInput.value = "0";
+                    listed.add(option.value);
+                });
+                toggleEmptyState();
+                updateDuplicateProtection();
+                updateTotals();
+                markDirty();
             });
         }
 

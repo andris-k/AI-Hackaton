@@ -15,27 +15,34 @@ def build_filters(
     *,
     name: str = "",
     category: str | list[str] = "",
+    location: str | list[str] = "",
     initial_value_from: str = "",
     initial_value_to: str = "",
     responsible_person: str = "",
     registration_date_from: str = "",
     registration_date_to: str = "",
 ) -> dict[str, Any]:
-    if isinstance(category, list):
-        category_values = [value.strip() for value in category if value.strip()]
-    else:
-        category_values = [value.strip() for value in category.split(",") if value.strip()]
+    category_values = _split_values(category)
+    location_values = _split_values(location)
 
     return {
         "name": name.strip(),
         "category": ",".join(category_values),
         "category_values": category_values,
+        "location": ",".join(location_values),
+        "location_values": location_values,
         "initial_value_from": initial_value_from.strip(),
         "initial_value_to": initial_value_to.strip(),
         "responsible_person": responsible_person.strip(),
         "registration_date_from": registration_date_from.strip(),
         "registration_date_to": registration_date_to.strip(),
     }
+
+
+def _split_values(value: str | list[str]) -> list[str]:
+    """A multi-value filter from a list (query string) or a comma-separated string."""
+    values = value if isinstance(value, list) else value.split(",")
+    return [item.strip() for item in values if item.strip()]
 
 
 def normalize_paging(page: int, page_size: int, total_items: int) -> tuple[int, int, int]:
@@ -114,10 +121,12 @@ def build_asset_form_data(
     initial_value: float,
     responsible_person: str,
     registration_date: str,
+    location_id: str = "",
 ) -> dict[str, str]:
     return {
         "name": name,
         "category_id": category_id,
+        "location_id": location_id,
         "quantity": str(quantity),
         "initial_value": str(initial_value),
         "responsible_person": responsible_person,
@@ -130,6 +139,18 @@ def validate_category_name(name: str) -> tuple[str, str | None]:
     if not normalized or len(normalized) > MAX_TEXT_LEN:
         return normalized, "Category name is required and must be 100 characters or less."
     return normalized, None
+
+
+def validate_location_name(name: str) -> tuple[str, str | None]:
+    normalized = name.strip()
+    if not normalized or len(normalized) > MAX_TEXT_LEN:
+        return normalized, "Location name is required and must be 100 characters or less."
+    return normalized, None
+
+
+def optional_id(value: str | None) -> str | None:
+    """A form's optional id field: blank means none."""
+    return (value or "").strip() or None
 
 
 def validate_image_upload(

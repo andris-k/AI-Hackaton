@@ -128,6 +128,7 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
     details = [
         ("Responsible person", str(inv_session["responsible_person"])),
         ("Date window", f"{inv_session['date_from']} to {inv_session['date_to']}"),
+        ("Location", str(inv_session["location"] or "All locations")),
         ("Status", str(inv_session["status"])),
         ("Created", by("created_at", "created_by_email")),
         ("Started", by("started_at", "started_by_email")),

@@ -333,7 +333,7 @@
                                             <span class="expected-qty" data-expected="0">0</span>
                                         </div>
                                         <div class="quantity-cell">
-                                            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
+                                            <input name="fixed_asset_quantities" type="number" min="0" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
                                         </div>
                                         <div class="difference-cell">
                                             <span class="diff-value diff-zero">0</span>
@@ -425,7 +425,7 @@
             <span class="expected-qty" data-expected="0">0</span>
         </div>
         <div class="quantity-cell">
-            <input name="fixed_asset_quantities" type="number" min="1" step="1" value="1" />
+            <input name="fixed_asset_quantities" type="number" min="0" step="1" value="1" />
         </div>
         <div class="difference-cell">
             <span class="diff-value diff-positive">+1</span>
@@ -471,7 +471,7 @@
         };
         const assetExpectedQtyById = {
             {% for asset in fixed_assets %}
-            "{{ asset.id }}": {{ asset.quantity }},
+            "{{ asset.id }}": {{ asset.expected_quantity }},
             {% endfor %}
         };
 
@@ -604,7 +604,7 @@
                 if (diff !== 0) {
                     discrepancyRows += 1;
                 }
-                if (!assetId || !quantity) return;
+                if (!assetId) return;
                 chosenAssetIds.add(assetId);
                 qtySum += quantity;
                 valueSum += rowValue;

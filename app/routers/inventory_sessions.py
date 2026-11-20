@@ -34,32 +34,34 @@ def _asset_options_for_session(session_id: str) -> list[dict[str, object]]:
 
     All fixed assets that are not deleted, plus deleted ones that are already
     linked to this session, so saving the form keeps those links intact.
+    Linked assets show the expected quantity saved for this session; the others
+    show their current quantity, which is what would be saved for them.
     """
-    options: list[dict[str, object]] = [
-        {
+    options: dict[str, dict[str, object]] = {
+        str(asset["id"]): {
             "id": str(asset["id"]),
             "name": str(asset["name"]),
             "category": str(asset["category"]),
-            "quantity": int(asset["quantity"]),
+            "expected_quantity": int(asset["quantity"]),
             "initial_value": float(asset["initial_value"]),
             "is_deleted": False,
         }
         for asset in assets_repo.list_assets()
-    ]
+    }
     for asset in repo.list_linked_assets(session_id):
-        if asset["deleted_at"] is None:
+        asset_id = str(asset["id"])
+        if asset_id in options:
+            options[asset_id]["expected_quantity"] = int(asset["expected_quantity"])
             continue
-        options.append(
-            {
-                "id": str(asset["id"]),
-                "name": str(asset["name"]),
-                "category": str(asset["category"]),
-                "quantity": int(asset["total_quantity"]),
-                "initial_value": float(asset["initial_value"]),
-                "is_deleted": True,
-            }
-        )
-    return options
+        options[asset_id] = {
+            "id": asset_id,
+            "name": str(asset["name"]),
+            "category": str(asset["category"]),
+            "expected_quantity": int(asset["expected_quantity"]),
+            "initial_value": float(asset["initial_value"]),
+            "is_deleted": True,
+        }
+    return list(options.values())
 
 
 def _render_edit_page(

@@ -196,17 +196,22 @@ def test_parse_linked_assets_rejects_non_numeric_quantity():
     assert error is not None
 
 
-def test_parse_linked_assets_rejects_zero_or_negative_quantity():
-    _, error_zero = parse_linked_assets(
+def test_parse_linked_assets_accepts_zero_quantity():
+    linked_assets, error = parse_linked_assets(
         fixed_asset_ids=["a1"],
         fixed_asset_quantities=["0"],
     )
-    _, error_negative = parse_linked_assets(
+    assert error is None
+    assert linked_assets == [("a1", 0)]
+
+
+def test_parse_linked_assets_rejects_negative_quantity():
+    linked_assets, error = parse_linked_assets(
         fixed_asset_ids=["a1"],
         fixed_asset_quantities=["-1"],
     )
-    assert error_zero is not None
-    assert error_negative is not None
+    assert linked_assets == []
+    assert error is not None
 
 
 def test_parse_linked_assets_rejects_missing_asset_with_quantity():

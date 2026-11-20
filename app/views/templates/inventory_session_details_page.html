@@ -92,21 +92,21 @@
                             <tr>
                                 <th>Asset</th>
                                 <th>Category</th>
-                                <th class="numeric-cell" title="Quantity registered on the fixed asset record">Total quantity</th>
-                                <th class="numeric-cell" title="Quantity recorded in this inventory session">Session quantity</th>
-                                <th class="numeric-cell" title="Session quantity minus total quantity">Difference</th>
+                                <th class="numeric-cell" title="Quantity on the fixed asset record when the session started">Expected</th>
+                                <th class="numeric-cell" title="Quantity counted in this inventory session">Counted</th>
+                                <th class="numeric-cell" title="Counted minus expected">Difference</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for asset in linked_assets %}
-                            {% set diff = (asset.quantity | int) - (asset.total_quantity | int) %}
+                            {% set diff = (asset.quantity | int) - (asset.expected_quantity | int) %}
                             <tr>
                                 <td>
                                     <a href="/fixed-assets/id/{{ asset.id }}">{{ asset.name }}</a>
                                     {% if asset.deleted_at %}<span class="badge badge-deleted" title="Deleted {{ asset.deleted_at }}">Deleted</span>{% endif %}
                                 </td>
                                 <td>{{ asset.category }}</td>
-                                <td class="numeric-cell">{{ asset.total_quantity }}</td>
+                                <td class="numeric-cell">{{ asset.expected_quantity }}</td>
                                 <td class="numeric-cell">{{ asset.quantity }}</td>
                                 <td class="numeric-cell">
                                     <span class="diff-value {% if diff > 0 %}diff-positive{% elif diff < 0 %}diff-negative{% else %}diff-zero{% endif %}">{% if diff > 0 %}+{% endif %}{{ diff }}</span>

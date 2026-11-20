@@ -121,8 +121,8 @@ def parse_linked_assets(
         except ValueError:
             return [], "Linked asset quantity must be a whole number."
 
-        if quantity <= 0:
-            return [], "Linked asset quantity must be greater than zero."
+        if quantity < 0:
+            return [], "Counted quantity cannot be negative. Enter 0 if the asset was not found."
 
         aggregated[asset_id] = aggregated.get(asset_id, 0) + quantity
 

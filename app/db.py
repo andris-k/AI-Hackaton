@@ -43,6 +43,20 @@ def db_session() -> sqlite3.Connection:
         connection.close()
 
 
+# `quantity` is the counted quantity; 0 means the asset was not found.
+# `expected_quantity` is the asset's quantity saved when the session starts;
+# it is NULL while the session is New.
+_SESSION_ASSET_LINK_COLUMNS = """
+    inventory_session_id TEXT NOT NULL,
+    fixed_asset_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 0),
+    expected_quantity INTEGER CHECK (expected_quantity >= 0),
+    PRIMARY KEY (inventory_session_id, fixed_asset_id),
+    FOREIGN KEY (inventory_session_id) REFERENCES inventory_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (fixed_asset_id) REFERENCES fixed_assets(id) ON DELETE CASCADE
+"""
+
+
 def initialize_database() -> None:
     with db_session() as connection:
         connection.execute(
@@ -222,27 +236,9 @@ def initialize_database() -> None:
             "CREATE INDEX IF NOT EXISTS idx_inventory_sessions_date_from ON inventory_sessions(date_from)"
         )
         connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS inventory_session_fixed_assets (
-                inventory_session_id TEXT NOT NULL,
-                fixed_asset_id TEXT NOT NULL,
-                quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
-                PRIMARY KEY (inventory_session_id, fixed_asset_id),
-                FOREIGN KEY (inventory_session_id) REFERENCES inventory_sessions(id) ON DELETE CASCADE,
-                FOREIGN KEY (fixed_asset_id) REFERENCES fixed_assets(id) ON DELETE CASCADE
-            )
-            """
+            f"CREATE TABLE IF NOT EXISTS inventory_session_fixed_assets ({_SESSION_ASSET_LINK_COLUMNS})"
         )
-        link_columns = {
-            row["name"]
-            for row in connection.execute(
-                "PRAGMA table_info(inventory_session_fixed_assets)"
-            ).fetchall()
-        }
-        if "quantity" not in link_columns:
-            connection.execute(
-                "ALTER TABLE inventory_session_fixed_assets ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1"
-            )
+        _migrate_inventory_session_fixed_assets_for_counts(connection)
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_inventory_session_fixed_assets_session_id ON inventory_session_fixed_assets(inventory_session_id)"
         )
@@ -324,6 +320,49 @@ def _migrate_fixed_asset_categories_for_soft_delete(connection: sqlite3.Connecti
         raise
     finally:
         connection.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_inventory_session_fixed_assets_for_counts(connection: sqlite3.Connection) -> None:
+    """Add ``expected_quantity`` and allow a counted ``quantity`` of 0.
+
+    Older databases required ``quantity > 0``, which SQLite cannot change in
+    place, so the table is rebuilt. Links in sessions that were already started
+    get the asset's current quantity as their expected quantity. The quantity at
+    the time they started is not known, but this stops later edits to the asset
+    from changing their results.
+    """
+    columns = {
+        row["name"]
+        for row in connection.execute(
+            "PRAGMA table_info(inventory_session_fixed_assets)"
+        ).fetchall()
+    }
+    if "expected_quantity" in columns:
+        return
+
+    quantity_source = "links.quantity" if "quantity" in columns else "1"
+    connection.execute(
+        f"CREATE TABLE inventory_session_fixed_assets_new ({_SESSION_ASSET_LINK_COLUMNS})"
+    )
+    connection.execute(
+        f"""
+        INSERT INTO inventory_session_fixed_assets_new (
+            inventory_session_id, fixed_asset_id, quantity, expected_quantity
+        )
+        SELECT
+            links.inventory_session_id,
+            links.fixed_asset_id,
+            {quantity_source},
+            CASE WHEN inventory_sessions.status = 'New' THEN NULL ELSE fixed_assets.quantity END
+        FROM inventory_session_fixed_assets AS links
+        LEFT JOIN inventory_sessions ON inventory_sessions.id = links.inventory_session_id
+        LEFT JOIN fixed_assets ON fixed_assets.id = links.fixed_asset_id
+        """
+    )
+    connection.execute("DROP TABLE inventory_session_fixed_assets")
+    connection.execute(
+        "ALTER TABLE inventory_session_fixed_assets_new RENAME TO inventory_session_fixed_assets"
+    )
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -965,14 +1004,22 @@ def _set_inventory_session_fixed_assets(
     connection: sqlite3.Connection,
     session_id: str,
     linked_assets: Sequence[tuple[str, int]],
+    *,
+    save_expected: bool,
 ) -> None:
+    """Replace the session's links with ``linked_assets`` (asset id, counted quantity).
+
+    With ``save_expected`` (any status but New), each link keeps the expected
+    quantity it already had; a link without one gets the asset's current
+    quantity. Otherwise expected quantities are cleared.
+    """
     normalized_assets: list[tuple[str, int]] = []
     aggregated_quantities: dict[str, int] = {}
     for fixed_asset_id, quantity in linked_assets:
         asset_id = fixed_asset_id.strip()
         if not asset_id:
             continue
-        if quantity <= 0:
+        if quantity < 0:
             continue
         aggregated_quantities[asset_id] = aggregated_quantities.get(asset_id, 0) + quantity
 
@@ -1006,6 +1053,17 @@ def _set_inventory_session_fixed_assets(
             if asset_id in valid_ids
         ]
 
+    previous_expected: dict[str, int | None] = {
+        str(row["fixed_asset_id"]): row["expected_quantity"]
+        for row in connection.execute(
+            """
+            SELECT fixed_asset_id, expected_quantity
+            FROM inventory_session_fixed_assets
+            WHERE inventory_session_id = ?
+            """,
+            (session_id,),
+        ).fetchall()
+    }
     connection.execute(
         "DELETE FROM inventory_session_fixed_assets WHERE inventory_session_id = ?",
         (session_id,),
@@ -1014,16 +1072,30 @@ def _set_inventory_session_fixed_assets(
         return
 
     rows = [
-        (session_id, asset_id, quantity)
+        (session_id, asset_id, quantity, previous_expected.get(asset_id) if save_expected else None)
         for asset_id, quantity in valid_assets
     ]
     connection.executemany(
         """
-        INSERT INTO inventory_session_fixed_assets (inventory_session_id, fixed_asset_id, quantity)
-        VALUES (?, ?, ?)
+        INSERT INTO inventory_session_fixed_assets (
+            inventory_session_id, fixed_asset_id, quantity, expected_quantity
+        )
+        VALUES (?, ?, ?, ?)
         """,
         rows,
     )
+    if save_expected:
+        connection.execute(
+            """
+            UPDATE inventory_session_fixed_assets
+            SET expected_quantity = (
+                SELECT fixed_assets.quantity FROM fixed_assets
+                WHERE fixed_assets.id = inventory_session_fixed_assets.fixed_asset_id
+            )
+            WHERE inventory_session_id = ? AND expected_quantity IS NULL
+            """,
+            (session_id,),
+        )
 
 
 def list_inventory_sessions(
@@ -1181,7 +1253,10 @@ def list_fixed_assets_for_inventory_session(session_id: str) -> list[sqlite3.Row
                 fixed_assets.responsible_person,
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
-                fixed_assets.quantity AS total_quantity,
+                COALESCE(
+                    inventory_session_fixed_assets.expected_quantity,
+                    fixed_assets.quantity
+                ) AS expected_quantity,
                 fixed_assets.deleted_at,
                 inventory_session_fixed_assets.quantity
             FROM inventory_session_fixed_assets
@@ -1267,7 +1342,7 @@ def create_inventory_session(
                 created_by_user_id,
             ),
         )
-        _set_inventory_session_fixed_assets(connection, session_id, linked_assets)
+        _set_inventory_session_fixed_assets(connection, session_id, linked_assets, save_expected=False)
         cursor = connection.execute(
             """
             SELECT
@@ -1397,7 +1472,7 @@ def update_inventory_session(
                 session_id,
             ),
         )
-        _set_inventory_session_fixed_assets(connection, session_id, linked_assets)
+        _set_inventory_session_fixed_assets(connection, session_id, linked_assets, save_expected=status != "New")
         cursor = connection.execute(
             """
             SELECT

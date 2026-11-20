@@ -12,6 +12,7 @@ AREAS: dict[str, str] = {
     "auth": "Accounts",
     "asset": "Fixed assets",
     "category": "Categories",
+    "location": "Locations",
     "inventory_session": "Inventory sessions",
 }
 
@@ -29,6 +30,9 @@ EVENT_LABELS: dict[str, str] = {
     "category.created": "Category created",
     "category.renamed": "Category renamed",
     "category.deleted": "Category deleted",
+    "location.created": "Location created",
+    "location.renamed": "Location renamed",
+    "location.deleted": "Location deleted",
     "inventory_session.created": "Session created",
     "inventory_session.updated": "Session saved",
     "inventory_session.started": "Session started",
@@ -39,9 +43,9 @@ EVENT_LABELS: dict[str, str] = {
     "inventory_session.report_downloaded": "PDF report downloaded",
 }
 
-_DANGER = {"auth.login_failed", "asset.deleted", "category.deleted", "inventory_session.cancelled",
+_DANGER = {"auth.login_failed", "asset.deleted", "category.deleted", "location.deleted", "inventory_session.cancelled",
            "inventory_session.deleted"}
-_SUCCESS = {"asset.created", "category.created", "inventory_session.created", "inventory_session.completed",
+_SUCCESS = {"asset.created", "category.created", "location.created", "inventory_session.created", "inventory_session.completed",
             "auth.registered"}
 _WARNING = {"inventory_session.reopened", "auth.password_reset_requested", "auth.password_reset_completed"}
 
@@ -61,7 +65,7 @@ _FIELD_LABELS = {
     "date_to": "Date to",
 }
 # Shown elsewhere in the row (as the item or link), so left out of the details column.
-_HIDDEN_FIELDS = {"asset_id", "category_id", "session_id", "user_id", "name"}
+_HIDDEN_FIELDS = {"asset_id", "category_id", "location_id", "session_id", "user_id", "name"}
 
 
 def is_admin(email: str | None) -> bool:
@@ -148,6 +152,9 @@ def _item(row: Any, fields: dict[str, Any], labels: dict[str, str]) -> tuple[str
     if entity_type == "category":
         name = fields.get("name") or (fields.get("changes", {}).get("name") or [None, None])[-1]
         return name or f"Category {entity_id[:8]}", None if deleted else f"/fixed-asset-categories/{entity_id}/edit"
+    if entity_type == "location":
+        name = fields.get("name") or (fields.get("changes", {}).get("name") or [None, None])[-1]
+        return name or f"Location {entity_id[:8]}", None if deleted else f"/locations/{entity_id}/edit"
     if entity_type == "inventory_session":
         label = labels.get(entity_id)
         if label is None and fields.get("date_from"):

@@ -18,6 +18,7 @@ from app.routers.auth import router as auth_router  # noqa: E402
 from app.routers.categories import router as categories_router
 from app.routers.fixed_assets import router as fixed_assets_router
 from app.routers.inventory_sessions import router as inventory_sessions_router
+from app.routers.locations import router as locations_router
 from app.repositories import audit_repository  # noqa: E402
 from app.services import auth_service
 
@@ -126,6 +127,7 @@ def favicon() -> FileResponse:
 app.include_router(auth_router)
 app.include_router(fixed_assets_router)
 app.include_router(categories_router)
+app.include_router(locations_router)
 app.include_router(inventory_sessions_router)
 app.include_router(audit_router)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")

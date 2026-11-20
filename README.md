@@ -10,6 +10,7 @@ The project now uses a modular monolith layering:
 * `app/routers/auth.py` - auth, dashboard, and users HTTP routes
 * `app/routers/fixed_assets.py` - fixed asset HTTP routes
 * `app/routers/categories.py` - fixed asset category HTTP routes
+* `app/routers/locations.py` - location HTTP routes (`/locations`)
 * `app/views/pages.py` - server-rendered HTML page helpers
 * `app/views/templates/` - Jinja2 templates for auth, users, fixed assets, and category pages
 * `app/static/app.css` - shared stylesheet (sidebar layout, design tokens, tables, forms), served at `/static/app.css`
@@ -17,6 +18,7 @@ The project now uses a modular monolith layering:
 * `app/services/fixed_assets_service.py` - fixed asset business rules (validation, filters, pagination normalization)
 * `app/repositories/auth_repository.py` - auth/session data access abstraction
 * `app/repositories/fixed_assets_repository.py` - fixed asset and category data access abstraction
+* `app/repositories/locations_repository.py` - location data access abstraction
 * `app/db.py` - SQLite schema management and lower-level DB operations
 * `app/config.py` - environment-based settings (production mode, storage paths, admin account, email)
 * `app/services/email_service.py` - sends password reset emails over SMTP
@@ -115,6 +117,8 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/fixed-assets/id/{fixed_asset_id}/edit` - fixed asset edit page
 * `/fixed-asset-categories` - fixed asset category management page
 * `/fixed-asset-categories/{category_id}/edit` - fixed asset category edit page
+* `/locations` - location management page
+* `/locations/{location_id}/edit` - location edit page
 * `/logout` - clear the active session
 
 Fixed assets page supports paging query parameters:
@@ -126,6 +130,7 @@ Fixed assets page also supports filtering by:
 
 * `name`
 * `category`
+* `location` (location names; `(none)` matches assets without a location)
 * `initial_value`
 * `responsible_person`
 * `registration_date_from`
@@ -143,6 +148,7 @@ The app creates `app.db` automatically on startup and stores:
 * password reset tokens
 * fixed assets
 * fixed asset categories
+* locations
 * inventory sessions and the assets linked to them
 * audit events
 

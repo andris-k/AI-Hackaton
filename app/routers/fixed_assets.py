@@ -23,7 +23,7 @@ from app.views.pages import (
 
 router = APIRouter()
 _AUDITED_ASSET_FIELDS = (
-    "name", "category", "quantity", "initial_value", "responsible_person", "registration_date",
+    "name", "category", "location", "quantity", "initial_value", "responsible_person", "registration_date",
 )
 _UPLOADS_ROOT = config.uploads_dir()
 _FIXED_ASSET_UPLOAD_DIR = _UPLOADS_ROOT / "fixed-assets"
@@ -64,6 +64,11 @@ def _delete_uploaded_image(image_path: str | None) -> None:
         target_path.unlink()
 
 
+def _missing_reference(error: ValueError) -> str:
+    """'location' or 'category', from the repository's "... not found." error."""
+    return "location" if str(error).startswith("Location") else "category"
+
+
 def _render_deleted_asset_not_editable(current_email: str, fixed_asset_id: str) -> HTMLResponse:
     return render_page(
         "AI Hackaton Edit Fixed Asset",
@@ -85,6 +90,7 @@ def fixed_assets_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: list[str] = Query(default=[]),
+    location: list[str] = Query(default=[]),
     initial_value_from: str = Query(default=""),
     initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
@@ -98,6 +104,7 @@ def fixed_assets_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
+        location=location,
         initial_value_from=initial_value_from,
         initial_value_to=initial_value_to,
         responsible_person=responsible_person,
@@ -157,6 +164,7 @@ def fixed_asset_details_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: str = Query(default=""),
+    location: str = Query(default=""),
     initial_value_from: str = Query(default=""),
     initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
@@ -183,6 +191,7 @@ def fixed_asset_details_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
+        location=location,
         initial_value_from=initial_value_from,
         initial_value_to=initial_value_to,
         responsible_person=responsible_person,
@@ -206,6 +215,7 @@ def edit_fixed_asset_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: str = Query(default=""),
+    location: str = Query(default=""),
     initial_value_from: str = Query(default=""),
     initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
@@ -246,6 +256,7 @@ def edit_fixed_asset_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
+        location=location,
         initial_value_from=initial_value_from,
         initial_value_to=initial_value_to,
         responsible_person=responsible_person,
@@ -271,11 +282,13 @@ def edit_fixed_asset_route(
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
+    location_id: str = Form(default=""),
     image: UploadFile | None = File(default=None),
     page: int = Form(default=1),
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
     category_filter: str = Form(default=""),
+    location_filter: str = Form(default=""),
     initial_value_from_filter: str = Form(default=""),
     initial_value_to_filter: str = Form(default=""),
     responsible_person_filter: str = Form(default=""),
@@ -316,6 +329,7 @@ def edit_fixed_asset_route(
     filters = assets_service.build_filters(
         name=name_filter,
         category=category_filter,
+        location=location_filter,
         initial_value_from=initial_value_from_filter,
         initial_value_to=initial_value_to_filter,
         responsible_person=responsible_person_filter,
@@ -371,8 +385,9 @@ def edit_fixed_asset_route(
             responsible_person=responsible_person.strip(),
             registration_date=registration_date,
             image_path=image_path_to_save,
+            location_id=assets_service.optional_id(location_id),
         )
-    except ValueError:
+    except ValueError as error:
         if new_image_path:
             _delete_uploaded_image(new_image_path)
         return render_edit_fixed_asset_page(
@@ -381,7 +396,7 @@ def edit_fixed_asset_route(
             page=safe_page,
             page_size=safe_page_size,
             filters=filters,
-            message="Selected category does not exist.",
+            message=f"Selected {_missing_reference(error)} does not exist.",
             message_kind="error",
         )
     if updated is None:
@@ -427,6 +442,7 @@ def add_fixed_asset_page(
     page_size: int = Query(default=20, ge=1, le=100),
     name: str = Query(default=""),
     category: str = Query(default=""),
+    location: str = Query(default=""),
     initial_value_from: str = Query(default=""),
     initial_value_to: str = Query(default=""),
     responsible_person: str = Query(default=""),
@@ -440,6 +456,7 @@ def add_fixed_asset_page(
     filters = assets_service.build_filters(
         name=name,
         category=category,
+        location=location,
         initial_value_from=initial_value_from,
         initial_value_to=initial_value_to,
         responsible_person=responsible_person,
@@ -477,11 +494,13 @@ def create_fixed_asset_route(
     initial_value: float = Form(...),
     responsible_person: str = Form(...),
     registration_date: str = Form(...),
+    location_id: str = Form(default=""),
     image: UploadFile | None = File(default=None),
     page: int = Form(default=1),
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
     category_filter: str = Form(default=""),
+    location_filter: str = Form(default=""),
     initial_value_from_filter: str = Form(default=""),
     initial_value_to_filter: str = Form(default=""),
     responsible_person_filter: str = Form(default=""),
@@ -495,6 +514,7 @@ def create_fixed_asset_route(
     filters = assets_service.build_filters(
         name=name_filter,
         category=category_filter,
+        location=location_filter,
         initial_value_from=initial_value_from_filter,
         initial_value_to=initial_value_to_filter,
         responsible_person=responsible_person_filter,
@@ -526,6 +546,7 @@ def create_fixed_asset_route(
                 initial_value=initial_value,
                 responsible_person=responsible_person,
                 registration_date=registration_date,
+                location_id=location_id,
             ),
             filters=filters,
             message=form_error,
@@ -548,6 +569,7 @@ def create_fixed_asset_route(
                     initial_value=initial_value,
                     responsible_person=responsible_person,
                     registration_date=registration_date,
+                    location_id=location_id,
                 ),
                 filters=filters,
                 message=image_error,
@@ -563,8 +585,9 @@ def create_fixed_asset_route(
             responsible_person=responsible_person.strip(),
             registration_date=registration_date,
             image_path=uploaded_image_path,
+            location_id=assets_service.optional_id(location_id),
         )
-    except ValueError:
+    except ValueError as error:
         if uploaded_image_path:
             _delete_uploaded_image(uploaded_image_path)
         return render_add_fixed_asset_page(
@@ -579,9 +602,10 @@ def create_fixed_asset_route(
                 initial_value=initial_value,
                 responsible_person=responsible_person,
                 registration_date=registration_date,
+                location_id=location_id,
             ),
             filters=filters,
-            message="Selected category does not exist.",
+            message=f"Selected {_missing_reference(error)} does not exist.",
             message_kind="error",
         )
     audit(
@@ -589,6 +613,7 @@ def create_fixed_asset_route(
         asset_id=created["id"],
         name=created["name"],
         category=created["category"],
+        location=created["location"],
         quantity=created["quantity"],
         initial_value=created["initial_value"],
         responsible_person=created["responsible_person"],
@@ -617,6 +642,7 @@ def delete_fixed_asset_route(
     page_size: int = Form(default=20),
     name_filter: str = Form(default=""),
     category_filter: str = Form(default=""),
+    location_filter: str = Form(default=""),
     initial_value_from_filter: str = Form(default=""),
     initial_value_to_filter: str = Form(default=""),
     responsible_person_filter: str = Form(default=""),
@@ -630,6 +656,7 @@ def delete_fixed_asset_route(
     filters = assets_service.build_filters(
         name=name_filter,
         category=category_filter,
+        location=location_filter,
         initial_value_from=initial_value_from_filter,
         initial_value_to=initial_value_to_filter,
         responsible_person=responsible_person_filter,

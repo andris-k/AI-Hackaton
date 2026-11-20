@@ -1,0 +1,57 @@
+<div class="stack">
+    <section class="panel">
+        <div class="page-header">
+            <div>
+                <h2>Locations</h2>
+                <p class="page-context">Where assets are kept: rooms, buildings or sites. An inventory session can cover one location.</p>
+            </div>
+            <div class="page-actions">
+                <a href="/fixed-assets">← Fixed assets</a>
+            </div>
+        </div>
+
+        <section class="section-card">
+            <h3>Add location</h3>
+            <form method="post" action="/locations" class="users-filter-row">
+                <div>
+                    <label for="location_name">Location name</label>
+                    <input id="location_name" name="name" type="text" maxlength="100" required />
+                </div>
+                <button type="submit">Create location</button>
+            </form>
+        </section>
+
+        <section class="section-card">
+            <h3>Existing locations <span class="filter-count">{{ locations | length }}</span></h3>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Location name</th>
+                            <th class="numeric-cell" style="width: 120px;">Assets</th>
+                            <th class="numeric-cell" style="width: 120px;">Sessions</th>
+                            <th class="action-cell" style="width: 160px;"><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for location in locations %}
+                        <tr>
+                            <td><strong>{{ location.name }}</strong></td>
+                            <td class="numeric-cell"><a href="{{ location.assets_href }}">{{ location.assets_count }}</a></td>
+                            <td class="numeric-cell">{{ location.sessions_count }}</td>
+                            <td class="action-cell">
+                                <a href="/locations/{{ location.id }}/edit">Edit</a>
+                                <form method="post" action="/locations/{{ location.id }}/delete" onsubmit="return confirm('Delete this location?');">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" style="padding: 28px 12px; text-align: center; color: var(--muted);">No locations yet. Add the first one above.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+</div>

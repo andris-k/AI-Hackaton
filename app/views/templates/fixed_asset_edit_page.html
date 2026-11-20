@@ -17,6 +17,7 @@
             <input type="hidden" name="page_size" value="{{ page_size }}" />
             <input type="hidden" name="name_filter" value="{{ filters.name }}" />
             <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+            <input type="hidden" name="location_filter" value="{{ filters.location }}" />
             <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
             <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
             <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />
@@ -34,6 +35,18 @@
                         <option value="{{ category.id }}" {% if category.id == selected_category_id %}selected{% endif %}>{{ category.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+            </div>
+            <div class="asset-form-row">
+                <div>
+                    <label for="location_id">Location (optional)</label>
+                    <select id="location_id" name="location_id">
+                        <option value="">No location</option>
+                        {% for location in locations %}
+                        <option value="{{ location.id }}" {% if location.id == selected_location_id %}selected{% endif %}>{{ location.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if not locations %}<p style="margin: 5px 0 0; color: var(--muted); font-size: 0.8rem;">No locations yet. <a href="/locations">Add locations</a></p>{% endif %}
                 </div>
             </div>
             <div class="asset-form-row">
@@ -82,6 +95,7 @@
                 <input type="hidden" name="page_size" value="{{ page_size }}" />
                 <input type="hidden" name="name_filter" value="{{ filters.name }}" />
                 <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+                <input type="hidden" name="location_filter" value="{{ filters.location }}" />
                 <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
                 <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
                 <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />

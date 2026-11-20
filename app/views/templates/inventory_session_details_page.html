@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2>Inventory session</h2>
-                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}</p>
+                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}{% if inv_session.location %} · {{ inv_session.location }}{% endif %}</p>
             </div>
             <div class="page-actions">
                 <a href="/inventory-sessions">← Back to sessions</a>
@@ -47,6 +47,9 @@
             <section class="detail-card">
                 <h3>Session history</h3>
                 <dl class="detail-grid">
+                    <dt>Location</dt>
+                    <dd>{{ inv_session.location or "All locations" }}</dd>
+
                     <dt>Created</dt>
                     <dd>{{ inv_session.created_at or '-' }} {% if inv_session.created_by_email %}by {{ inv_session.created_by_email }}{% endif %}</dd>
 

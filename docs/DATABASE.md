@@ -19,6 +19,8 @@ erDiagram
     users ||--o{ password_reset_tokens : "requests"
     users |o--o{ inventory_sessions : "created / started / completed / cancelled / last edited by"
     fixed_asset_categories ||--o{ fixed_assets : "classifies"
+    locations |o--o{ fixed_assets : "holds"
+    locations |o--o{ inventory_sessions : "covered by"
     inventory_sessions ||--o{ inventory_session_fixed_assets : "includes"
     fixed_assets ||--o{ inventory_session_fixed_assets : "counted in"
 
@@ -59,6 +61,12 @@ erDiagram
         TEXT registration_date
         TEXT image_path
         TEXT deleted_at
+        TEXT location_id FK
+    }
+    locations {
+        TEXT id PK "UUID"
+        TEXT name
+        TEXT deleted_at
     }
     inventory_sessions {
         TEXT id PK "UUID"
@@ -67,6 +75,7 @@ erDiagram
         TEXT status
         TEXT responsible_person
         TEXT notes
+        TEXT location_id FK
     }
     inventory_session_fixed_assets {
         TEXT inventory_session_id PK, FK
@@ -152,8 +161,23 @@ Category names are unique among categories that are not deleted, ignoring case. 
 | `registration_date` | TEXT | `YYYY-MM-DD` |
 | `image_path` | TEXT | Relative to the uploads folder, e.g. `fixed-assets/<uuid>.jpg`. Optional |
 | `deleted_at` | TEXT | Set on logical delete, otherwise `NULL`. Indexed |
+| `location_id` | TEXT | → `locations.id`. Optional. Indexed |
 
 The `category` column comes from an older version of the schema, where categories were free text. It is still filled on insert and update, and it is updated when a category is renamed. Queries read `COALESCE(fixed_asset_categories.name, fixed_assets.category)`, so the linked category's name wins.
+
+### `locations`
+
+Where assets are kept, such as a room, building or site. Managed on the Locations page (`/locations`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `name` | TEXT | Required, max 100 characters |
+| `deleted_at` | TEXT | Set on logical delete, otherwise `NULL` |
+
+Like categories, names are unique among locations that are not deleted, ignoring case (`ux_locations_active_name` on `lower(name) WHERE deleted_at IS NULL`). Unlike categories, a location is optional on an asset.
+
+The fixed assets list can be filtered by location names. The filter value `(none)` (`NO_LOCATION_FILTER` in `app/db.py`) matches assets without a location.
 
 ### `inventory_sessions`
 
@@ -170,6 +194,9 @@ A stocktake over a date range, with the assets to be counted.
 | `started_at`, `completed_at`, `cancelled_at` | TEXT | Set on the first move into that status |
 | `created_at`, `updated_at`, `last_edited_at` | TEXT | ISO 8601 UTC |
 | `created_by_user_id`, `started_by_user_id`, `completed_by_user_id`, `cancelled_by_user_id`, `last_edited_by_user_id` | INTEGER | → `users.id`, nullable |
+| `location_id` | TEXT | → `locations.id`. Optional: `NULL` means the session covers all locations |
+
+When a session has a location, the edit page only offers assets at that location, and can add all of them at once with a count of 0. Assets already linked from elsewhere stay linked. `update_inventory_session` keeps the current location unless `location_id` is passed.
 
 How status changes affect the timestamps (`update_inventory_session` in `app/db.py`):
 
@@ -211,7 +238,7 @@ Who did what. Written through `audit()` in `app/logging_config.py`. See [Logging
 | `created_at` | TEXT | ISO 8601 UTC, seconds precision. Indexed |
 | `event` | TEXT | E.g. `asset.deleted`, `auth.login_failed`. Indexed |
 | `actor` | TEXT | Email of the user, if any. Indexed |
-| `entity_type` | TEXT | `asset`, `category`, `inventory_session` or `user`, taken from the event prefix |
+| `entity_type` | TEXT | `asset`, `category`, `location`, `inventory_session` or `user`, taken from the event prefix |
 | `entity_id` | TEXT | ID of the affected record. Indexed together with `entity_type` |
 | `request_id` | TEXT | Matches the `X-Request-ID` header and the request's log lines |
 | `details` | TEXT | JSON object with the event's fields. Defaults to `{}` |
@@ -220,18 +247,18 @@ When `AUDIT_RETENTION_DAYS` is set, events older than that are deleted at startu
 
 ## Logical deletion
 
-Fixed assets and categories are never removed from the table. Deleting one sets `deleted_at` to the current UTC time. This keeps inventory sessions and their reports complete after an asset or category is deleted.
+Fixed assets, categories and locations are never removed from the table. Deleting one sets `deleted_at` to the current UTC time. This keeps inventory sessions and their reports complete after an asset, category or location is deleted.
 
 * Lists, counts, reports, filters and pickers only show rows where `deleted_at IS NULL`.
 * `get_fixed_asset_by_id` also returns deleted assets, so inventory session pages can still show them. `get_fixed_asset_category_by_id` does not.
-* A category cannot be deleted while assets that are not deleted still use it.
-* A deleted asset cannot be edited, and a deleted category cannot be assigned to an asset.
+* A category or location cannot be deleted while assets that are not deleted still use it.
+* A deleted asset cannot be edited, and a deleted category or location cannot be assigned to an asset or a new session. A session keeps a location that is deleted later.
 
 Users and inventory sessions are deleted for real.
 
 ## Conventions
 
-* **IDs.** Domain records (categories, assets, inventory sessions) use UUID strings. Auth tables and `audit_events` use integer auto-increment IDs.
+* **IDs.** Domain records (categories, locations, assets, inventory sessions) use UUID strings. Auth tables and `audit_events` use integer auto-increment IDs.
 * **Dates and times.** Stored as text. Dates are `YYYY-MM-DD`. Timestamps written by the app are ISO 8601 in UTC, e.g. `2026-11-20T09:15:00.123456+00:00`. Columns that default to `CURRENT_TIMESTAMP` use SQLite's format instead (`2026-11-20 09:15:00`, also UTC).
 * **Foreign keys.** Turned on for every connection (`PRAGMA foreign_keys = ON`).
 * **Transactions.** Every `app/db.py` function opens its own connection with `db_session()`, which commits on success, rolls back on error and closes the connection.
@@ -242,7 +269,7 @@ Users and inventory sessions are deleted for real.
 There is no migration tool. On startup, `auth_service.initialize_defaults()` runs:
 
 1. `initialize_database()` (`app/db.py`). Creates missing tables and indexes with `CREATE ... IF NOT EXISTS`, then brings older databases up to date:
-   * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`; the audit and reason columns of `inventory_sessions`;
+   * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`, `location_id`; the audit, reason and `location_id` columns of `inventory_sessions`;
    * rebuilds `inventory_session_fixed_assets` to add `expected_quantity` and allow a quantity of 0 (`_migrate_inventory_session_fixed_assets_for_counts`). Links in sessions that were already started get the asset's quantity at the time of the migration as their expected quantity, because the quantity when they started was never stored;
    * fills empty `created_at`, `updated_at` and `last_edited_at` on inventory sessions;
    * rebuilds `fixed_asset_categories` without its old `UNIQUE(name)` constraint, which SQLite cannot drop in place (`_migrate_fixed_asset_categories_for_soft_delete`);
@@ -250,7 +277,7 @@ There is no migration tool. On startup, `auth_service.initialize_defaults()` run
 2. `initialize_audit_storage()`. Creates `audit_events` and its indexes.
 3. `ensure_default_user()`. Creates the demo or bootstrap admin account. See [Running in production](../README.md#running-in-production).
 
-All steps can run any number of times. To change the schema, update the `CREATE TABLE` statement for new databases and add a matching step for existing ones, as above. `tests/unit/test_soft_delete.py` shows how to test a migration against a database in the old format.
+All steps can run any number of times. To change the schema, update the `CREATE TABLE` statement for new databases and add a matching step for existing ones, as above. `tests/unit/test_soft_delete.py` and `tests/unit/test_locations.py` show how to test a migration against a database in the old format.
 
 ## Working with the database
 

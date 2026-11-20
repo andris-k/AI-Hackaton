@@ -124,6 +124,24 @@ def initialize_database() -> None:
         )
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS locations (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL CHECK (length(name) <= 100),
+                deleted_at TEXT
+            )
+            """
+        )
+        # Like categories, names are unique (ignoring case) among locations that
+        # are not deleted.
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_locations_active_name
+            ON locations(lower(name))
+            WHERE deleted_at IS NULL
+            """
+        )
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS fixed_assets (
                 id TEXT PRIMARY KEY,
                 category_id TEXT NOT NULL,
@@ -135,6 +153,7 @@ def initialize_database() -> None:
                 registration_date TEXT NOT NULL,
                 image_path TEXT,
                 deleted_at TEXT,
+                location_id TEXT REFERENCES locations(id),
                 FOREIGN KEY (category_id) REFERENCES fixed_asset_categories(id)
             )
             """
@@ -157,12 +176,19 @@ def initialize_database() -> None:
             connection.execute("ALTER TABLE fixed_assets ADD COLUMN image_path TEXT")
         if "deleted_at" not in columns:
             connection.execute("ALTER TABLE fixed_assets ADD COLUMN deleted_at TEXT")
+        if "location_id" not in columns:
+            connection.execute(
+                "ALTER TABLE fixed_assets ADD COLUMN location_id TEXT REFERENCES locations(id)"
+            )
 
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_fixed_assets_category_id ON fixed_assets(category_id)"
         )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_fixed_assets_deleted_at ON fixed_assets(deleted_at)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fixed_assets_location_id ON fixed_assets(location_id)"
         )
 
         connection.execute(
@@ -187,6 +213,7 @@ def initialize_database() -> None:
                 completed_by_user_id INTEGER,
                 cancelled_by_user_id INTEGER,
                 last_edited_by_user_id INTEGER,
+                location_id TEXT REFERENCES locations(id),
                 FOREIGN KEY (created_by_user_id) REFERENCES users(id),
                 FOREIGN KEY (started_by_user_id) REFERENCES users(id),
                 FOREIGN KEY (completed_by_user_id) REFERENCES users(id),
@@ -214,6 +241,7 @@ def initialize_database() -> None:
             "completed_by_user_id": "INTEGER",
             "cancelled_by_user_id": "INTEGER",
             "last_edited_by_user_id": "INTEGER",
+            "location_id": "TEXT REFERENCES locations(id)",
         }
         for column_name, column_type in migration_columns.items():
             if column_name in inventory_session_columns:
@@ -695,6 +723,135 @@ def delete_fixed_asset_category(category_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+# ---------------------------------------------------------------------------
+# Locations
+# ---------------------------------------------------------------------------
+
+_LOCATION_NAME_EXISTS = "Location name already exists."
+
+
+def _active_location_name_taken(
+    connection: sqlite3.Connection, name: str, exclude_id: str | None = None
+) -> bool:
+    return connection.execute(
+        """
+        SELECT 1 FROM locations
+        WHERE lower(name) = lower(?) AND deleted_at IS NULL AND id IS NOT ?
+        """,
+        (name, exclude_id),
+    ).fetchone() is not None
+
+
+def list_locations() -> list[sqlite3.Row]:
+    with db_session() as connection:
+        return connection.execute(
+            "SELECT id, name FROM locations WHERE deleted_at IS NULL ORDER BY name ASC"
+        ).fetchall()
+
+
+def list_locations_with_usage() -> list[sqlite3.Row]:
+    with db_session() as connection:
+        return connection.execute(
+            """
+            SELECT
+                locations.id,
+                locations.name,
+                (
+                    SELECT COUNT(1) FROM fixed_assets
+                    WHERE fixed_assets.location_id = locations.id
+                      AND fixed_assets.deleted_at IS NULL
+                ) AS assets_count,
+                (
+                    SELECT COUNT(1) FROM inventory_sessions
+                    WHERE inventory_sessions.location_id = locations.id
+                ) AS sessions_count
+            FROM locations
+            WHERE locations.deleted_at IS NULL
+            ORDER BY locations.name ASC
+            """
+        ).fetchall()
+
+
+def get_location_by_id(location_id: str) -> sqlite3.Row | None:
+    with db_session() as connection:
+        return connection.execute(
+            "SELECT id, name FROM locations WHERE id = ? AND deleted_at IS NULL",
+            (location_id,),
+        ).fetchone()
+
+
+def create_location(name: str) -> sqlite3.Row:
+    """Create a location. Raises ValueError if the name is already used."""
+    normalized_name = name.strip()
+    location_id = str(uuid.uuid4())
+    with db_session() as connection:
+        if _active_location_name_taken(connection, normalized_name):
+            raise ValueError(_LOCATION_NAME_EXISTS)
+        connection.execute(
+            "INSERT INTO locations (id, name) VALUES (?, ?)",
+            (location_id, normalized_name),
+        )
+        return connection.execute(
+            "SELECT id, name FROM locations WHERE id = ?",
+            (location_id,),
+        ).fetchone()
+
+
+def update_location(location_id: str, name: str) -> sqlite3.Row | None:
+    """Rename a location. Returns None if it does not exist; raises ValueError
+    if another location already uses the name."""
+    normalized_name = name.strip()
+    with db_session() as connection:
+        existing = connection.execute(
+            "SELECT id FROM locations WHERE id = ? AND deleted_at IS NULL",
+            (location_id,),
+        ).fetchone()
+        if existing is None:
+            return None
+        if _active_location_name_taken(connection, normalized_name, exclude_id=location_id):
+            raise ValueError(_LOCATION_NAME_EXISTS)
+        connection.execute(
+            "UPDATE locations SET name = ? WHERE id = ?",
+            (normalized_name, location_id),
+        )
+        return connection.execute(
+            "SELECT id, name FROM locations WHERE id = ?",
+            (location_id,),
+        ).fetchone()
+
+
+def delete_location(location_id: str) -> bool:
+    """Logically delete a location.
+
+    The row is kept so that inventory sessions and deleted fixed assets still
+    show its name. A location cannot be deleted while fixed assets that are not
+    deleted are at it.
+    """
+    with db_session() as connection:
+        in_use = connection.execute(
+            "SELECT 1 FROM fixed_assets WHERE location_id = ? AND deleted_at IS NULL",
+            (location_id,),
+        ).fetchone()
+        if in_use is not None:
+            return False
+        cursor = connection.execute(
+            "UPDATE locations SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+            (_utc_now_text(), location_id),
+        )
+        return cursor.rowcount > 0
+
+
+def _require_active_location(connection: sqlite3.Connection, location_id: str | None) -> None:
+    if location_id is None:
+        return
+    found = connection.execute(
+        "SELECT 1 FROM locations WHERE id = ? AND deleted_at IS NULL",
+        (location_id,),
+    ).fetchone()
+    if found is None:
+        raise ValueError("Location not found.")
+
+
 def create_fixed_asset(
     name: str,
     category_id: str,
@@ -703,9 +860,11 @@ def create_fixed_asset(
     responsible_person: str,
     registration_date: str,
     image_path: str | None = None,
+    location_id: str | None = None,
 ) -> sqlite3.Row:
     fixed_asset_id = str(uuid.uuid4())
     with db_session() as connection:
+        _require_active_location(connection, location_id)
         category = connection.execute(
             "SELECT name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
@@ -724,8 +883,9 @@ def create_fixed_asset(
                 initial_value,
                 responsible_person,
                 registration_date,
-                image_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                image_path,
+                location_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 fixed_asset_id,
@@ -737,6 +897,7 @@ def create_fixed_asset(
                 responsible_person,
                 registration_date,
                 image_path,
+                location_id,
             ),
         )
         cursor = connection.execute(
@@ -751,9 +912,12 @@ def create_fixed_asset(
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
                 fixed_assets.image_path,
-                fixed_assets.deleted_at
+                fixed_assets.deleted_at,
+                fixed_assets.location_id,
+                locations.name AS location
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
             WHERE fixed_assets.id = ?
             """,
             (fixed_asset_id,),
@@ -775,9 +939,12 @@ def get_fixed_asset_by_id(fixed_asset_id: str) -> sqlite3.Row | None:
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
                 fixed_assets.image_path,
-                fixed_assets.deleted_at
+                fixed_assets.deleted_at,
+                fixed_assets.location_id,
+                locations.name AS location
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
             WHERE fixed_assets.id = ?
             """,
             (fixed_asset_id,),
@@ -794,8 +961,16 @@ def update_fixed_asset(
     responsible_person: str,
     registration_date: str,
     image_path: str | None = None,
+    location_id: str | None = None,
 ) -> sqlite3.Row | None:
     with db_session() as connection:
+        current = connection.execute(
+            "SELECT location_id FROM fixed_assets WHERE id = ?",
+            (fixed_asset_id,),
+        ).fetchone()
+        # An asset may keep a location it already has; a new one must exist.
+        if current is None or current["location_id"] != location_id:
+            _require_active_location(connection, location_id)
         category = connection.execute(
             "SELECT name FROM fixed_asset_categories WHERE id = ? AND deleted_at IS NULL",
             (category_id,),
@@ -814,7 +989,8 @@ def update_fixed_asset(
                 initial_value = ?,
                 responsible_person = ?,
                 registration_date = ?,
-                image_path = ?
+                image_path = ?,
+                location_id = ?
             WHERE id = ? AND deleted_at IS NULL
             """,
             (
@@ -826,6 +1002,7 @@ def update_fixed_asset(
                 responsible_person,
                 registration_date,
                 image_path,
+                location_id,
                 fixed_asset_id,
             ),
         )
@@ -841,9 +1018,12 @@ def update_fixed_asset(
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
                 fixed_assets.image_path,
-                fixed_assets.deleted_at
+                fixed_assets.deleted_at,
+                fixed_assets.location_id,
+                locations.name AS location
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
             WHERE fixed_assets.id = ?
             """,
             (fixed_asset_id,),
@@ -864,6 +1044,19 @@ def delete_fixed_asset(fixed_asset_id: str) -> bool:
             (_utc_now_text(), fixed_asset_id),
         )
         return cursor.rowcount > 0
+
+
+# Location filter value that matches assets without a location.
+NO_LOCATION_FILTER = "(none)"
+
+
+def _filter_values(filters: dict[str, Any], key: str) -> list[str]:
+    """Values of a multi-value filter, given as a list (``<key>_values``) or a
+    comma-separated string (``<key>``)."""
+    raw_values = filters.get(f"{key}_values")
+    if isinstance(raw_values, Sequence) and not isinstance(raw_values, str):
+        return [str(value).strip() for value in raw_values if str(value).strip()]
+    return [value.strip() for value in str(filters.get(key) or "").split(",") if value.strip()]
 
 
 def _fixed_assets_filter_clause(filters: dict[str, Any] | None = None) -> tuple[str, list[Any]]:
@@ -892,6 +1085,22 @@ def _fixed_assets_filter_clause(filters: dict[str, Any] | None = None) -> tuple[
             f"lower(COALESCE(fixed_asset_categories.name, fixed_assets.category)) IN ({placeholders})"
         )
         params.extend(category_values)
+
+    location_values = _filter_values(filters, "location")
+    if location_values:
+        location_names = [value for value in location_values if value != NO_LOCATION_FILTER]
+        location_conditions: list[str] = []
+        if location_names:
+            placeholders = ", ".join("lower(?)" for _ in location_names)
+            location_conditions.append(f"lower(locations.name) IN ({placeholders})")
+            params.extend(location_names)
+        if NO_LOCATION_FILTER in location_values:
+            location_conditions.append("fixed_assets.location_id IS NULL")
+        conditions.append("(" + " OR ".join(location_conditions) + ")")
+
+    if filters.get("location_id"):
+        conditions.append("fixed_assets.location_id = ?")
+        params.append(filters["location_id"])
 
     if filters.get("responsible_person"):
         conditions.append("lower(fixed_assets.responsible_person) LIKE lower(?)")
@@ -924,6 +1133,7 @@ def count_fixed_assets(filters: dict[str, Any] | None = None) -> int:
             SELECT COUNT(1) AS total
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
             {where_clause}
             """,
             params,
@@ -952,9 +1162,12 @@ def list_fixed_assets(
                     fixed_assets.registration_date,
                     fixed_assets.category_id,
                     fixed_assets.image_path,
-                    fixed_assets.deleted_at
+                    fixed_assets.deleted_at,
+                    fixed_assets.location_id,
+                    locations.name AS location
                 FROM fixed_assets
                 LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+                LEFT JOIN locations ON locations.id = fixed_assets.location_id
                 {where_clause}
                 ORDER BY fixed_assets.registration_date DESC, fixed_assets.name ASC
                 """,
@@ -976,9 +1189,12 @@ def list_fixed_assets(
                 fixed_assets.registration_date,
                 fixed_assets.category_id,
                 fixed_assets.image_path,
-                fixed_assets.deleted_at
+                fixed_assets.deleted_at,
+                fixed_assets.location_id,
+                locations.name AS location
             FROM fixed_assets
             LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
             {where_clause}
             ORDER BY fixed_assets.registration_date DESC, fixed_assets.name ASC
             LIMIT ? OFFSET ?
@@ -993,6 +1209,9 @@ def list_fixed_assets(
 # ---------------------------------------------------------------------------
 
 INVENTORY_SESSION_STATUSES = ("New", "Active", "Completed", "Cancelled")
+
+# Default for update_inventory_session(location_id=...): keep the current location.
+KEEP_LOCATION = object()
 
 _INVENTORY_SESSION_SELECT = """
     SELECT id, date_from, date_to, status, responsible_person
@@ -1103,21 +1322,25 @@ def list_inventory_sessions(
     responsible_person: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    location_id: str | None = None,
 ) -> list[sqlite3.Row]:
     conditions: list[str] = []
     params: list[Any] = []
 
     if status:
-        conditions.append("status = ?")
+        conditions.append("inventory_sessions.status = ?")
         params.append(status)
+    if location_id:
+        conditions.append("inventory_sessions.location_id = ?")
+        params.append(location_id)
     if responsible_person:
-        conditions.append("lower(responsible_person) LIKE lower(?)")
+        conditions.append("lower(inventory_sessions.responsible_person) LIKE lower(?)")
         params.append(f"%{responsible_person}%")
     if date_from:
-        conditions.append("date_from >= ?")
+        conditions.append("inventory_sessions.date_from >= ?")
         params.append(date_from)
     if date_to:
-        conditions.append("date_to <= ?")
+        conditions.append("inventory_sessions.date_to <= ?")
         params.append(date_to)
 
     where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
@@ -1138,9 +1361,12 @@ def list_inventory_sessions(
                 inventory_sessions.notes,
                 inventory_sessions.completion_reason,
                 inventory_sessions.cancellation_reason,
+                inventory_sessions.location_id,
+                locations.name AS location,
                 COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
                 COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
             FROM inventory_sessions
+            LEFT JOIN locations ON locations.id = inventory_sessions.location_id
             LEFT JOIN inventory_session_fixed_assets
                 ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
             {where}
@@ -1157,7 +1383,9 @@ def list_inventory_sessions(
                 inventory_sessions.updated_at,
                 inventory_sessions.notes,
                 inventory_sessions.completion_reason,
-                inventory_sessions.cancellation_reason
+                inventory_sessions.cancellation_reason,
+                inventory_sessions.location_id,
+                locations.name
             ORDER BY inventory_sessions.date_from DESC, inventory_sessions.date_to DESC
             """,
             params,
@@ -1194,6 +1422,8 @@ def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
                 completed_by_user.email AS completed_by_email,
                 cancelled_by_user.email AS cancelled_by_email,
                 last_edited_by_user.email AS last_edited_by_email,
+                inventory_sessions.location_id,
+                locations.name AS location,
                 COUNT(inventory_session_fixed_assets.fixed_asset_id) AS linked_assets_count,
                 COALESCE(SUM(inventory_session_fixed_assets.quantity), 0) AS linked_assets_quantity_total
             FROM inventory_sessions
@@ -1207,6 +1437,7 @@ def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
                 ON cancelled_by_user.id = inventory_sessions.cancelled_by_user_id
             LEFT JOIN users AS last_edited_by_user
                 ON last_edited_by_user.id = inventory_sessions.last_edited_by_user_id
+            LEFT JOIN locations ON locations.id = inventory_sessions.location_id
             LEFT JOIN inventory_session_fixed_assets
                 ON inventory_session_fixed_assets.inventory_session_id = inventory_sessions.id
             WHERE inventory_sessions.id = ?
@@ -1234,7 +1465,9 @@ def get_inventory_session_by_id(session_id: str) -> sqlite3.Row | None:
                 started_by_user.email,
                 completed_by_user.email,
                 cancelled_by_user.email,
-                last_edited_by_user.email
+                last_edited_by_user.email,
+                inventory_sessions.location_id,
+                locations.name
             """,
             (session_id,),
         )
@@ -1308,10 +1541,12 @@ def create_inventory_session(
     linked_assets: Sequence[tuple[str, int]] = (),
     created_by_user_id: int | None = None,
     notes: str = "",
+    location_id: str | None = None,
 ) -> sqlite3.Row:
     session_id = str(uuid.uuid4())
     now_text = datetime.now(timezone.utc).isoformat()
     with db_session() as connection:
+        _require_active_location(connection, location_id)
         connection.execute(
             """
             INSERT INTO inventory_sessions (
@@ -1325,9 +1560,10 @@ def create_inventory_session(
                 updated_at,
                 last_edited_at,
                 created_by_user_id,
-                last_edited_by_user_id
+                last_edited_by_user_id,
+                location_id
             )
-            VALUES (?, ?, ?, 'New', ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, 'New', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -1340,6 +1576,7 @@ def create_inventory_session(
                 now_text,
                 created_by_user_id,
                 created_by_user_id,
+                location_id,
             ),
         )
         _set_inventory_session_fixed_assets(connection, session_id, linked_assets, save_expected=False)
@@ -1380,7 +1617,10 @@ def update_inventory_session(
     completion_reason: str = "",
     cancellation_reason: str = "",
     actor_user_id: int | None = None,
+    location_id: str | None | object = KEEP_LOCATION,
 ) -> sqlite3.Row | None:
+    """Save a session. Leave out ``location_id`` to keep the current location;
+    pass None to clear it."""
     if status not in INVENTORY_SESSION_STATUSES:
         raise ValueError(f"Invalid status: {status!r}")
     now_text = datetime.now(timezone.utc).isoformat()
@@ -1395,7 +1635,8 @@ def update_inventory_session(
                 cancelled_at,
                 started_by_user_id,
                 completed_by_user_id,
-                cancelled_by_user_id
+                cancelled_by_user_id,
+                location_id
             FROM inventory_sessions
             WHERE id = ?
             """,
@@ -1403,6 +1644,12 @@ def update_inventory_session(
         ).fetchone()
         if existing is None:
             return None
+
+        if location_id is KEEP_LOCATION:
+            location_id = existing["location_id"]
+        elif location_id != existing["location_id"]:
+            # A session may keep a location that was deleted later; a new one must exist.
+            _require_active_location(connection, location_id)
 
         previous_status = str(existing["status"])
         started_at = existing["started_at"]
@@ -1449,7 +1696,8 @@ def update_inventory_session(
                 started_by_user_id = ?,
                 completed_by_user_id = ?,
                 cancelled_by_user_id = ?,
-                last_edited_by_user_id = ?
+                last_edited_by_user_id = ?,
+                location_id = ?
             WHERE id = ?
             """,
             (
@@ -1469,6 +1717,7 @@ def update_inventory_session(
                 completed_by_user_id,
                 cancelled_by_user_id,
                 actor_user_id,
+                location_id,
                 session_id,
             ),
         )

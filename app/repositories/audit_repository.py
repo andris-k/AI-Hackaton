@@ -13,6 +13,7 @@ from app.db import db_session
 _ENTITY_KEYS = {
     "asset": ("asset", "asset_id"),
     "category": ("category", "category_id"),
+    "location": ("location", "location_id"),
     "inventory_session": ("inventory_session", "session_id"),
     "auth": ("user", "user_id"),
 }

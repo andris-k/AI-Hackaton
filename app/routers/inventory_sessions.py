@@ -9,8 +9,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.repositories import fixed_assets_repository as assets_repo
 from app.repositories import inventory_sessions_repository as repo
+from app.repositories import locations_repository as locations_repo
 from app.logging_config import audit
 from app.services import auth_service
+from app.services import fixed_assets_service as assets_service
 from app.services import inventory_sessions_service as svc
 from app.services import inventory_report_service as report_svc
 from app.views.pages import (
@@ -29,11 +31,13 @@ _STATUS_EVENTS = {
 }
 
 
-def _asset_options_for_session(session_id: str) -> list[dict[str, object]]:
-    """Assets that can be picked on the session edit page.
+def _asset_options_for_session(session_id: str, location_id: str | None) -> list[dict[str, object]]:
+    """Assets for the pickers on the session edit page.
 
-    All fixed assets that are not deleted, plus deleted ones that are already
-    linked to this session, so saving the form keeps those links intact.
+    ``selectable`` assets can be added: those that are not deleted and, when the
+    session has a location, are at it. Assets already linked to the session are
+    always included, so saving the form keeps those links, but they are marked
+    when they are deleted or at another location.
     Linked assets show the expected quantity saved for this session; the others
     show their current quantity, which is what would be saved for them.
     """
@@ -44,9 +48,10 @@ def _asset_options_for_session(session_id: str) -> list[dict[str, object]]:
             "category": str(asset["category"]),
             "expected_quantity": int(asset["quantity"]),
             "initial_value": float(asset["initial_value"]),
-            "is_deleted": False,
+            "selectable": True,
+            "note": "",
         }
-        for asset in assets_repo.list_assets()
+        for asset in assets_repo.list_assets(filters={"location_id": location_id} if location_id else None)
     }
     for asset in repo.list_linked_assets(session_id):
         asset_id = str(asset["id"])
@@ -59,9 +64,18 @@ def _asset_options_for_session(session_id: str) -> list[dict[str, object]]:
             "category": str(asset["category"]),
             "expected_quantity": int(asset["expected_quantity"]),
             "initial_value": float(asset["initial_value"]),
-            "is_deleted": True,
+            "selectable": False,
+            "note": "deleted" if asset["deleted_at"] else "other location",
         }
     return list(options.values())
+
+
+def _location_choices(current_id: object = None, current_name: object = None) -> list[dict[str, str]]:
+    """Locations for a dropdown, plus the session's own one if it was deleted since."""
+    choices = [{"id": str(row["id"]), "name": str(row["name"])} for row in locations_repo.list_all()]
+    if current_id and all(choice["id"] != str(current_id) for choice in choices):
+        choices.append({"id": str(current_id), "name": f"{current_name or 'Unknown'} (deleted)"})
+    return choices
 
 
 def _render_edit_page(
@@ -79,7 +93,11 @@ def _render_edit_page(
         inv_session=inv_session,
         current_email=user_email,
         statuses=statuses,
-        fixed_assets=_asset_options_for_session(str(inv_session["id"])),
+        fixed_assets=_asset_options_for_session(
+            str(inv_session["id"]),
+            (prefill or {}).get("location_id", inv_session["location_id"]) or None,
+        ),
+        locations=_location_choices(inv_session["location_id"], inv_session["location"]),
         linked_asset_rows=linked_asset_rows,
         is_read_only=svc.is_terminal_status(current_status) and not is_admin_user,
         is_admin_user=is_admin_user,
@@ -94,12 +112,14 @@ def _build_filters(
     responsible_person: str,
     date_from: str,
     date_to: str,
+    location_id: str = "",
 ) -> dict[str, str]:
     return {
         "status": status,
         "responsible_person": responsible_person,
         "date_from": date_from,
         "date_to": date_to,
+        "location_id": location_id,
     }
 
 
@@ -149,6 +169,7 @@ def inventory_sessions_page(
     responsible_person: str = Query(default=""),
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
+    location_id: str = Query(default=""),
 ) -> HTMLResponse:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -159,12 +180,14 @@ def inventory_sessions_page(
         responsible_person=responsible_person or None,
         date_from=date_from or None,
         date_to=date_to or None,
+        location_id=location_id or None,
     )
     filters = _build_filters(
         status=status,
         responsible_person=responsible_person,
         date_from=date_from,
         date_to=date_to,
+        location_id=location_id,
     )
     return render_inventory_sessions_page(
         sessions=sessions,
@@ -172,6 +195,7 @@ def inventory_sessions_page(
         statuses=list(svc.STATUSES),
         filters=filters,
         summary=_calculate_summary(sessions),
+        locations=_location_choices(),
     )
 
 
@@ -182,6 +206,7 @@ def export_inventory_sessions_csv(
     responsible_person: str = Query(default=""),
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
+    location_id: str = Query(default=""),
 ) -> Response:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -192,6 +217,7 @@ def export_inventory_sessions_csv(
         responsible_person=responsible_person or None,
         date_from=date_from or None,
         date_to=date_to or None,
+        location_id=location_id or None,
     )
     summary = _calculate_summary(sessions)
 
@@ -202,6 +228,7 @@ def export_inventory_sessions_csv(
     writer.writerow(["responsible_person", responsible_person or "ALL"])
     writer.writerow(["date_from", date_from or "ALL"])
     writer.writerow(["date_to", date_to or "ALL"])
+    writer.writerow(["location_id", location_id or "ALL"])
     writer.writerow([])
     writer.writerow(["Summary", "Value"])
     writer.writerow(["total_sessions", summary["total_sessions"]])
@@ -220,6 +247,7 @@ def export_inventory_sessions_csv(
             "date_to",
             "status",
             "responsible_person",
+            "location",
             "created_at",
             "started_at",
             "completed_at",
@@ -239,6 +267,7 @@ def export_inventory_sessions_csv(
                 row["date_to"],
                 row["status"],
                 row["responsible_person"],
+                row["location"] or "",
                 row["created_at"],
                 row["started_at"],
                 row["completed_at"],
@@ -268,6 +297,7 @@ def export_inventory_sessions_json(
     responsible_person: str = Query(default=""),
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
+    location_id: str = Query(default=""),
 ) -> Response:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -278,6 +308,7 @@ def export_inventory_sessions_json(
         responsible_person=responsible_person or None,
         date_from=date_from or None,
         date_to=date_to or None,
+        location_id=location_id or None,
     )
     summary = _calculate_summary(sessions)
 
@@ -287,6 +318,7 @@ def export_inventory_sessions_json(
             responsible_person=responsible_person,
             date_from=date_from,
             date_to=date_to,
+            location_id=location_id,
         ),
         "summary": summary,
         "sessions": [
@@ -296,6 +328,8 @@ def export_inventory_sessions_json(
                 "date_to": str(row["date_to"]),
                 "status": str(row["status"]),
                 "responsible_person": str(row["responsible_person"]),
+                "location_id": str(row["location_id"] or ""),
+                "location": str(row["location"] or ""),
                 "created_at": str(row["created_at"] or ""),
                 "started_at": str(row["started_at"] or ""),
                 "completed_at": str(row["completed_at"] or ""),
@@ -330,6 +364,7 @@ def add_inventory_session_page(
         current_email=user["email"],
         fixed_assets=fixed_assets,
         linked_asset_rows=[],
+        locations=_location_choices(),
     )
 
 
@@ -340,6 +375,7 @@ def add_inventory_session(
     date_to: str = Form(...),
     responsible_person: str = Form(...),
     notes: str = Form(default=""),
+    location_id: str = Form(default=""),
     fixed_asset_ids: list[str] = Form(default=[]),
     fixed_asset_quantities: list[str] = Form(default=[]),
 ) -> HTMLResponse:
@@ -356,6 +392,9 @@ def add_inventory_session(
         fixed_asset_ids=fixed_asset_ids,
         fixed_asset_quantities=fixed_asset_quantities,
     )
+    session_location_id = assets_service.optional_id(location_id)
+    if session_location_id and locations_repo.get_by_id(session_location_id) is None:
+        error = error or "Selected location does not exist."
     combined_error = error or linked_assets_error
     if combined_error:
         fixed_assets = assets_repo.list_assets()
@@ -373,9 +412,11 @@ def add_inventory_session(
                 "date_to": date_to,
                 "responsible_person": responsible_person,
                 "notes": notes,
+                "location_id": location_id,
             },
             fixed_assets=fixed_assets,
             linked_asset_rows=linked_asset_rows,
+            locations=_location_choices(),
         )
 
     session = repo.create_session(
@@ -385,6 +426,7 @@ def add_inventory_session(
         linked_assets=linked_assets,
         created_by_user_id=int(user["id"]),
         notes=notes,
+        location_id=session_location_id,
     )
     audit(
         "inventory_session.created",
@@ -392,6 +434,7 @@ def add_inventory_session(
         date_from=date_from,
         date_to=date_to,
         responsible_person=responsible_person,
+        location=locations_repo.get_by_id(session_location_id)["name"] if session_location_id else None,
         linked_assets=len(linked_assets),
     )
     return RedirectResponse(
@@ -490,6 +533,7 @@ def edit_inventory_session(
     notes: str = Form(default=""),
     completion_reason: str = Form(default=""),
     cancellation_reason: str = Form(default=""),
+    location_id: str = Form(default=""),
     admin_override: str = Form(default=""),
     fixed_asset_ids: list[str] = Form(default=[]),
     fixed_asset_quantities: list[str] = Form(default=[]),
@@ -542,7 +586,18 @@ def edit_inventory_session(
     if current_status != target_status and target_status == "Cancelled" and not cancellation_reason.strip():
         terminal_reason_error = "Cancellation reason is required when cancelling a session."
 
-    combined_error = error or linked_assets_error or status_transition_error or terminal_reason_error
+    session_location_id = assets_service.optional_id(location_id)
+    location_error: str | None = None
+    if (
+        session_location_id
+        and session_location_id != inv_session["location_id"]
+        and locations_repo.get_by_id(session_location_id) is None
+    ):
+        location_error = "Selected location does not exist."
+
+    combined_error = (
+        error or linked_assets_error or status_transition_error or terminal_reason_error or location_error
+    )
     if combined_error:
         linked_asset_rows = [
             {"fixed_asset_id": fixed_asset_ids[index], "quantity": fixed_asset_quantities[index]}
@@ -562,6 +617,7 @@ def edit_inventory_session(
                 "notes": notes,
                 "completion_reason": completion_reason,
                 "cancellation_reason": cancellation_reason,
+                "location_id": location_id,
                 "admin_override": "1" if admin_override_requested else "",
             },
             linked_asset_rows=linked_asset_rows,
@@ -579,6 +635,7 @@ def edit_inventory_session(
         completion_reason=completion_reason,
         cancellation_reason=cancellation_reason,
         actor_user_id=int(user["id"]),
+        location_id=session_location_id,
     )
     if updated is None:
         return render_login_page("Inventory session not found.")
@@ -593,10 +650,17 @@ def edit_inventory_session(
                                 and svc.transition_error(current_status, target_status)),
             reason=completion_reason.strip() or cancellation_reason.strip() or None,
         )
+    location_changes = {}
+    if session_location_id != inv_session["location_id"]:
+        new_location = locations_repo.get_by_id(session_location_id) if session_location_id else None
+        location_changes = {
+            "location": [inv_session["location"], new_location["name"] if new_location else None]
+        }
     audit(
         "inventory_session.updated",
         session_id=session_id,
         status=target_status,
+        **({"changes": location_changes} if location_changes else {}),
         linked_assets=len(linked_assets),
         total_quantity=sum(quantity for _, quantity in linked_assets),
     )

@@ -1,5 +1,5 @@
 {% set ns = namespace(active=0) %}
-{% for key in ["name", "category", "initial_value_from", "initial_value_to", "responsible_person", "registration_date_from", "registration_date_to"] %}
+{% for key in ["name", "category", "location", "initial_value_from", "initial_value_to", "responsible_person", "registration_date_from", "registration_date_to"] %}
     {% if filters[key] %}{% set ns.active = ns.active + 1 %}{% endif %}
 {% endfor %}
 <div class="assets-grid">
@@ -56,6 +56,16 @@
                 </div>
                 <div class="asset-form-row">
                     <div>
+                        <label for="filter_location">Location <span class="mono">(Ctrl+click for several)</span></label>
+                        <select id="filter_location" name="location" multiple size="4">
+                            {% for value, label in location_filter_options %}
+                            <option value="{{ value }}" {% if value in selected_location_filters %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="asset-form-row">
+                    <div>
                         <label for="filter_initial_value_from">Initial value from</label>
                         <input id="filter_initial_value_from" name="initial_value_from" type="number" step="0.01" min="0" value="{{ filters.initial_value_from }}" />
                     </div>
@@ -95,6 +105,7 @@
                         <tr>
                             <th>Name</th>
                             <th>Category</th>
+                            <th>Location</th>
                             <th class="col-qty">Qty</th>
                             <th class="col-value">Initial value</th>
                             <th>Responsible person</th>
@@ -110,6 +121,7 @@
                                 <span class="asset-sub mono" title="{{ asset.id }}">{{ asset.id[:8] }}</span>
                             </td>
                             <td>{{ asset.category }}</td>
+                            <td>{% if asset.location %}{{ asset.location }}{% else %}<span style="color: var(--muted);">—</span>{% endif %}</td>
                             <td class="col-qty">{{ asset.quantity }}</td>
                             <td class="col-value">{{ asset.initial_value }}</td>
                             <td>{{ asset.responsible_person }}</td>
@@ -122,6 +134,7 @@
                                         <input type="hidden" name="page_size" value="{{ page_size }}" />
                                         <input type="hidden" name="name_filter" value="{{ filters.name }}" />
                                         <input type="hidden" name="category_filter" value="{{ filters.category }}" />
+                                        <input type="hidden" name="location_filter" value="{{ filters.location }}" />
                                         <input type="hidden" name="initial_value_from_filter" value="{{ filters.initial_value_from }}" />
                                         <input type="hidden" name="initial_value_to_filter" value="{{ filters.initial_value_to }}" />
                                         <input type="hidden" name="responsible_person_filter" value="{{ filters.responsible_person }}" />
@@ -134,7 +147,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" style="padding: 28px 12px; text-align: center; color: var(--muted);">
+                            <td colspan="8" style="padding: 28px 12px; text-align: center; color: var(--muted);">
                                 No fixed assets match.{% if ns.active %} <a href="{{ clear_filters_href }}">Clear filters</a>{% endif %}
                             </td>
                         </tr>

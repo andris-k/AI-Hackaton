@@ -13,6 +13,7 @@ from app.logging_config import configure_logging, mask_path, start_request_conte
 
 configure_logging()
 
+from app.routers.analytics import router as analytics_router  # noqa: E402
 from app.routers.asset_import import router as asset_import_router  # noqa: E402
 from app.routers.audit import router as audit_router  # noqa: E402  (logging is configured first)
 from app.routers.auth import router as auth_router  # noqa: E402
@@ -132,5 +133,6 @@ app.include_router(categories_router)
 app.include_router(locations_router)
 app.include_router(inventory_sessions_router)
 app.include_router(audit_router)
+app.include_router(analytics_router)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")

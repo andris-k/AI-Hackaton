@@ -8,6 +8,9 @@ The project now uses a modular monolith layering:
 
 * `app/main.py` - app bootstrap and router registration
 * `app/routers/auth.py` - auth, dashboard, and users HTTP routes
+* `app/routers/analytics.py` - analytics page (`/analytics`)
+* `app/services/dashboard_service.py` - what the dashboard and analytics page show
+* `app/repositories/reporting_repository.py` - read-only figures for them
 * `app/routers/fixed_assets.py` - fixed asset HTTP routes
 * `app/routers/categories.py` - fixed asset category HTTP routes
 * `app/routers/locations.py` - location HTTP routes (`/locations`)
@@ -111,7 +114,8 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/register` - create a new user account
 * `/forgot-password` - generate a local password reset link
 * `/reset-password/{token}` - set a new password using a reset token
-* `/dashboard` - protected dashboard for signed-in users
+* `/dashboard` - key numbers, active inventory sessions with progress and a Count button, a "Needs attention" list (accounts waiting for approval, sessions completed with differences in the last 30 days, assets without a location, sessions not started) and, for administrators, recent activity
+* `/analytics` - asset value or number of assets by category and by location, assets registered per month, and how many assets matched in completed sessions; each chart can be shown as a table
 * `/users` - protected list of all registered users
 * `/fixed-assets` - protected fixed assets management page
 * `/fixed-assets/add` - separate page for adding a fixed asset

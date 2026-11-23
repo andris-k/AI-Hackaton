@@ -676,6 +676,47 @@ def render_edit_fixed_asset_category_page(
     )
 
 
+_IMPORT_PREVIEW_ROWS = 100
+
+
+def render_fixed_asset_import_page(
+    current_email: str,
+    *,
+    preview: object | None = None,
+    token: str = "",
+    filename: str = "",
+    imported: dict[str, object] | None = None,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    """Upload form; or the preview of an uploaded file (rows with errors first);
+    or the result after importing."""
+    shown_rows: list[object] = []
+    if preview is not None:
+        rows = list(preview.rows)
+        problem_rows = [row for row in rows if row.errors]
+        shown_rows = (problem_rows or rows)[:_IMPORT_PREVIEW_ROWS]
+    content = _render_template(
+        "fixed_asset_import_page.html",
+        preview=preview,
+        shown_rows=shown_rows,
+        token=token,
+        filename=filename,
+        imported=imported,
+    )
+    return render_page(
+        "AI Hackaton Import Fixed Assets",
+        "Import fixed assets",
+        "Add many fixed assets from a CSV file.",
+        content,
+        width="1100px",
+        message=message,
+        message_kind=message_kind,
+        current_email=current_email,
+        active_nav="fixed-assets",
+    )
+
+
 def render_locations_page(
     current_email: str,
     *,

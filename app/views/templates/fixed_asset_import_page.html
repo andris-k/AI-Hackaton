@@ -1,0 +1,162 @@
+<style>
+    .import-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+    .import-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
+    .import-columns ul { margin: 6px 0 0; padding-left: 18px; }
+    .import-upload { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+    .import-upload input[type="file"] { max-width: 100%; }
+    .import-row-error td { background: var(--danger-soft); }
+    .import-row-warning td { background: var(--warning-soft); }
+    .import-problems { margin: 0; padding-left: 16px; font-size: 0.85rem; }
+    .import-problems .error { color: var(--danger); }
+    .import-problems .warning { color: var(--warning); }
+    .import-new { margin: 6px 0 0; }
+</style>
+
+<div class="stack">
+    <section class="panel">
+        <div class="page-header">
+            <div>
+                <h2>Import fixed assets</h2>
+                <p class="page-context">Add many fixed assets at once from a CSV file, for example one saved from Excel.</p>
+            </div>
+            <div class="page-actions">
+                <a href="/fixed-assets">← Fixed assets</a>
+                <a href="/fixed-assets/import/template.csv">Download template</a>
+            </div>
+        </div>
+
+        {% if imported %}
+        <section class="section-card">
+            <h3>Import complete</h3>
+            <p>{{ imported.asset_ids | length }} fixed assets were added{% if filename %} from <strong>{{ filename }}</strong>{% endif %}.</p>
+            {% if imported.created_categories %}<p class="import-new">New categories: {{ imported.created_categories | join(", ") }}</p>{% endif %}
+            {% if imported.created_locations %}<p class="import-new">New locations: {{ imported.created_locations | join(", ") }}</p>{% endif %}
+            <div class="button-row" style="margin-top: 12px;">
+                <a class="primary" href="/fixed-assets">View fixed assets</a>
+                <a href="/fixed-assets/import">Import another file</a>
+            </div>
+        </section>
+
+        {% elif preview %}
+        <section class="section-card">
+            <h3>Check the file{% if filename %}: {{ filename }}{% endif %}</h3>
+            <div class="summary-grid">
+                <article class="summary-card"><p>Assets in file</p><strong>{{ preview.rows | length }}</strong></article>
+                <article class="summary-card"><p>Rows with errors</p><strong {% if preview.error_count %}style="color: var(--danger);"{% endif %}>{{ preview.error_count }}</strong></article>
+                <article class="summary-card"><p>Rows with warnings</p><strong>{{ preview.warning_count }}</strong></article>
+                <article class="summary-card"><p>New categories / locations</p><strong>{{ preview.new_categories | length }} / {{ preview.new_locations | length }}</strong></article>
+            </div>
+            {% if preview.new_categories %}<p class="import-new">These categories don't exist yet and will be created: <strong>{{ preview.new_categories | join(", ") }}</strong></p>{% endif %}
+            {% if preview.new_locations %}<p class="import-new">These locations don't exist yet and will be created: <strong>{{ preview.new_locations | join(", ") }}</strong></p>{% endif %}
+            {% if preview.ignored_columns %}<p class="import-new" style="color: var(--muted);">Ignored columns: {{ preview.ignored_columns | join(", ") }}</p>{% endif %}
+
+            {% if not preview.rows %}
+            <p class="message error">The file has no asset rows below the header.</p>
+            {% elif preview.can_import %}
+            <form method="post" action="/fixed-assets/import/confirm" class="button-row" style="margin-top: 14px;">
+                <input type="hidden" name="token" value="{{ token }}" />
+                <input type="hidden" name="filename" value="{{ filename }}" />
+                <button type="submit" class="primary">Import {{ preview.rows | length }} fixed assets</button>
+                <a href="/fixed-assets/import">Cancel</a>
+            </form>
+            {% else %}
+            <p class="message error">Nothing was imported. Fix the rows below in your file and upload it again. Line numbers count the header as line 1.</p>
+            {% endif %}
+        </section>
+
+        {% if shown_rows %}
+        <section class="section-card">
+            <h3>
+                {% if preview.error_count %}Rows with errors{% else %}Preview{% endif %}
+                {% set total = preview.error_count if preview.error_count else (preview.rows | length) %}
+                {% if shown_rows | length < total %}<span class="filter-count">first {{ shown_rows | length }} of {{ total }}</span>{% endif %}
+            </h3>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="numeric-cell">Line</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Location</th>
+                            <th class="numeric-cell">Qty</th>
+                            <th class="numeric-cell">Initial value</th>
+                            <th>Responsible person</th>
+                            <th>Registered</th>
+                            <th>Problems</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in shown_rows %}
+                        <tr class="{% if row.errors %}import-row-error{% elif row.warnings %}import-row-warning{% endif %}">
+                            <td class="numeric-cell">{{ row.line }}</td>
+                            <td>{{ row.name }}</td>
+                            <td>{{ row.category }}</td>
+                            <td>{{ row.location or "—" }}</td>
+                            <td class="numeric-cell">{{ row.quantity }}</td>
+                            <td class="numeric-cell">{{ "%.2f" | format(row.initial_value) }}</td>
+                            <td>{{ row.responsible_person }}</td>
+                            <td class="col-date">{{ row.registration_date }}</td>
+                            <td>
+                                {% if row.errors or row.warnings %}
+                                <ul class="import-problems">
+                                    {% for problem in row.errors %}<li class="error">{{ problem }}</li>{% endfor %}
+                                    {% for problem in row.warnings %}<li class="warning">{{ problem }}</li>{% endfor %}
+                                </ul>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+        {% endif %}
+
+        {% if not imported %}
+        <section class="section-card">
+            <h3>{% if preview %}Upload another file{% else %}Upload a CSV file{% endif %}</h3>
+            <form method="post" action="/fixed-assets/import" enctype="multipart/form-data" class="import-upload">
+                <div>
+                    <label for="file">CSV file (UTF-8, up to 5 MB and 5,000 assets)</label>
+                    <input id="file" name="file" type="file" accept=".csv,text/csv" required />
+                </div>
+                <button type="submit">Check file</button>
+            </form>
+            <p style="margin: 10px 0 0; color: var(--muted);">Nothing is saved until you have checked the preview and confirmed. If any row has an error, nothing is imported.</p>
+        </section>
+
+        {% if not preview %}
+        <section class="section-card">
+            <h3>File format</h3>
+            <ol class="import-steps">
+                <li>Start from the <a href="/fixed-assets/import/template.csv">template</a>, or use your own file with a header row naming the columns.</li>
+                <li>Columns can be separated by commas, semicolons or tabs. Header names can use spaces or underscores, in any case.</li>
+                <li>In Excel, save with <strong>File › Save As › CSV UTF-8 (Comma delimited)</strong> so that letters such as ā, č, ē and š are kept.</li>
+            </ol>
+            <div class="import-columns">
+                <div>
+                    <strong>Required columns</strong>
+                    <ul>
+                        <li><code>name</code>: up to 100 characters</li>
+                        <li><code>category</code>: matched by name; a new one is created if it doesn't exist</li>
+                        <li><code>initial_value</code>: a number such as <code>1249.00</code> or <code>1 249,00</code></li>
+                        <li><code>responsible_person</code>: up to 100 characters</li>
+                        <li><code>registration_date</code>: <code>2026-01-31</code> or <code>31.01.2026</code></li>
+                    </ul>
+                </div>
+                <div>
+                    <strong>Optional columns</strong>
+                    <ul>
+                        <li><code>location</code>: matched by name; a new one is created if it doesn't exist</li>
+                        <li><code>quantity</code>: a whole number, 1 if left out</li>
+                    </ul>
+                    <p style="margin: 8px 0 0; color: var(--muted);">Other columns are ignored.</p>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+        {% endif %}
+    </section>
+</div>

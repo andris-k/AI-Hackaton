@@ -83,6 +83,21 @@ def audit(event: str, *, actor: str | None = None, **fields: Any) -> None:
         logging.getLogger("app.error").exception("Could not store audit event", extra={"audit_event": event})
 
 
+def audit_many(event: str, records: list[dict[str, Any]], *, actor: str | None = None) -> None:
+    """Record the same event for many items, e.g. one asset.created per imported
+    asset. Same result as calling audit() for each, but stored in one transaction."""
+    context = current_request_context()
+    acting_user = actor or context.get("user_email")
+    for fields in records:
+        _AUDIT_LOGGER.info(event, extra={"event": event, "actor": acting_user, "fields": fields})
+    try:
+        from app.repositories import audit_repository
+
+        audit_repository.record_events(event, acting_user, context.get("request_id"), records)
+    except Exception:
+        logging.getLogger("app.error").exception("Could not store audit events", extra={"audit_event": event})
+
+
 def diff_fields(before: Any, after: Any, names: tuple[str, ...]) -> dict[str, list[Any]]:
     """{field: [old, new]} for the fields whose values differ between two rows/mappings."""
     changes: dict[str, list[Any]] = {}

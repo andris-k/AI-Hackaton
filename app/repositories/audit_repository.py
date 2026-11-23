@@ -45,25 +45,47 @@ def initialize_audit_storage() -> None:
         ensure_audit_table(connection)
 
 
-def record_event(event: str, actor: str | None, request_id: str | None, fields: dict[str, Any]) -> None:
+_INSERT_EVENT = """
+    INSERT INTO audit_events (created_at, event, actor, entity_type, entity_id, request_id, details)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+"""
+
+
+def _event_values(
+    event: str, actor: str | None, request_id: str | None, fields: dict[str, Any], created_at: str
+) -> tuple[Any, ...]:
     prefix = event.split(".", 1)[0]
     entity_type, id_key = _ENTITY_KEYS.get(prefix, (None, None))
     entity_id = fields.get(id_key) if id_key else None
+    return (
+        created_at,
+        event,
+        actor,
+        entity_type,
+        str(entity_id) if entity_id is not None else None,
+        request_id,
+        json.dumps(fields, default=str, ensure_ascii=False),
+    )
+
+
+def _now_text() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def record_event(event: str, actor: str | None, request_id: str | None, fields: dict[str, Any]) -> None:
     with db_session() as connection:
-        connection.execute(
-            """
-            INSERT INTO audit_events (created_at, event, actor, entity_type, entity_id, request_id, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                event,
-                actor,
-                entity_type,
-                str(entity_id) if entity_id is not None else None,
-                request_id,
-                json.dumps(fields, default=str, ensure_ascii=False),
-            ),
+        connection.execute(_INSERT_EVENT, _event_values(event, actor, request_id, fields, _now_text()))
+
+
+def record_events(
+    event: str, actor: str | None, request_id: str | None, records: list[dict[str, Any]]
+) -> None:
+    """Store many events in one transaction."""
+    created_at = _now_text()
+    with db_session() as connection:
+        connection.executemany(
+            _INSERT_EVENT,
+            [_event_values(event, actor, request_id, fields, created_at) for fields in records],
         )
 
 

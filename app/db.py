@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 import uuid
 from typing import Any
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1589,6 +1589,91 @@ def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> 
             "expected_quantity": int(link["expected_quantity"]),
             "other_location": session["location_id"] is not None
             and asset["location_id"] != session["location_id"],
+        }
+
+
+def list_fixed_asset_names() -> list[str]:
+    """Names of all assets that are not deleted (to warn about duplicates on import)."""
+    with db_session() as connection:
+        rows = connection.execute("SELECT name FROM fixed_assets WHERE deleted_at IS NULL").fetchall()
+        return [str(row["name"]) for row in rows]
+
+
+def import_fixed_assets(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Insert many assets in one transaction: all of them or, on any error, none.
+
+    Each row has ``name``, ``category``, ``location`` (may be empty), ``quantity``,
+    ``initial_value``, ``responsible_person`` and ``registration_date``. Categories
+    and locations are matched by name, ignoring case, and created when missing.
+    Returns the new asset ids and the names of the categories and locations created.
+    """
+    with db_session() as connection:
+        category_ids = {
+            str(row["name"]).lower(): str(row["id"])
+            for row in connection.execute(
+                "SELECT id, name FROM fixed_asset_categories WHERE deleted_at IS NULL"
+            ).fetchall()
+        }
+        location_ids = {
+            str(row["name"]).lower(): str(row["id"])
+            for row in connection.execute("SELECT id, name FROM locations WHERE deleted_at IS NULL").fetchall()
+        }
+        created_categories: list[str] = []
+        created_locations: list[str] = []
+        asset_ids: list[str] = []
+
+        for row in rows:
+            category_name = str(row["category"]).strip()
+            category_key = category_name.lower()
+            if category_key not in category_ids:
+                category_ids[category_key] = str(uuid.uuid4())
+                connection.execute(
+                    "INSERT INTO fixed_asset_categories (id, name) VALUES (?, ?)",
+                    (category_ids[category_key], category_name),
+                )
+                created_categories.append(category_name)
+
+            location_id = None
+            location_name = str(row.get("location") or "").strip()
+            if location_name:
+                location_key = location_name.lower()
+                if location_key not in location_ids:
+                    location_ids[location_key] = str(uuid.uuid4())
+                    connection.execute(
+                        "INSERT INTO locations (id, name) VALUES (?, ?)",
+                        (location_ids[location_key], location_name),
+                    )
+                    created_locations.append(location_name)
+                location_id = location_ids[location_key]
+
+            asset_id = str(uuid.uuid4())
+            connection.execute(
+                """
+                INSERT INTO fixed_assets (
+                    id, category_id, name, category, quantity, initial_value,
+                    responsible_person, registration_date, location_id
+                )
+                SELECT ?, ?, ?, name, ?, ?, ?, ?, ?
+                FROM fixed_asset_categories WHERE id = ?
+                """,
+                (
+                    asset_id,
+                    category_ids[category_key],
+                    str(row["name"]).strip(),
+                    int(row["quantity"]),
+                    float(row["initial_value"]),
+                    str(row["responsible_person"]).strip(),
+                    str(row["registration_date"]),
+                    location_id,
+                    category_ids[category_key],
+                ),
+            )
+            asset_ids.append(asset_id)
+
+        return {
+            "asset_ids": asset_ids,
+            "created_categories": created_categories,
+            "created_locations": created_locations,
         }
 
 

@@ -1,8 +1,8 @@
-<div class="dashboard-shell">
-    <div class="page-header">
+<div class="dashboard">
+    <div class="page-header dash-header">
         <div>
             <h2>Dashboard</h2>
-            <p class="page-context">Welcome back, <strong>{{ user_email }}</strong>. Choose an area to continue.</p>
+            <p class="page-context">Welcome back, <strong>{{ user_email }}</strong></p>
         </div>
         <div class="page-actions">
             <a href="/inventory-sessions/add">New inventory session</a>
@@ -10,38 +10,81 @@
         </div>
     </div>
 
-    <section class="action-cards">
-        <a class="action-card" href="/fixed-assets">
-            <h4>Fixed assets</h4>
-            <p>Create, edit, and monitor registered fixed assets.</p>
+    <section class="dash-tiles" aria-label="Key numbers">
+        {% for tile in tiles %}
+        <a class="dash-tile{% if tile.tone %} dash-tile-{{ tile.tone }}{% endif %}" href="{{ tile.href }}">
+            <span class="dash-tile-label">{{ tile.label }}</span>
+            <strong class="dash-tile-value">{{ tile.value }}</strong>
+            <span class="dash-tile-sub">{{ tile.sub }}</span>
         </a>
-        <a class="action-card" href="/fixed-asset-categories">
-            <h4>Categories</h4>
-            <p>Organize categories and keep asset grouping clean.</p>
-        </a>
-        <a class="action-card" href="/inventory-sessions">
-            <h4>Inventory sessions</h4>
-            <p>Run stock-takes from New through Active to Completed.</p>
-        </a>
-        <a class="action-card" href="/users">
-            <h4>Users</h4>
-            <p>Browse registered users and filter by email.</p>
-        </a>
+        {% endfor %}
     </section>
 
-    <section class="aux-grid">
-        <section class="section-card">
-            <h3>Account</h3>
-            <div class="inline-links">
-                <a href="/forgot-password">Reset password</a>
-                <a href="/register">Create another account</a>
-                <a href="/logout">Log out</a>
+    <section class="section-card dash-sessions">
+        <div class="dash-section-head">
+            <h3>Active inventory sessions</h3>
+            <a href="/inventory-sessions">All sessions</a>
+        </div>
+        {% for s in active_sessions %}
+        <article class="dash-session">
+            <div class="dash-session-top">
+                <div>
+                    <strong>{{ s.title }}</strong>
+                    <p>{{ s.responsible_person }}</p>
+                </div>
+                <div class="dash-session-actions">
+                    <a href="/inventory-sessions/id/{{ s.id }}/edit">Open</a>
+                    <a class="primary" href="/inventory-sessions/id/{{ s.id }}/count">Count</a>
+                </div>
             </div>
-        </section>
-
-        <section class="section-card">
-            <h3>System</h3>
-            <p style="margin: 0; color: var(--muted);">This dashboard is protected and available only to authenticated users.</p>
-        </section>
+            <div class="dash-progress" role="img" aria-label="{{ s.label }}">
+                <span class="{% if s.complete %}is-complete{% endif %}" style="width: {{ s.percent }}%;"></span>
+            </div>
+            <p class="dash-session-label">{{ s.label }}</p>
+        </article>
+        {% else %}
+        <p class="dash-empty">No session is being counted right now. <a href="/inventory-sessions?status=New">Start a New session</a> or <a href="/inventory-sessions/add">create one</a>.</p>
+        {% endfor %}
     </section>
+
+    <section class="section-card dash-attention">
+        <h3>Needs attention</h3>
+        {% if attention %}
+        <ul class="dash-attention-list">
+            {% for item in attention %}
+            <li>
+                <a href="{{ item.href }}">
+                    <span class="dash-dot dash-dot-{{ item.tone }}" aria-hidden="true"></span>
+                    <span class="dash-attention-text"><span class="visually-hidden">{{ item.kind }}: </span>{{ item.text }}</span>
+                    <span class="dash-attention-action">{{ item.action }} →</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="dash-empty">All caught up. Nothing needs attention.</p>
+        {% endif %}
+    </section>
+
+    {% if is_admin %}
+    <section class="section-card dash-activity">
+        <div class="dash-section-head">
+            <h3>Recent activity</h3>
+            <a href="/audit-log">Audit log</a>
+        </div>
+        {% if activity %}
+        <ul class="dash-activity-list">
+            {% for row in activity %}
+            <li>
+                <span class="dash-activity-time">{{ row.time }}</span>
+                <span class="dash-activity-what">{{ row.label }}{% if row.item_label %} · {% if row.item_link %}<a href="{{ row.item_link }}">{{ row.item_label }}</a>{% else %}{{ row.item_label }}{% endif %}{% endif %}</span>
+                <span class="dash-activity-who" title="{{ row.actor }}">{{ row.actor }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="dash-empty">No activity recorded yet.</p>
+        {% endif %}
+    </section>
+    {% endif %}
 </div>

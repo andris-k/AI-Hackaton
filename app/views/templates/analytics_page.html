@@ -1,0 +1,101 @@
+{% macro bar_list(rows, label_header, value_header) %}
+<ul class="chart-bars">
+    {% for row in rows %}
+    <li class="chart-bar-row" title="{{ row.label }}: {{ row.detail }}">
+        <span class="chart-bar-label">{% if row.href %}<a href="{{ row.href }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}</span>
+        <span class="chart-bar-track" aria-hidden="true"><span class="chart-bar" style="width: {{ row.percent }}%;"></span></span>
+        <span class="chart-bar-value">{{ row.display }}</span>
+    </li>
+    {% endfor %}
+</ul>
+<details class="chart-table">
+    <summary>Show as table</summary>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>{{ label_header }}</th><th class="numeric-cell">{{ value_header }}</th><th>Details</th></tr></thead>
+            <tbody>
+                {% for row in rows %}
+                <tr><td>{{ row.label }}</td><td class="numeric-cell">{{ row.display }}</td><td>{{ row.detail }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</details>
+{% endmacro %}
+
+<div class="stack analytics">
+    <div class="page-header">
+        <div>
+            <h2>Analytics</h2>
+            <p class="page-context">The asset register in numbers. Deleted assets are not included.</p>
+        </div>
+        <nav class="segmented" aria-label="Measure">
+            <span class="segmented-label">Show</span>
+            {% for m in measures %}
+            <a href="{{ m.href }}"{% if m.selected %} class="selected" aria-current="true"{% endif %}>{{ m.label }}</a>
+            {% endfor %}
+        </nav>
+    </div>
+
+    <section class="dash-tiles" aria-label="Key numbers">
+        {% for tile in tiles %}
+        <div class="dash-tile">
+            <span class="dash-tile-label">{{ tile.label }}</span>
+            <strong class="dash-tile-value">{{ tile.value }}</strong>
+            {% if tile.sub %}<span class="dash-tile-sub">{{ tile.sub }}</span>{% endif %}
+        </div>
+        {% endfor %}
+    </section>
+
+    {% if not has_assets %}
+    <section class="section-card"><p class="dash-empty">No fixed assets are registered yet, so there is nothing to chart. <a href="/fixed-assets/add">Add an asset</a> or <a href="/fixed-assets/import">import a CSV file</a>.</p></section>
+    {% else %}
+    <div class="chart-grid">
+        <section class="section-card chart-card">
+            <h3>{{ measure_label }} by category</h3>
+            {{ bar_list(by_category, "Category", measure_label) }}
+        </section>
+        <section class="section-card chart-card">
+            <h3>{{ measure_label }} by location</h3>
+            {{ bar_list(by_location, "Location", measure_label) }}
+        </section>
+
+        <section class="section-card chart-card">
+            <h3>Assets registered per month</h3>
+            <p class="chart-sub">Last 12 months, by registration date · {{ months_total }} in total</p>
+            <div class="chart-columns" aria-hidden="true">
+                {% for m in months %}
+                <div class="chart-column-slot" title="{{ m.full_label }}: {{ m.count }} assets">
+                    {% if m.is_peak %}<span class="chart-column-value" style="bottom: calc({{ m.percent }}% + 4px);">{{ m.count }}</span>{% endif %}
+                    <span class="chart-column" style="height: {{ m.percent }}%;"></span>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="chart-column-axis" aria-hidden="true">
+                {% for m in months %}<span>{{ m.label }}</span>{% endfor %}
+            </div>
+            <details class="chart-table">
+                <summary>Show as table</summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Month</th><th class="numeric-cell">Assets registered</th></tr></thead>
+                        <tbody>
+                            {% for m in months %}<tr><td>{{ m.full_label }}</td><td class="numeric-cell">{{ m.count }}</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <section class="section-card chart-card">
+            <h3>Completed sessions: assets that matched</h3>
+            <p class="chart-sub">Share of each session's assets whose count matched the expected quantity</p>
+            {% if session_results %}
+            {{ bar_list(session_results, "Session", "Matched") }}
+            {% else %}
+            <p class="dash-empty">No completed sessions with counted assets yet.</p>
+            {% endif %}
+        </section>
+    </div>
+    {% endif %}
+</div>

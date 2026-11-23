@@ -40,6 +40,7 @@ _WORKSPACE_NAV = (
     ("categories", "Categories", "/fixed-asset-categories"),
     ("locations", "Locations", "/locations"),
     ("inventory", "Inventory sessions", "/inventory-sessions"),
+    ("analytics", "Analytics", "/analytics"),
 )
 # (key, label, href, admins only)
 _ADMINISTRATION_NAV = (
@@ -55,7 +56,7 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
             <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-            <link rel="stylesheet" href="/static/app.css?v=7" />
+            <link rel="stylesheet" href="/static/app.css?v=8" />
 """
 
 _BRAND = """
@@ -267,21 +268,38 @@ def render_dashboard_page(
     message: str | None = None,
     message_kind: str = "success",
 ) -> HTMLResponse:
+    from app.services import dashboard_service
+
     content = _render_template(
         "dashboard_page.html",
         user_email=user_email,
-        session_token=session_token,
+        **dashboard_service.build_dashboard(user_email),
     )
     return render_page(
         "AI Hackaton Dashboard",
         "Dashboard",
         "Protected workspace for authenticated users.",
         content,
-        width="760px",
+        width="1200px",
         message=message,
         message_kind=message_kind,
         current_email=user_email,
         active_nav="dashboard",
+    )
+
+
+def render_analytics_page(current_email: str, measure: str = "value") -> HTMLResponse:
+    from app.services import dashboard_service
+
+    content = _render_template("analytics_page.html", **dashboard_service.build_analytics(measure))
+    return render_page(
+        "AI Hackaton Analytics",
+        "Analytics",
+        "The asset register in numbers.",
+        content,
+        width="1200px",
+        current_email=current_email,
+        active_nav="analytics",
     )
 
 

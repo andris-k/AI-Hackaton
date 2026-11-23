@@ -285,7 +285,13 @@ def test_transition_error_can_be_bypassed_with_override():
     assert transition_error("Completed", "Active", allow_override=True) is None
 
 
-def test_admin_email_helper():
+def test_admin_email_helper(tmp_path, monkeypatch):
+    from app import db
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    db.initialize_database()
+    db.create_user("admin@example.com", "password123", is_admin=True)
+    db.create_user("user@example.com", "password123")
     assert is_admin_email("admin@example.com") is True
     assert is_admin_email("ADMIN@example.com") is True
     assert is_admin_email("user@example.com") is False

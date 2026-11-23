@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 
+from app import config
 from app.logging_config import audit, set_request_user
 from app.repositories import auth_repository
+from app.services import email_service
+
+PENDING_LOGIN_MESSAGE = (
+    "Your account is waiting for an administrator's approval. You can log in once it has been approved."
+)
 
 
 def initialize_defaults() -> None:
@@ -27,6 +33,10 @@ def login_user(email: str, password: str) -> tuple[sqlite3.Row | None, str | Non
     if user is None or not auth_repository.verify_user_password(password, user["password_hash"]):
         audit("auth.login_failed", actor=email, reason="unknown email" if user is None else "wrong password")
         return None, None, "Invalid email or password."
+    # Only said after the password is checked, so the form doesn't reveal who has registered.
+    if user["status"] != "active":
+        audit("auth.login_failed", actor=email, reason="waiting for approval", user_id=user["id"])
+        return None, None, PENDING_LOGIN_MESSAGE
 
     session_token, _ = auth_repository.create_user_session(user["id"])
     set_request_user(user["id"], user["email"])
@@ -48,11 +58,59 @@ def register_user(
     if auth_repository.find_user_by_email(email) is not None:
         return None, None, "That email is already registered."
 
-    user = auth_repository.create_user_account(email, password)
-    session_token, _ = auth_repository.create_user_session(user["id"])
-    set_request_user(user["id"], user["email"])
-    audit("auth.registered", user_id=user["id"])
-    return user, session_token, None
+    # Accounts named in ADMIN_EMAIL / ADMIN_EMAILS are trusted, so a new
+    # installation can always get its first admin in. Everyone else waits for approval.
+    if email.strip().lower() in config.admin_emails():
+        user = auth_repository.create_user_account(email, password, is_admin=True)
+        session_token, _ = auth_repository.create_user_session(user["id"])
+        set_request_user(user["id"], user["email"])
+        audit("auth.registered", user_id=user["id"], status="active")
+        return user, session_token, None
+
+    user = auth_repository.create_user_account(email, password, status="pending")
+    audit("auth.registered", actor=user["email"], user_id=user["id"], status="pending")
+    email_service.send_new_account_notice(auth_repository.admin_emails(), user["email"])
+    return user, None, None
+
+
+def approve_account(admin: sqlite3.Row, user_id: int) -> str | None:
+    """Returns an error message, or None when the account was approved."""
+    user = auth_repository.find_user_by_id(user_id)
+    if user is None or not auth_repository.approve(user_id, int(admin["id"])):
+        return "That account is not waiting for approval."
+    audit("auth.account_approved", user_id=user_id, email=user["email"])
+    return None
+
+
+def reject_account(user_id: int) -> str | None:
+    rejected = auth_repository.reject(user_id)
+    if rejected is None:
+        return "That account is not waiting for approval."
+    audit("auth.account_rejected", user_id=user_id, email=rejected["email"])
+    return None
+
+
+def set_admin_rights(admin: sqlite3.Row, user_id: int, make_admin: bool) -> str | None:
+    if int(admin["id"]) == user_id:
+        return "You can't change your own administrator rights. Ask another administrator."
+    user = auth_repository.find_user_by_id(user_id)
+    try:
+        changed = auth_repository.set_admin(user_id, make_admin)
+    except ValueError as error:
+        return str(error)
+    if user is None or not changed:
+        return "That account does not exist or is not active."
+    if bool(user["is_admin"]) != make_admin:
+        audit("auth.admin_granted" if make_admin else "auth.admin_revoked", user_id=user_id, email=user["email"])
+    return None
+
+
+def is_admin(email: str | None) -> bool:
+    return auth_repository.is_admin(email)
+
+
+def pending_account_count() -> int:
+    return auth_repository.pending_count()
 
 
 def create_password_reset_link(email: str) -> tuple[str | None, str | None]:

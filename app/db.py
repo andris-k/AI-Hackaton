@@ -65,10 +65,24 @@ def initialize_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active')),
+                is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+                approved_at TEXT,
+                approved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
             )
             """
         )
+        # Accounts that existed before approval was introduced stay active.
+        user_columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
+        for column_name, column_definition in (
+            ("status", "TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active'))"),
+            ("is_admin", "INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1))"),
+            ("approved_at", "TEXT"),
+            ("approved_by_user_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL"),
+        ):
+            if column_name not in user_columns:
+                connection.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_definition}")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -452,20 +466,46 @@ def ensure_default_user() -> None:
         )
         if cursor.fetchone() is None:
             connection.execute(
-                "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+                "INSERT INTO users (email, password_hash, is_admin) VALUES (?, ?, 1)",
                 (email, hash_password(password)),
             )
 
 
-def create_user(email: str, password: str) -> sqlite3.Row:
+def ensure_configured_admins() -> None:
+    """Make the accounts named in ADMIN_EMAIL / ADMIN_EMAILS active admins.
+
+    Runs at every startup, so a configured admin can always get in, even after
+    being removed as admin on the Users page.
+    """
+    emails = sorted(config.admin_emails())
+    if not emails:
+        return
+    placeholders = ", ".join("?" for _ in emails)
+    with db_session() as connection:
+        connection.execute(
+            f"""
+            UPDATE users
+            SET is_admin = 1,
+                status = 'active',
+                approved_at = COALESCE(approved_at, ?)
+            WHERE lower(email) IN ({placeholders})
+            """,
+            (_utc_now_text(), *emails),
+        )
+
+
+_USER_COLUMNS = "id, email, password_hash, created_at, status, is_admin, approved_at"
+
+
+def create_user(email: str, password: str, *, status: str = "active", is_admin: bool = False) -> sqlite3.Row:
     with db_session() as connection:
         cursor = connection.execute(
-            "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-            (email, hash_password(password)),
+            "INSERT INTO users (email, password_hash, status, is_admin) VALUES (?, ?, ?, ?)",
+            (email, hash_password(password), status, int(is_admin)),
         )
         user_id = cursor.lastrowid
         user_cursor = connection.execute(
-            "SELECT id, email, password_hash, created_at FROM users WHERE id = ?",
+            f"SELECT {_USER_COLUMNS} FROM users WHERE id = ?",
             (user_id,),
         )
         return user_cursor.fetchone()
@@ -474,7 +514,7 @@ def create_user(email: str, password: str) -> sqlite3.Row:
 def get_user_by_email(email: str) -> sqlite3.Row | None:
     with db_session() as connection:
         cursor = connection.execute(
-            "SELECT id, email, password_hash, created_at FROM users WHERE email = ?",
+            f"SELECT {_USER_COLUMNS} FROM users WHERE email = ?",
             (email,),
         )
         return cursor.fetchone()
@@ -483,7 +523,7 @@ def get_user_by_email(email: str) -> sqlite3.Row | None:
 def get_user_by_id(user_id: int) -> sqlite3.Row | None:
     with db_session() as connection:
         cursor = connection.execute(
-            "SELECT id, email, password_hash, created_at FROM users WHERE id = ?",
+            f"SELECT {_USER_COLUMNS} FROM users WHERE id = ?",
             (user_id,),
         )
         return cursor.fetchone()
@@ -494,7 +534,7 @@ def list_users(email_filter: str | None = None) -> list[sqlite3.Row]:
         if email_filter:
             cursor = connection.execute(
                 """
-                SELECT id, email, created_at
+                SELECT id, email, created_at, status, is_admin, approved_at
                 FROM users
                 WHERE lower(email) LIKE lower(?)
                 ORDER BY email ASC
@@ -503,9 +543,81 @@ def list_users(email_filter: str | None = None) -> list[sqlite3.Row]:
             )
         else:
             cursor = connection.execute(
-                "SELECT id, email, created_at FROM users ORDER BY email ASC"
+                "SELECT id, email, created_at, status, is_admin, approved_at FROM users ORDER BY email ASC"
             )
         return cursor.fetchall()
+
+
+def is_admin_email(email: str | None) -> bool:
+    if not email:
+        return False
+    with db_session() as connection:
+        row = connection.execute(
+            "SELECT 1 FROM users WHERE lower(email) = lower(?) AND is_admin = 1 AND status = 'active'",
+            (email.strip(),),
+        ).fetchone()
+        return row is not None
+
+
+def list_admin_emails() -> list[str]:
+    with db_session() as connection:
+        rows = connection.execute(
+            "SELECT email FROM users WHERE is_admin = 1 AND status = 'active' ORDER BY email"
+        ).fetchall()
+        return [str(row["email"]) for row in rows]
+
+
+def count_pending_users() -> int:
+    with db_session() as connection:
+        return int(connection.execute("SELECT COUNT(*) FROM users WHERE status = 'pending'").fetchone()[0])
+
+
+def approve_user(user_id: int, approved_by_user_id: int) -> bool:
+    """Activate a pending account. Returns False if it is not pending."""
+    with db_session() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE users
+            SET status = 'active', approved_at = ?, approved_by_user_id = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (_utc_now_text(), approved_by_user_id, user_id),
+        )
+        return cursor.rowcount > 0
+
+
+def delete_pending_user(user_id: int) -> sqlite3.Row | None:
+    """Delete a pending account (rejecting it). Returns the deleted user, or
+    None if there is no pending account with that id."""
+    with db_session() as connection:
+        user = connection.execute(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE id = ? AND status = 'pending'",
+            (user_id,),
+        ).fetchone()
+        if user is None:
+            return None
+        connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        return user
+
+
+def set_user_admin(user_id: int, is_admin: bool) -> bool:
+    """Give or remove admin rights on an active account. Returns False if there
+    is no such account. Raises ValueError rather than remove the last admin."""
+    with db_session() as connection:
+        user = connection.execute(
+            "SELECT is_admin FROM users WHERE id = ? AND status = 'active'",
+            (user_id,),
+        ).fetchone()
+        if user is None:
+            return False
+        if not is_admin and user["is_admin"]:
+            admins = connection.execute(
+                "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active'"
+            ).fetchone()[0]
+            if admins <= 1:
+                raise ValueError("There must be at least one administrator.")
+        connection.execute("UPDATE users SET is_admin = ? WHERE id = ?", (int(is_admin), user_id))
+        return True
 
 
 def update_user_password(user_id: int, password: str) -> None:
@@ -538,7 +650,7 @@ def get_session(token: str) -> sqlite3.Row | None:
             SELECT sessions.id, sessions.user_id, sessions.token, sessions.created_at, sessions.expires_at, users.email
             FROM sessions
             JOIN users ON users.id = sessions.user_id
-            WHERE sessions.token = ? AND sessions.expires_at > ?
+            WHERE sessions.token = ? AND sessions.expires_at > ? AND users.status = 'active'
             """,
             (token, now_text),
         )

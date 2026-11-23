@@ -3,9 +3,49 @@
         <div class="page-header">
             <div>
                 <h2>Users</h2>
-                <p class="page-context">Browse registered accounts and filter by email.</p>
+                <p class="page-context">
+                    {% if is_admin %}Approve new accounts and choose who is an administrator.{% else %}Browse registered accounts and filter by email.{% endif %}
+                </p>
             </div>
         </div>
+
+        {% if is_admin %}
+        <section class="section-card"{% if pending %} style="border-color: var(--warning);"{% endif %}>
+            <h3>Waiting for approval <span class="filter-count">{{ pending | length }}</span></h3>
+            {% if pending %}
+            <p style="margin: 0 0 10px; color: var(--muted);">These people registered and can't log in until you approve them. Approve only people you know should see the asset register. Rejecting deletes the request.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th class="col-created" style="width: 190px;">Registered</th>
+                            <th class="action-cell" style="width: 220px;"><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in pending %}
+                        <tr>
+                            <td><strong>{{ user.email }}</strong></td>
+                            <td class="col-created">{{ user.created_at }}</td>
+                            <td class="action-cell">
+                                <form method="post" action="/users/{{ user.id }}/approve">
+                                    <button type="submit" class="primary">Approve</button>
+                                </form>
+                                <form method="post" action="/users/{{ user.id }}/reject" onsubmit="return confirm('Reject and delete the request from {{ user.email }}?');">
+                                    <button type="submit">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="margin: 0; color: var(--muted);">No accounts are waiting.</p>
+            {% endif %}
+        </section>
+        {% endif %}
 
         <section class="section-card">
             <form method="get" action="/users">
@@ -26,27 +66,44 @@
         </section>
 
         <section class="section-card">
-            <h3>Registered users <span class="filter-count">{{ users | length }}</span></h3>
+            <h3>Active users <span class="filter-count">{{ users | length }}</span></h3>
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
                             <th class="col-id num" style="width: 80px;">ID</th>
                             <th>Email</th>
+                            <th style="width: 140px;">Role</th>
                             <th class="col-created" style="width: 190px;">Created</th>
+                            {% if is_admin %}<th class="action-cell" style="width: 200px;"><span class="visually-hidden">Actions</span></th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for user in users %}
                         <tr>
                             <td class="col-id num">{{ user.id }}</td>
-                            <td>{{ user.email }}</td>
+                            <td>{{ user.email }}{% if user.is_self %} <span style="color: var(--muted);">(you)</span>{% endif %}</td>
+                            <td>{% if user.is_admin %}<strong>Administrator</strong>{% else %}User{% endif %}</td>
                             <td class="col-created">{{ user.created_at }}</td>
+                            {% if is_admin %}
+                            <td class="action-cell">
+                                {% if not user.is_self %}
+                                <form method="post" action="/users/{{ user.id }}/admin"
+                                      onsubmit="return confirm('{% if user.is_admin %}Remove administrator rights from{% else %}Make{% endif %} {{ user.email }}{% if not user.is_admin %} an administrator{% endif %}?');">
+                                    <input type="hidden" name="make_admin" value="{{ '' if user.is_admin else '1' }}" />
+                                    <button type="submit">{% if user.is_admin %}Remove admin{% else %}Make admin{% endif %}</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% if is_admin %}
+            <p style="margin: 10px 0 0; color: var(--muted);">Administrators can approve accounts, see the audit log, and reopen closed inventory sessions. Accounts named in <code>ADMIN_EMAIL</code> / <code>ADMIN_EMAILS</code> are made administrators again at every start.</p>
+            {% endif %}
         </section>
     </section>
 </div>

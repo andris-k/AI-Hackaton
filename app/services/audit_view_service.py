@@ -6,7 +6,6 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from app import config
 
 AREAS: dict[str, str] = {
     "auth": "Accounts",
@@ -23,6 +22,10 @@ EVENT_LABELS: dict[str, str] = {
     "auth.registered": "Registered",
     "auth.password_reset_requested": "Password reset requested",
     "auth.password_reset_completed": "Password reset completed",
+    "auth.account_approved": "Account approved",
+    "auth.account_rejected": "Account rejected",
+    "auth.admin_granted": "Administrator rights given",
+    "auth.admin_revoked": "Administrator rights removed",
     "asset.created": "Asset created",
     "asset.updated": "Asset updated",
     "asset.deleted": "Asset deleted",
@@ -46,11 +49,11 @@ EVENT_LABELS: dict[str, str] = {
     "inventory_session.count_changed": "Count changed",
 }
 
-_DANGER = {"auth.login_failed", "asset.deleted", "category.deleted", "location.deleted", "inventory_session.cancelled",
+_DANGER = {"auth.account_rejected", "auth.login_failed", "asset.deleted", "category.deleted", "location.deleted", "inventory_session.cancelled",
            "inventory_session.deleted"}
-_SUCCESS = {"asset.created", "asset.imported", "category.created", "location.created", "inventory_session.created", "inventory_session.completed",
+_SUCCESS = {"auth.account_approved", "asset.created", "asset.imported", "category.created", "location.created", "inventory_session.created", "inventory_session.completed",
             "auth.registered"}
-_WARNING = {"inventory_session.reopened", "auth.password_reset_requested", "auth.password_reset_completed"}
+_WARNING = {"inventory_session.reopened", "auth.admin_granted", "auth.admin_revoked", "auth.password_reset_requested", "auth.password_reset_completed"}
 
 _FIELD_LABELS = {
     "initial_value": "Initial value",
@@ -74,7 +77,9 @@ _HIDDEN_FIELDS = {"asset_id", "category_id", "location_id", "session_id", "user_
 
 
 def is_admin(email: str | None) -> bool:
-    return bool(email and email.strip().lower() in config.admin_emails())
+    from app.db import is_admin_email
+
+    return is_admin_email(email)
 
 
 def event_choices() -> list[dict[str, Any]]:

@@ -73,8 +73,62 @@ def users_page(
     if user is None:
         return render_login_page("Please log in to access the users page.")
 
-    users = auth_service.list_users(email)
-    return render_users_page(user["email"], users, email)
+    return _users_page(user, email)
+
+
+def _users_page(user: object, email_filter: str = "", message: str | None = None, message_kind: str = "info") -> HTMLResponse:
+    return render_users_page(
+        user["email"],
+        auth_service.list_users(email_filter),
+        email_filter,
+        current_user_id=int(user["id"]),
+        is_admin=auth_service.is_admin(user["email"]),
+        message=message,
+        message_kind=message_kind,
+    )
+
+
+def _admin_action(session_token: str | None, action) -> HTMLResponse:
+    """Run an admin-only action on the Users page and show the result there."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to access the users page.")
+    if not auth_service.is_admin(user["email"]):
+        return _users_page(user, message="Only administrators can do that.", message_kind="error")
+    error, success = action(user)
+    return _users_page(user, message=error or success, message_kind="error" if error else "success")
+
+
+@router.post("/users/{user_id}/approve", response_class=HTMLResponse)
+def approve_user(user_id: int, session_token: str | None = Cookie(default=None)) -> HTMLResponse:
+    return _admin_action(
+        session_token,
+        lambda admin: (auth_service.approve_account(admin, user_id), "Account approved. The user can now log in."),
+    )
+
+
+@router.post("/users/{user_id}/reject", response_class=HTMLResponse)
+def reject_user(user_id: int, session_token: str | None = Cookie(default=None)) -> HTMLResponse:
+    return _admin_action(
+        session_token,
+        lambda admin: (auth_service.reject_account(user_id), "Account rejected and deleted."),
+    )
+
+
+@router.post("/users/{user_id}/admin", response_class=HTMLResponse)
+def set_user_admin(
+    user_id: int,
+    session_token: str | None = Cookie(default=None),
+    make_admin: str = Form(default=""),
+) -> HTMLResponse:
+    grant = make_admin in {"1", "true", "on", "yes"}
+    return _admin_action(
+        session_token,
+        lambda admin: (
+            auth_service.set_admin_rights(admin, user_id, grant),
+            "Administrator rights given." if grant else "Administrator rights removed.",
+        ),
+    )
 
 
 @router.post("/", response_class=HTMLResponse)
@@ -100,6 +154,12 @@ def register(email: str = Form(...), password: str = Form(...), confirm_password
     user, session_token, error = auth_service.register_user(email, password, confirm_password)
     if error:
         return render_register_page(error, email=email)
+    if session_token is None:
+        return render_login_page(
+            notice="Your account has been created and is waiting for an administrator's approval. "
+            "You can log in once it has been approved.",
+            email=user["email"],
+        )
 
     response = set_session_cookie(
         render_dashboard_page(user["email"], session_token, message="Account created successfully."),
@@ -201,6 +261,8 @@ def reset_password(
             return render_login_page(error)
         return render_reset_password_page(token, error)
 
+    if user["status"] != "active":
+        return render_login_page(notice="Password updated. " + auth_service.PENDING_LOGIN_MESSAGE, email=user["email"])
     session_token = auth_service.create_session_for_user(user["id"])
     response = set_session_cookie(
         render_dashboard_page(user["email"], session_token, message="Password updated successfully."),

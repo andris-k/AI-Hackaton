@@ -207,7 +207,13 @@ In production the app:
 * turns off the API docs at `/docs`, `/redoc` and `/openapi.json`;
 * hides the demo-credentials hint on the login page.
 
-Registration at `/register` stays open to everyone.
+### Accounts and administrators
+
+Anyone can request an account at `/register`, but new accounts are **pending**: they can't log in until an administrator approves them on the Users page (`/users`). Administrators see the number of waiting accounts next to Users in the sidebar, and are emailed about each new request when SMTP and `APP_BASE_URL` are set. Rejecting a request deletes it. This applies in development too.
+
+Administrators can approve accounts, see the audit log and History sections, and reopen closed inventory sessions. Admin rights are stored in the database and managed on the Users page: administrators can make other users administrators or remove that again. Nobody can change their own rights, and the last administrator can't be removed.
+
+Accounts named in `ADMIN_EMAIL` / `ADMIN_EMAILS` are made active administrators at every start, and can register without approval, so an installation always has a way in. Removing one of them as administrator on the Users page only lasts until the next restart; remove it from the setting to make it permanent.
 
 ### Configuration
 
@@ -220,7 +226,7 @@ All settings are environment variables. None are needed for local development.
 | `UPLOADS_DIR` | Folder for asset images; put it on a persistent disk | `app/uploads` |
 | `ADMIN_EMAIL` | First admin account, created on startup if missing | — |
 | `ADMIN_PASSWORD` | Its password, at least 12 characters | — |
-| `ADMIN_EMAILS` | Comma-separated emails allowed admin-only actions, such as reopening closed inventory sessions | `ADMIN_EMAIL` in production, `admin@example.com` in development |
+| `ADMIN_EMAILS` | Comma-separated emails that are always administrators (made admin at every start, no approval needed). More administrators can be added on the Users page | `ADMIN_EMAIL` in production, `admin@example.com` in development |
 | `APP_BASE_URL` | Public URL used in emailed links and in the QR codes on asset labels, e.g. `https://assets.example.com` | — (labels use the URL the page was opened on) |
 | `SMTP_HOST` | Mail server for password reset emails | — (reset off in production) |
 | `SMTP_PORT` | Mail server port | `587` |
@@ -253,7 +259,7 @@ Audit events are also stored in the `audit_events` database table, so administra
 * **Audit log** page (`/audit-log`, in the sidebar for administrators): all events, newest first, 50 per page. Filter by area, event, user and date range. Field changes are shown as `old → new` and affected items are linked.
 * **History** section on each fixed asset and inventory session page: the latest 20 events for that record, with a link to its full history in the audit log.
 
-Only administrators (`ADMIN_EMAILS`) can see the audit log and History sections, because they contain personal data. Set `AUDIT_RETENTION_DAYS` to delete old records automatically. If storing an event fails, the user's action still completes and the error is logged.
+Only administrators can see the audit log and History sections, because they contain personal data. Set `AUDIT_RETENTION_DAYS` to delete old records automatically. If storing an event fails, the user's action still completes and the error is logged.
 
 To add an audit event in new code:
 

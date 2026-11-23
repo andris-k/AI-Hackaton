@@ -107,8 +107,12 @@ Accounts that can log in.
 | `email` | TEXT | Required, unique |
 | `password_hash` | TEXT | `pbkdf2_sha256$<iterations>$<salt hex>$<hash hex>`, 210,000 iterations |
 | `created_at` | TEXT | Defaults to `CURRENT_TIMESTAMP` |
+| `status` | TEXT | `pending` (registered, waiting for approval) or `active`. Default `active` |
+| `is_admin` | INTEGER | 1 for administrators, otherwise 0 |
+| `approved_at` | TEXT | When an administrator approved the account |
+| `approved_by_user_id` | INTEGER | → `users.id`, `ON DELETE SET NULL` |
 
-Admin rights are not stored here. They come from the `ADMIN_EMAILS` setting.
+New registrations are `pending`, except for emails in `ADMIN_EMAIL` / `ADMIN_EMAILS`. Pending accounts can't log in: `get_session` only accepts sessions of active users, so no route can log one in by accident. Rejecting a request deletes the row. `is_admin` only counts for active accounts. `ensure_configured_admins()` runs at startup and makes the configured emails active administrators. Accounts that existed before approval was added stay active.
 
 ### `sessions`
 
@@ -277,13 +281,14 @@ Users and inventory sessions are deleted for real.
 There is no migration tool. On startup, `auth_service.initialize_defaults()` runs:
 
 1. `initialize_database()` (`app/db.py`). Creates missing tables and indexes with `CREATE ... IF NOT EXISTS`, then brings older databases up to date:
-   * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`, `location_id`; the audit, reason and `location_id` columns of `inventory_sessions`;
+   * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: the approval and admin columns of `users`; `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`, `location_id`; the audit, reason and `location_id` columns of `inventory_sessions`;
    * rebuilds `inventory_session_fixed_assets` to add `expected_quantity` and allow a quantity of 0 (`_migrate_inventory_session_fixed_assets_for_counts`). Links in sessions that were already started get the asset's quantity at the time of the migration as their expected quantity, because the quantity when they started was never stored;
    * fills empty `created_at`, `updated_at` and `last_edited_at` on inventory sessions;
    * rebuilds `fixed_asset_categories` without its old `UNIQUE(name)` constraint, which SQLite cannot drop in place (`_migrate_fixed_asset_categories_for_soft_delete`);
    * creates a category for each free-text `fixed_assets.category` value and sets `category_id` where it is missing.
 2. `initialize_audit_storage()`. Creates `audit_events` and its indexes.
 3. `ensure_default_user()`. Creates the demo or bootstrap admin account. See [Running in production](../README.md#running-in-production).
+4. `ensure_configured_admins()`. Makes the accounts in `ADMIN_EMAIL` / `ADMIN_EMAILS` active administrators.
 
 All steps can run any number of times. To change the schema, update the `CREATE TABLE` statement for new databases and add a matching step for existing ones, as above. `tests/unit/test_soft_delete.py` and `tests/unit/test_locations.py` show how to test a migration against a database in the old format.
 

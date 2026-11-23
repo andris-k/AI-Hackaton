@@ -9,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app import config
 from app.repositories import audit_repository
+from app.repositories import auth_repository
 from app.services import audit_view_service as audit_view
 from app.repositories import fixed_assets_repository as assets_repo
 from app.repositories import locations_repository
@@ -54,7 +55,7 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
             <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-            <link rel="stylesheet" href="/static/app.css?v=6" />
+            <link rel="stylesheet" href="/static/app.css?v=7" />
 """
 
 _BRAND = """
@@ -63,7 +64,9 @@ _BRAND = """
 """
 
 
-def _nav_link(key: str, label: str, href: str, active_nav: str | None) -> str:
+def _nav_link(key: str, label: str, href: str, active_nav: str | None, badge: int = 0) -> str:
+    if badge:
+        label = f'{label} <span class="nav-badge" title="{badge} waiting for approval">{badge}</span>'
     if key == active_nav:
         return f'<a class="nav-link active" href="{href}" aria-current="page">{label}</a>'
     return f'<a class="nav-link" href="{href}">{label}</a>'
@@ -72,8 +75,9 @@ def _nav_link(key: str, label: str, href: str, active_nav: str | None) -> str:
 def _render_nav(current_email: str, active_nav: str | None) -> str:
     is_admin = audit_view.is_admin(current_email)
     workspace_links = "".join(_nav_link(key, label, href, active_nav) for key, label, href in _WORKSPACE_NAV)
+    pending = auth_repository.pending_count() if is_admin else 0
     admin_links = "".join(
-        _nav_link(key, label, href, active_nav)
+        _nav_link(key, label, href, active_nav, badge=pending if key == "users" else 0)
         for key, label, href, admins_only in _ADMINISTRATION_NAV
         if is_admin or not admins_only
     )
@@ -181,7 +185,7 @@ def render_page(
     return HTMLResponse(content=html)
 
 
-def render_login_page(error: str | None = None, email: str = "") -> HTMLResponse:
+def render_login_page(error: str | None = None, email: str = "", *, notice: str | None = None) -> HTMLResponse:
     content = _render_template(
         "login_page.html",
         email=email,
@@ -193,7 +197,7 @@ def render_login_page(error: str | None = None, email: str = "") -> HTMLResponse
         "Log in",
         "Enter your email and password to access the system.",
         content,
-        message=error,
+        message=error or notice,
         message_kind="error" if error else "info",
     )
 
@@ -203,7 +207,7 @@ def render_register_page(error: str | None = None, email: str = "") -> HTMLRespo
     return render_page(
         "AI Hackaton Registration",
         "Create account",
-        "Register a new user to access the dashboard.",
+        "Request an account. An administrator approves new accounts before they can be used.",
         content,
         message=error,
         message_kind="error" if error else "info",
@@ -281,26 +285,44 @@ def render_dashboard_page(
     )
 
 
-def render_users_page(current_email: str, users: list[object], email_filter: str = "") -> HTMLResponse:
+def render_users_page(
+    current_email: str,
+    users: list[object],
+    email_filter: str = "",
+    *,
+    current_user_id: int | None = None,
+    is_admin: bool = False,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    rows = [
+        {
+            "id": int(user["id"]),
+            "email": str(user["email"]),
+            "created_at": str(user["created_at"]),
+            "pending": user["status"] == "pending",
+            "is_admin": bool(user["is_admin"]),
+            "is_self": int(user["id"]) == current_user_id,
+        }
+        for user in users
+    ]
     table = _render_template(
         "users_page.html",
         current_email=current_email,
         email_filter=email_filter,
-        users=[
-            {
-                "id": str(user["id"]),
-                "email": str(user["email"]),
-                "created_at": str(user["created_at"]),
-            }
-            for user in users
-        ],
+        is_admin=is_admin,
+        # Waiting accounts are personal data and only matter to admins.
+        pending=[row for row in rows if row["pending"]] if is_admin else [],
+        users=[row for row in rows if not row["pending"]],
     )
     return render_page(
         "AI Hackaton Users",
         "Users",
         "List of registered users in the system.",
         table,
-        width="860px",
+        width="960px",
+        message=message,
+        message_kind=message_kind,
         current_email=current_email,
         active_nav="users",
     )

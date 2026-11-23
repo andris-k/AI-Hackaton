@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from app import config
 from app.db import INVENTORY_SESSION_STATUSES
+from app.db import is_admin_email as db_is_admin_email
 
 STATUSES: tuple[str, ...] = INVENTORY_SESSION_STATUSES
 TERMINAL_STATUSES: tuple[str, ...] = ("Completed", "Cancelled")
@@ -28,7 +28,7 @@ def can_transition(current_status: str, target_status: str) -> bool:
 
 
 def is_admin_email(email: str | None) -> bool:
-    return bool(email and email.strip().lower() in config.admin_emails())
+    return db_is_admin_email(email)
 
 
 def transition_error(

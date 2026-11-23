@@ -28,6 +28,7 @@ EVENT_LABELS: dict[str, str] = {
     "asset.deleted": "Asset deleted",
     "asset.report_downloaded": "Assets PDF report downloaded",
     "asset.labels_downloaded": "Asset labels downloaded",
+    "asset.imported": "Assets imported from CSV",
     "category.created": "Category created",
     "category.renamed": "Category renamed",
     "category.deleted": "Category deleted",
@@ -47,7 +48,7 @@ EVENT_LABELS: dict[str, str] = {
 
 _DANGER = {"auth.login_failed", "asset.deleted", "category.deleted", "location.deleted", "inventory_session.cancelled",
            "inventory_session.deleted"}
-_SUCCESS = {"asset.created", "category.created", "location.created", "inventory_session.created", "inventory_session.completed",
+_SUCCESS = {"asset.created", "asset.imported", "category.created", "location.created", "inventory_session.created", "inventory_session.completed",
             "auth.registered"}
 _WARNING = {"inventory_session.reopened", "auth.password_reset_requested", "auth.password_reset_completed"}
 

@@ -12,8 +12,10 @@ from app.db import (
     find_fixed_asset_ids_by_prefix,
     get_fixed_asset_by_id,
     get_fixed_asset_category_by_id,
+    import_fixed_assets,
     list_fixed_asset_categories,
     list_fixed_asset_categories_with_usage,
+    list_fixed_asset_names,
     list_fixed_assets,
     update_fixed_asset,
     update_fixed_asset_category,
@@ -112,3 +114,11 @@ def delete_category(category_id: str) -> bool:
 
 def find_ids_by_prefix(prefix: str, limit: int = 2) -> list[str]:
     return find_fixed_asset_ids_by_prefix(prefix, limit)
+
+
+def list_asset_names() -> list[str]:
+    return list_fixed_asset_names()
+
+
+def import_assets(rows: list[dict[str, object]]) -> dict[str, object]:
+    return import_fixed_assets(rows)

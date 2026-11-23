@@ -163,6 +163,8 @@ Category names are unique among categories that are not deleted, ignoring case. 
 | `deleted_at` | TEXT | Set on logical delete, otherwise `NULL`. Indexed |
 | `location_id` | TEXT | → `locations.id`. Optional. Indexed |
 
+`import_fixed_assets` adds many assets in one transaction, all or none. It matches categories and locations by name, ignoring case, and creates the missing ones. The CSV file is read and every row is checked first (`app/services/asset_import_service.py`). Between the preview and the confirmation, the upload waits in the system temp folder (`asset-registry-imports`), not in the public uploads folder, and is deleted after an hour.
+
 The `category` column comes from an older version of the schema, where categories were free text. It is still filled on insert and update, and it is updated when a category is renamed. Queries read `COALESCE(fixed_asset_categories.name, fixed_assets.category)`, so the linked category's name wins.
 
 ### `locations`

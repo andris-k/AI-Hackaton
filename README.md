@@ -11,6 +11,8 @@ The project now uses a modular monolith layering:
 * `app/routers/fixed_assets.py` - fixed asset HTTP routes
 * `app/routers/categories.py` - fixed asset category HTTP routes
 * `app/routers/locations.py` - location HTTP routes (`/locations`)
+* `app/routers/asset_import.py` - CSV import of fixed assets (`/fixed-assets/import`)
+* `app/services/asset_import_service.py` - reading and checking import files
 * `app/views/pages.py` - server-rendered HTML page helpers
 * `app/views/templates/` - Jinja2 templates for auth, users, fixed assets, and category pages
 * `app/static/app.css` - shared stylesheet (sidebar layout, design tokens, tables, forms), served at `/static/app.css`
@@ -117,6 +119,8 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/fixed-assets/id/{fixed_asset_id}/edit` - fixed asset edit page
 * `/fixed-asset-categories` - fixed asset category management page
 * `/fixed-asset-categories/{category_id}/edit` - fixed asset category edit page
+* `/fixed-assets/import` - import fixed assets from a CSV file: upload, preview, confirm
+* `/fixed-assets/import/template.csv` - CSV template for the import
 * `/fixed-assets/labels.pdf` - QR labels for the assets matching the list filters (A4, 3 × 7 labels of 63.5 × 38.1 mm)
 * `/fixed-assets/id/{fixed_asset_id}/label.pdf` - QR label for one asset
 * `/inventory-sessions/id/{session_id}/count` - phone-friendly counting page for an Active session
@@ -258,3 +262,5 @@ from app.logging_config import audit
 
 audit("asset.transferred", asset_id=asset_id, to_person=new_person)
 ```
+
+For the same event on many records at once, `audit_many("asset.created", [{...}, {...}])` stores them in one transaction.

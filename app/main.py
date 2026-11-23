@@ -13,6 +13,7 @@ from app.logging_config import configure_logging, mask_path, start_request_conte
 
 configure_logging()
 
+from app.routers.asset_import import router as asset_import_router  # noqa: E402
 from app.routers.audit import router as audit_router  # noqa: E402  (logging is configured first)
 from app.routers.auth import router as auth_router  # noqa: E402
 from app.routers.categories import router as categories_router
@@ -125,6 +126,7 @@ def favicon() -> FileResponse:
 
 
 app.include_router(auth_router)
+app.include_router(asset_import_router)
 app.include_router(fixed_assets_router)
 app.include_router(categories_router)
 app.include_router(locations_router)

@@ -57,7 +57,7 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
             <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-            <link rel="stylesheet" href="/static/app.css?v=8" />
+            <link rel="stylesheet" href="/static/app.css?v=9" />
 """
 
 _BRAND = """
@@ -935,46 +935,77 @@ def render_inventory_session_details_page(
     )
 
 
+def render_count_row(row: dict[str, object], session_id: str) -> str:
+    """One row of the counting workspace, as sent back after each count."""
+    return _render_template("inventory_count_row.html", r=row, session_id=session_id)
+
+
 def render_inventory_session_count_page(
     current_email: str,
     inv_session: object,
-    linked_assets: list[object],
     *,
-    counts_here: dict[str, int] | None = None,
     locations: list[dict[str, str]] | None = None,
-    highlight_asset_id: str = "",
+    selected_tab: str = "all",
+    details_open: bool = False,
     message: str | None = None,
     message_kind: str = "info",
 ) -> HTMLResponse:
-    counts_here = counts_here or {}
-    rows = [
-        {
-            "id": str(asset["id"]),
-            "name": str(asset["name"]),
-            "category": str(asset["category"]),
-            "location": str(asset["location"] or ""),
-            "other_location": bool(inv_session["location_id"]) and asset["location_id"] != inv_session["location_id"],
-            "expected": int(asset["expected_quantity"]),
-            "counted": int(asset["quantity"]),
-            "here": counts_here.get(str(asset["id"]), 0),
-            "deleted": bool(asset["deleted_at"]),
-        }
-        for asset in linked_assets
-    ]
+    """The counting workspace of an Active session."""
+    from app.services import counting_workspace_service as workspace
+
+    session_id = str(inv_session["id"])
+    rows = workspace.build_rows(inv_session)
+    counts = workspace.summary(rows)
     content = _render_template(
         "inventory_session_count_page.html",
         inv_session=inv_session,
-        locations=locations or [],
+        session_id=session_id,
         rows=rows,
-        highlight_asset_id=highlight_asset_id,
-        matching=sum(1 for row in rows if row["counted"] == row["expected"]),
+        summary=counts,
+        tabs=workspace.tabs(counts),
+        selected_tab=selected_tab if selected_tab in {key for key, _ in workspace.TABS} else "all",
+        locations=locations or [],
+        recent=workspace.recent_counts(session_id),
+        location_history=session_locations(session_id)["location_history"],
+        details_open=details_open,
     )
     return render_page(
         "AI Hackaton Count Inventory",
         "Count inventory",
-        "Count assets by scanning their labels.",
+        "Count the assets of an inventory session.",
         content,
-        width="720px",
+        width="1200px",
+        message=message,
+        message_kind=message_kind,
+        current_email=current_email,
+        active_nav="inventory",
+    )
+
+
+def render_inventory_session_finish_page(
+    current_email: str,
+    inv_session: object,
+    *,
+    completion_reason: str = "",
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    """Review before completing: what is not counted yet, the differences, the locations used."""
+    from app.services import counting_workspace_service as workspace
+
+    content = _render_template(
+        "inventory_session_finish_page.html",
+        inv_session=inv_session,
+        completion_reason=completion_reason,
+        location_history=session_locations(str(inv_session["id"]))["location_history"],
+        **workspace.build_review(inv_session),
+    )
+    return render_page(
+        "AI Hackaton Finish Counting",
+        "Finish counting",
+        "Review the results before completing the session.",
+        content,
+        width="1100px",
         message=message,
         message_kind=message_kind,
         current_email=current_email,

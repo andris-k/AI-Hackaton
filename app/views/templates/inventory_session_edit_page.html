@@ -423,7 +423,6 @@
                                 {% if inv_session.location_id %}
                                 <button type="button" id="add-location-assets" class="workflow-neutral" title="Adds a row with a count of 0 for every asset registered at {{ inv_session.location }} that is not listed yet">+ Add all assets registered at {{ inv_session.location }}</button>
                                 {% endif %}
-                                <button type="button" id="clear-linked-assets" class="workflow-neutral">Clear all rows</button>
                             </div>
                             {% endif %}
                         </section>
@@ -500,7 +499,6 @@
 
         const grid = document.getElementById("linked-assets-grid");
         const addButton = document.getElementById("add-linked-asset");
-        const clearButton = document.getElementById("clear-linked-assets");
         const template = document.getElementById("linked-asset-row-template");
         const emptyState = document.getElementById("linked-assets-empty");
         const discrepanciesOnlyToggle = document.getElementById("show-discrepancies-only");
@@ -926,18 +924,6 @@
                     if (qtyInput) qtyInput.value = "0";
                     listed.add(option.value);
                 });
-                toggleEmptyState();
-                updateDuplicateProtection();
-                updateTotals();
-                markDirty();
-            });
-        }
-
-        if (clearButton && grid) {
-            clearButton.addEventListener("click", function () {
-                grid.innerHTML = "";
-                hideUndoToast();
-                lastRemovedRow = null;
                 toggleEmptyState();
                 updateDuplicateProtection();
                 updateTotals();

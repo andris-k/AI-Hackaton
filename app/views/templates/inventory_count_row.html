@@ -1,0 +1,47 @@
+{# One asset in the counting workspace. Rendered with the page and again after each count. #}
+<article class="count-row{% if r.at_location %} is-at-location{% endif %}" id="asset-{{ r.id }}" data-asset-id="{{ r.id }}" data-group="{{ r.group }}">
+    <div class="count-row-info">
+        <div class="count-row-title">
+            <strong>{{ r.name }}</strong>
+            <span class="status-chip status-chip-{{ r.status_key }}">{{ r.status_label }}</span>
+            {% if r.deleted %}<span class="status-chip status-chip-notfound">Deleted</span>{% endif %}
+        </div>
+        <span class="count-row-meta">{{ r.category }} · registered at {{ r.register_location or "no location" }} · <span class="mono">{{ r.short_id }}</span>{% if r.found_away %} · <strong>found away from its registered location</strong>{% endif %}</span>
+        <span class="count-row-where">{{ r.counted_at }}</span>
+    </div>
+    <div class="count-row-controls">
+        <div class="count-figure"><span>Expected</span><strong>{{ r.expected }}</strong></div>
+        <div class="count-stepper">
+            <form method="post" action="/inventory-sessions/id/{{ session_id }}/count" class="count-form">
+                <input type="hidden" name="code" value="{{ r.id }}" />
+                <input type="hidden" name="delta" value="-1" />
+                <button type="submit" class="count-step" aria-label="One less {{ r.name }} here">&minus;</button>
+            </form>
+            <form method="post" action="/inventory-sessions/id/{{ session_id }}/count" class="count-form count-set-form">
+                <input type="hidden" name="code" value="{{ r.id }}" />
+                <label class="count-figure">
+                    <span>Here</span>
+                    <input name="quantity" type="number" min="0" step="1" inputmode="numeric" value="{{ r.here }}" aria-label="Count of {{ r.name }} here" />
+                </label>
+            </form>
+            <form method="post" action="/inventory-sessions/id/{{ session_id }}/count" class="count-form">
+                <input type="hidden" name="code" value="{{ r.id }}" />
+                <input type="hidden" name="delta" value="1" />
+                <button type="submit" class="count-step count-step-plus" aria-label="One more {{ r.name }} here">+</button>
+            </form>
+        </div>
+        <div class="count-figure"><span>Total</span><strong>{{ r.total }}</strong></div>
+        <form method="post" action="/inventory-sessions/id/{{ session_id }}/count" class="count-form">
+            <input type="hidden" name="code" value="{{ r.id }}" />
+            <input type="hidden" name="quantity" value="0" />
+            <input type="hidden" name="not_found" value="1" />
+            <button type="submit" class="count-secondary">Not found here</button>
+        </form>
+        <form method="post" action="/inventory-sessions/id/{{ session_id }}/remove" class="count-remove-form">
+            <input type="hidden" name="asset_id" value="{{ r.id }}" />
+            <button type="submit" class="count-remove" aria-label="Remove {{ r.name }} from the session" title="Remove from the session">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+            </button>
+        </form>
+    </div>
+</article>

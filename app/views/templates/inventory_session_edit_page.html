@@ -34,6 +34,15 @@
     }
     .header-meta-item p { margin: 0; color: var(--muted); font-size: 0.78rem; }
     .header-meta-item strong { display: block; margin-top: 2px; font-size: 0.98rem; }
+    .active-location-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 12px; }
+    .active-location-form > div { flex: 1 1 220px; min-width: 0; }
+    .active-location-form select { width: 100%; }
+    .active-location-form .help-text { flex-basis: 100%; }
+    .location-history { margin-top: 10px; font-size: 0.86rem; }
+    .location-history summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+    .location-history ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+    .location-history span { color: var(--muted); }
+    .elsewhere-qty { display: block; margin-top: 2px; font-size: 0.78rem; color: var(--muted); }
     .session-id-value {
         margin: 0;
         font-family: var(--font-mono);
@@ -211,10 +220,36 @@
                         <strong>{{ prefill.responsible_person if prefill else inv_session.responsible_person }}</strong>
                     </article>
                     <article class="header-meta-item">
-                        <p>Location</p>
-                        <strong>{{ inv_session.location or "All locations" }}</strong>
+                        <p>Active location</p>
+                        <strong>{{ inv_session.location or "No location" }}</strong>
                     </article>
                 </div>
+                {% if inv_session.status in ["New", "Active"] and not is_read_only %}
+                <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/active-location" class="active-location-form">
+                    <input type="hidden" name="back" value="edit" />
+                    <div>
+                        <label for="active_location_id">Counting at</label>
+                        <select id="active_location_id" name="location_id">
+                            <option value="">No location</option>
+                            {% for location in locations %}
+                            <option value="{{ location.id }}" {% if location.id == inv_session.location_id %}selected{% endif %}>{{ location.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="workflow-neutral">Set active location</button>
+                    <p class="help-text">Counts are recorded at the active location. Change it when you move on to the next room or site; unsaved changes on this page are lost.</p>
+                </form>
+                {% endif %}
+                {% if location_history %}
+                <details class="location-history">
+                    <summary>Location history ({{ location_history | length }})</summary>
+                    <ol>
+                        {% for entry in location_history %}
+                        <li><strong>{{ entry.location }}</strong> <span>from {{ entry.time }}{% if entry.by %} · {{ entry.by }}{% endif %}</span></li>
+                        {% endfor %}
+                    </ol>
+                </details>
+                {% endif %}
                 {% if not is_read_only %}
                 <div class="status-quick-actions">
                     <p>Quick lifecycle actions</p>
@@ -280,17 +315,6 @@
                                            {% if is_read_only %}disabled{% endif %} required />
                                 </div>
                             </div>
-                            {% set selected_location_id = prefill.location_id if prefill else (inv_session.location_id or "") %}
-                            <div>
-                                <label for="location_id">Location</label>
-                                <select id="location_id" name="location_id" {% if is_read_only %}disabled{% endif %}>
-                                    <option value="">All locations</option>
-                                    {% for location in locations %}
-                                    <option value="{{ location.id }}" {% if location.id == selected_location_id %}selected{% endif %}>{{ location.name }}</option>
-                                    {% endfor %}
-                                </select>
-                                <p class="help-text">With a location, only assets at it can be added. After changing it, save to update the asset list.</p>
-                            </div>
                         </section>
 
                         <section class="section-card">
@@ -319,7 +343,7 @@
                                 <div class="linked-assets-head">
                                     <div>Search and Asset</div>
                                     <div>Expected</div>
-                                    <div>Counted</div>
+                                    <div>Counted at {{ inv_session.location or "no location" }}</div>
                                     <div>Difference</div>
                                     <div>Line Value</div>
                                     <div>Action</div>
@@ -334,7 +358,7 @@
                                 <p id="linked-assets-empty" class="empty-linked-assets" {% if linked_asset_rows %}style="display:none;"{% endif %}>No linked assets yet. Use + Add asset to start.</p>
                                 <div class="linked-assets-grid" id="linked-assets-grid">
                                     {% for row in linked_asset_rows %}
-                                    <div class="linked-asset-row">
+                                    <div class="linked-asset-row" data-elsewhere="{{ row.elsewhere }}">
                                         <div class="asset-cell">
                                             <select name="fixed_asset_ids" {% if is_read_only %}disabled{% endif %}>
                                                 <option value="">-- Select fixed asset --</option>
@@ -354,6 +378,7 @@
                                         </div>
                                         <div class="quantity-cell">
                                             <input name="fixed_asset_quantities" type="number" min="0" step="1" value="{{ row.quantity }}" {% if is_read_only %}disabled{% endif %} />
+                                            {% if row.elsewhere != "0" %}<span class="elsewhere-qty">+ {{ row.elsewhere }} at other locations</span>{% endif %}
                                         </div>
                                         <div class="difference-cell">
                                             <span class="diff-value diff-zero">0</span>
@@ -396,7 +421,7 @@
                             <div style="margin-top: 10px; display:flex; gap:8px; flex-wrap: wrap;">
                                 <button type="button" id="add-linked-asset">+ Add asset</button>
                                 {% if inv_session.location_id %}
-                                <button type="button" id="add-location-assets" class="workflow-neutral" title="Adds a row with a count of 0 for every asset at {{ inv_session.location }} that is not listed yet">+ Add all assets at {{ inv_session.location }}</button>
+                                <button type="button" id="add-location-assets" class="workflow-neutral" title="Adds a row with a count of 0 for every asset registered at {{ inv_session.location }} that is not listed yet">+ Add all assets registered at {{ inv_session.location }}</button>
                                 {% endif %}
                                 <button type="button" id="clear-linked-assets" class="workflow-neutral">Clear all rows</button>
                             </div>
@@ -433,12 +458,12 @@
 </div>
 
 <template id="linked-asset-row-template">
-    <div class="linked-asset-row">
+    <div class="linked-asset-row" data-elsewhere="0">
         <div class="asset-cell">
             <select name="fixed_asset_ids">
                 <option value="">-- Select fixed asset --</option>
                 {% for asset in fixed_assets if asset.selectable %}
-                <option value="{{ asset.id }}">{{ asset.name }} ({{ asset.category }})</option>
+                <option value="{{ asset.id }}"{% if asset.at_location %} data-at-location="1"{% endif %}>{{ asset.name }} ({{ asset.category }})</option>
                 {% endfor %}
             </select>
             <p class="help-text">Asset can be selected only once.</p>
@@ -598,10 +623,12 @@
 
                 const assetId = (select.value || "").trim();
                 const quantity = Math.max(0, Number(qtyInput.value || 0));
+                // The input is the count at the active location; the asset may also be counted elsewhere.
+                const counted = quantity + Math.max(0, Number(row.dataset.elsewhere || 0));
                 const expectedQty = expectedQuantityForAsset(assetId);
-                const diff = quantity - expectedQty;
+                const diff = counted - expectedQty;
                 const unitValue = Number(assetValueById[assetId] || 0);
-                const rowValue = assetId && quantity ? (unitValue * quantity) : 0;
+                const rowValue = assetId && counted ? (unitValue * counted) : 0;
                 const expectedQtyEl = row.querySelector('.expected-qty');
 
                 if (lineValue) {
@@ -629,7 +656,7 @@
                 }
                 if (!assetId) return;
                 chosenAssetIds.add(assetId);
-                qtySum += quantity;
+                qtySum += counted;
                 valueSum += rowValue;
             });
 
@@ -875,7 +902,7 @@
         const addLocationAssetsButton = document.getElementById("add-location-assets");
         if (addLocationAssetsButton && template && grid) {
             addLocationAssetsButton.addEventListener("click", function () {
-                // Every asset the new-row picker offers is at the session's location.
+                // The new-row picker offers every asset; add the ones registered at the active location.
                 const templateSelect = template.content.querySelector('select[name="fixed_asset_ids"]');
                 if (!templateSelect) return;
                 const listed = new Set(
@@ -887,7 +914,7 @@
                 const emptySelects = Array.from(grid.querySelectorAll('select[name="fixed_asset_ids"]'))
                     .filter((select) => !select.value);
                 Array.from(templateSelect.options).forEach((option) => {
-                    if (!option.value || listed.has(option.value)) return;
+                    if (!option.value || listed.has(option.value) || option.dataset.atLocation !== "1") return;
                     let select = emptySelects.shift();
                     if (!select) {
                         const row = appendLinkedAssetRow();

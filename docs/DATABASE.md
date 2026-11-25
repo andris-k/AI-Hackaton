@@ -20,7 +20,10 @@ erDiagram
     users |o--o{ inventory_sessions : "created / started / completed / cancelled / last edited by"
     fixed_asset_categories ||--o{ fixed_assets : "classifies"
     locations |o--o{ fixed_assets : "holds"
-    locations |o--o{ inventory_sessions : "covered by"
+    locations |o--o{ inventory_sessions : "active in"
+    inventory_sessions ||--o{ inventory_session_locations : "location history"
+    inventory_session_fixed_assets ||--o{ inventory_session_counts : "counted per location"
+    locations |o--o{ inventory_session_counts : "counted at"
     inventory_sessions ||--o{ inventory_session_fixed_assets : "includes"
     fixed_assets ||--o{ inventory_session_fixed_assets : "counted in"
 
@@ -80,8 +83,23 @@ erDiagram
     inventory_session_fixed_assets {
         TEXT inventory_session_id PK, FK
         TEXT fixed_asset_id PK, FK
-        INTEGER quantity "counted"
+        INTEGER quantity "counted, total"
         INTEGER expected_quantity
+    }
+    inventory_session_counts {
+        INTEGER id PK
+        TEXT inventory_session_id FK
+        TEXT fixed_asset_id FK
+        TEXT location_id FK
+        INTEGER quantity
+        TEXT updated_at
+    }
+    inventory_session_locations {
+        INTEGER id PK
+        TEXT inventory_session_id FK
+        TEXT location_id FK
+        TEXT activated_at
+        INTEGER activated_by_user_id FK
     }
     audit_events {
         INTEGER id PK
@@ -200,9 +218,9 @@ A stocktake over a date range, with the assets to be counted.
 | `started_at`, `completed_at`, `cancelled_at` | TEXT | Set on the first move into that status |
 | `created_at`, `updated_at`, `last_edited_at` | TEXT | ISO 8601 UTC |
 | `created_by_user_id`, `started_by_user_id`, `completed_by_user_id`, `cancelled_by_user_id`, `last_edited_by_user_id` | INTEGER | → `users.id`, nullable |
-| `location_id` | TEXT | → `locations.id`. Optional: `NULL` means the session covers all locations |
+| `location_id` | TEXT | → `locations.id`. The **active location**: where counts are recorded now. `NULL`: counting with no location |
 
-When a session has a location, the edit page only offers assets at that location, and can add all of them at once with a count of 0. Assets already linked from elsewhere stay linked. `update_inventory_session` keeps the current location unless `location_id` is passed.
+The active location can change any number of times while a session is New or Active (`set_active_location`, from the edit page and the counting page). Every change, and the starting location chosen when the session is created, is added to `inventory_session_locations`. Changing it sets `updated_at`, so an edit page opened before refuses to save its counts at the new location. Any asset in the register can be added to a session, wherever it is registered; "Add all assets registered at …" on the edit page is a shortcut for the active location. `update_inventory_session` keeps the active location unless `location_id` is passed, and then records the change in the history too.
 
 How status changes affect the timestamps (`update_inventory_session` in `app/db.py`):
 
@@ -222,10 +240,10 @@ Links assets to inventory sessions, with how many of each were expected and coun
 |---|---|---|
 | `inventory_session_id` | TEXT | → `inventory_sessions.id`, `ON DELETE CASCADE` |
 | `fixed_asset_id` | TEXT | → `fixed_assets.id`, `ON DELETE CASCADE` |
-| `quantity` | INTEGER | Counted quantity. Default 1, must be ≥ 0. 0 means the asset was not found |
+| `quantity` | INTEGER | Total counted over all locations: the sum of the asset's rows in `inventory_session_counts`, kept up to date by every write in the same transaction. Must be ≥ 0. 0 means the asset was not found |
 | `expected_quantity` | INTEGER | The asset's quantity when the session started, must be ≥ 0. `NULL` while the session is New |
 
-The primary key is (`inventory_session_id`, `fixed_asset_id`), and both columns are indexed. When a session is saved, all its links are deleted and inserted again. Duplicate assets are merged by adding their quantities, and links with a negative quantity are dropped. A deleted asset cannot be newly linked, but an asset already linked to the session stays linked.
+The primary key is (`inventory_session_id`, `fixed_asset_id`), and both columns are indexed. Saving the edit page updates the links in place: assets left out are removed (with their counts), new ones are added, and each submitted quantity is the count at the active location. Duplicate assets are merged by adding their quantities, and links with a negative quantity are dropped. A deleted asset cannot be newly linked, but an asset already linked to the session stays linked. Start, Complete and Cancel don't touch the links or counts.
 
 Expected quantities are saved so that a session's results don't change when an asset is edited later:
 
@@ -234,11 +252,37 @@ Expected quantities are saved so that a session's results don't change when an a
 * Reopening a session keeps its expected quantities. An asset that is removed and added again gets the current quantity.
 * Queries read `COALESCE(expected_quantity, fixed_assets.quantity) AS expected_quantity`.
 
-Counting by scanning labels (`adjust_inventory_count`) changes one link at a time, only in Active sessions:
+Counting by scanning labels (`adjust_inventory_count`) changes one count at a time, only in Active sessions:
 
-* It adds to `quantity` in one statement (never below 0), so two phones counting the same asset don't lose a count.
-* Scanning an asset that is not in the session adds it, with its current quantity as expected, even if it is at another location.
-* It sets the session's `updated_at`. The edit page sends the `updated_at` it was loaded with, and a save is refused if the session changed since, because saving replaces all links and would overwrite the counts.
+* It changes the asset's count at the active location and then the total. The first write is an UPDATE, which takes SQLite's write lock before a missing row is inserted, so two phones counting the same asset don't lose a count. Counts never go below 0, and a minus where nothing is counted at the active location changes nothing.
+* Scanning an asset that is not in the session adds it, with its current quantity as expected, wherever it is registered. When the active location differs from the asset's location in the register, the result says so.
+* It sets the session's `updated_at`. The edit page sends the `updated_at` it was loaded with, and a save is refused if the session changed since, because it would overwrite the counts.
+
+### `inventory_session_counts`
+
+What was counted of an asset at one location in a session.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `inventory_session_id`, `fixed_asset_id` | TEXT | → the link in `inventory_session_fixed_assets`, `ON DELETE CASCADE` (removing an asset from a session removes its counts) |
+| `location_id` | TEXT | → `locations.id`. `NULL`: counted with no active location |
+| `quantity` | INTEGER | Must be ≥ 0 |
+| `updated_at` | TEXT | Last change |
+
+One row per asset and location: `ux_inventory_session_counts_location` covers rows with a location and `ux_inventory_session_counts_no_location` the ones without, because SQLite treats NULLs as distinct in a unique index. A count of 0 is only stored when an existing count is set to 0; a missing row means nothing was counted there. The session page and the PDF report list the counts as "Counted at", for example `Room A: 3 · Room B: 2`, next to the asset's location in the register.
+
+### `inventory_session_locations`
+
+The history of a session's active location, oldest first.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `inventory_session_id` | TEXT | → `inventory_sessions.id`, `ON DELETE CASCADE` |
+| `location_id` | TEXT | → `locations.id`. `NULL`: counting with no location from then on |
+| `activated_at` | TEXT | When it became active |
+| `activated_by_user_id` | INTEGER | → `users.id`, `ON DELETE SET NULL` |
 
 ### `audit_events`
 
@@ -282,6 +326,7 @@ There is no migration tool. On startup, `auth_service.initialize_defaults()` run
 
 1. `initialize_database()` (`app/db.py`). Creates missing tables and indexes with `CREATE ... IF NOT EXISTS`, then brings older databases up to date:
    * adds missing columns with `ALTER TABLE ... ADD COLUMN` after checking `PRAGMA table_info`: the approval and admin columns of `users`; `fixed_assets.category_id`, `quantity`, `image_path`, `deleted_at`, `location_id`; the audit, reason and `location_id` columns of `inventory_sessions`;
+   * creates `inventory_session_counts` and `inventory_session_locations` (`_create_session_location_tables`), after the links table's own migration below. On first creation each counted link gets one count at its session's location, and each session with a location gets it as the first history entry (dated when the session started);
    * rebuilds `inventory_session_fixed_assets` to add `expected_quantity` and allow a quantity of 0 (`_migrate_inventory_session_fixed_assets_for_counts`). Links in sessions that were already started get the asset's quantity at the time of the migration as their expected quantity, because the quantity when they started was never stored;
    * fills empty `created_at`, `updated_at` and `last_edited_at` on inventory sessions;
    * rebuilds `fixed_asset_categories` without its old `UNIQUE(name)` constraint, which SQLite cannot drop in place (`_migrate_fixed_asset_categories_for_soft_delete`);

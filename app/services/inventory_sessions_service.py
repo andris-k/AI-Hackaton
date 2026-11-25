@@ -159,16 +159,22 @@ def count_message(outcome: dict[str, object]) -> tuple[str, str]:
     """(message, kind) to show after a scan or a +/- tap."""
     result = outcome.get("result")
     name = str(outcome.get("name") or "This asset")
+    where = f" at {outcome['location']}" if outcome.get("location") else ""
     if result == "counted":
-        return f"{name}: counted {outcome['quantity']} of {outcome['expected_quantity']}.", "success"
+        text = f"{name}: counted {outcome['quantity']} of {outcome['expected_quantity']}."
+        if "here_quantity" in outcome and outcome["here_quantity"] != outcome["quantity"]:
+            text += f" {outcome['here_quantity']} of them{where}."
+        return text, "success"
     if result == "added":
         if outcome.get("other_location"):
             return (
                 f"{name} was not in this session and is registered at another location. "
-                f"It was added with a count of {outcome['quantity']}.",
+                f"It was added with a count of {outcome['quantity']}{where}.",
                 "info",
             )
-        return f"{name} was added to the session with a count of {outcome['quantity']}.", "success"
+        return f"{name} was added to the session with a count of {outcome['quantity']}{where}.", "success"
+    if result == "not_counted_here":
+        return f"Nothing of {name} is counted{where or ' without a location'}, so there is nothing to take away.", "error"
     if result == "not_active":
         return "Counting is only possible while the session is Active.", "error"
     if result == "asset_deleted":

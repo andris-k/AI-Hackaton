@@ -5,6 +5,8 @@
     .count-scan-row input { flex: 1; min-width: 0; font-size: 1.1rem; padding: 12px; }
     .count-scan-row button, .count-camera-button { min-height: 48px; padding: 0 18px; font-size: 1rem; }
     .count-help { margin: 0; color: var(--muted); font-size: 0.85rem; }
+    .count-location { display: grid; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .count-location select { flex: 1; min-width: 0; font-size: 1rem; padding: 10px; }
     .count-video-wrap { display: none; position: relative; border-radius: var(--radius); overflow: hidden; background: #000; }
     .count-video-wrap.active { display: block; }
     .count-video-wrap video { display: block; width: 100%; max-height: 50vh; object-fit: cover; }
@@ -21,7 +23,7 @@
     .count-controls { display: flex; align-items: center; gap: 6px; }
     .count-controls form { margin: 0; }
     .count-controls button { min-width: 48px; min-height: 48px; font-size: 1.3rem; padding: 0; }
-    .count-numbers { min-width: 64px; text-align: center; line-height: 1.1; }
+    .count-numbers { min-width: 84px; text-align: center; line-height: 1.1; }
     .count-numbers strong { display: block; font-size: 1.4rem; }
     .count-numbers span { color: var(--muted); font-size: 0.75rem; }
     .count-toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; display: none; max-width: calc(100% - 32px); padding: 10px 14px; border-radius: var(--radius); background: var(--nav-bg); color: #fff; box-shadow: var(--shadow-md); font-size: 0.9rem; }
@@ -34,7 +36,7 @@
         <div class="page-header">
             <div>
                 <h2>Count inventory</h2>
-                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }} · {{ inv_session.location or "All locations" }}</p>
+                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}</p>
             </div>
             <div class="page-actions">
                 <a href="/inventory-sessions/id/{{ inv_session.id }}/edit">&larr; Session</a>
@@ -42,6 +44,19 @@
         </div>
 
         <section class="section-card count-scan">
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/active-location" class="count-location">
+                <input type="hidden" name="back" value="count" />
+                <label for="count_location">Counting at</label>
+                <div class="count-scan-row">
+                    <select id="count_location" name="location_id">
+                        <option value="">No location</option>
+                        {% for location in locations %}
+                        <option value="{{ location.id }}" {% if location.id == inv_session.location_id %}selected{% endif %}>{{ location.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="workflow-neutral">Change</button>
+                </div>
+            </form>
             <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form" id="scan-form">
                 <label for="code">Scan a label or type its short id</label>
                 <div class="count-scan-row">
@@ -75,8 +90,8 @@
                         <button type="submit" class="workflow-neutral" aria-label="One less {{ row.name }}">&minus;</button>
                     </form>
                     <div class="count-numbers">
-                        <strong data-role="counted">{{ row.counted }}</strong>
-                        <span>of <span data-role="expected">{{ row.expected }}</span></span>
+                        <strong data-role="here">{{ row.here }}</strong>
+                        <span>here · <span data-role="counted">{{ row.counted }}</span> of <span data-role="expected">{{ row.expected }}</span></span>
                     </div>
                     <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
                         <input type="hidden" name="code" value="{{ row.id }}" />
@@ -106,8 +121,8 @@
                 <button type="submit" class="workflow-neutral" aria-label="One less">&minus;</button>
             </form>
             <div class="count-numbers">
-                <strong data-role="counted">0</strong>
-                <span>of <span data-role="expected">0</span></span>
+                <strong data-role="here">0</strong>
+                <span>here · <span data-role="counted">0</span> of <span data-role="expected">0</span></span>
             </div>
             <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
                 <input type="hidden" name="code" value="" />
@@ -147,7 +162,7 @@
             node.dataset.assetId = data.asset_id;
             node.querySelector('[data-role="name"]').textContent = data.name || "";
             node.querySelector('[data-role="meta"]').textContent =
-                [data.category, data.location].filter(Boolean).join(" · ");
+                [data.category, data.asset_location].filter(Boolean).join(" · ");
             node.querySelector('[data-role="short"]').textContent = data.asset_id.slice(0, 8);
             node.querySelector('[data-role="other"]').hidden = !data.other_location;
             node.querySelectorAll('input[name="code"]').forEach((input) => { input.value = data.asset_id; });
@@ -161,6 +176,7 @@
         function applyResult(data) {
             if (data.result !== "counted" && data.result !== "added") return;
             const row = rowFor(data);
+            row.querySelector('[data-role="here"]').textContent = String(data.here_quantity);
             row.querySelector('[data-role="counted"]').textContent = String(data.quantity);
             row.querySelector('[data-role="expected"]').textContent = String(data.expected_quantity);
             const matches = data.quantity === data.expected_quantity;

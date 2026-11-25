@@ -83,10 +83,10 @@ def test_count_never_goes_below_zero(category_id):
     asset_id = _asset(category_id)
     session_id = _session(linked=[(asset_id, 1)])
 
-    db.adjust_inventory_count(session_id, asset_id, -1)
-    outcome = db.adjust_inventory_count(session_id, asset_id, -1)
-
-    assert outcome["quantity"] == 0
+    assert db.adjust_inventory_count(session_id, asset_id, -1)["quantity"] == 0
+    # Nothing left to take away at this location: nothing changes.
+    assert db.adjust_inventory_count(session_id, asset_id, -1)["result"] == "not_counted_here"
+    assert _count(session_id, asset_id) == 0
 
 
 def test_scanning_an_asset_not_in_the_session_adds_it(category_id):
@@ -178,15 +178,21 @@ def test_active_sessions_for_an_asset(category_id):
     warehouse = db.create_location("Warehouse")
     office = db.create_location("Office")
     asset_id = _asset(category_id, location_id=warehouse["id"])
-    all_locations = _session()
+    no_location = _session()
     same_location = _session(location_id=warehouse["id"])
-    other_but_linked = _session(location_id=office["id"], linked=[(asset_id, 2)])
-    _session(location_id=office["id"])
+    linked_elsewhere = _session(location_id=office["id"], linked=[(asset_id, 2)])
+    other_location = _session(location_id=office["id"])
     _session(status="New")
 
-    rows = {row["id"]: row["quantity"] for row in db.list_active_sessions_for_asset(asset_id)}
+    rows = {row["id"]: (row["quantity"], row["location"]) for row in db.list_active_sessions_for_asset(asset_id)}
 
-    assert rows == {all_locations: None, same_location: None, other_but_linked: 2}
+    # Every Active session, whatever its active location; the New one is left out.
+    assert rows == {
+        no_location: (None, None),
+        same_location: (None, "Warehouse"),
+        linked_elsewhere: (2, "Office"),
+        other_location: (None, "Office"),
+    }
 
 
 # ---------------------------------------------------------------------------

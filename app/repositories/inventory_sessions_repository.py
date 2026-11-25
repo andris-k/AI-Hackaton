@@ -14,6 +14,10 @@ from app.db import (
     list_inventory_sessions,
     list_linked_fixed_asset_ids_for_inventory_session,
     list_linked_fixed_assets_for_inventory_session,
+    list_session_counts,
+    list_session_counts_at_location,
+    list_session_location_history,
+    set_active_location as set_inventory_session_active_location,
     update_inventory_session,
 )
 
@@ -110,3 +114,19 @@ def adjust_count(session_id: str, fixed_asset_id: str, delta: int) -> dict[str, 
 
 def list_active_for_asset(fixed_asset_id: str) -> list[sqlite3.Row]:
     return list_active_sessions_for_asset(fixed_asset_id)
+
+
+def set_active_location(session_id: str, location_id: str | None, user_id: int | None) -> str:
+    return set_inventory_session_active_location(session_id, location_id, user_id)
+
+
+def location_history(session_id: str) -> list[sqlite3.Row]:
+    return list_session_location_history(session_id)
+
+
+def counts(session_id: str) -> list[sqlite3.Row]:
+    return list_session_counts(session_id)
+
+
+def counts_at_active_location(session_id: str) -> list[sqlite3.Row]:
+    return list_session_counts_at_location(session_id)

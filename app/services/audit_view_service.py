@@ -47,6 +47,7 @@ EVENT_LABELS: dict[str, str] = {
     "inventory_session.deleted": "Session deleted",
     "inventory_session.report_downloaded": "PDF report downloaded",
     "inventory_session.count_changed": "Count changed",
+    "inventory_session.location_changed": "Active location changed",
 }
 
 _DANGER = {"auth.account_rejected", "auth.login_failed", "asset.deleted", "category.deleted", "location.deleted", "inventory_session.cancelled",
@@ -66,6 +67,7 @@ _FIELD_LABELS = {
     "admin_override": "Admin override",
     "linked_assets": "Linked assets",
     "total_quantity": "Total quantity",
+    "counted_here": "Counted at active location",
     "delta": "Change",
     "added_to_session": "Added to session",
     "account_exists": "Account exists",

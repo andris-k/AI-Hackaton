@@ -45,7 +45,15 @@ def _fmt_diff(value: int) -> str:
     return f"+{value}" if value > 0 else str(value)
 
 
-def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence[Mapping[str, Any]]) -> bytes:
+def build_session_report(
+    inv_session: Mapping[str, Any],
+    linked_assets: Sequence[Mapping[str, Any]],
+    counted_at: Mapping[str, str] | None = None,
+    location_history: Sequence[Mapping[str, str]] = (),
+) -> bytes:
+    """``counted_at``: asset id -> "Room A: 3 · Room B: 2"; ``location_history``:
+    the session's active locations in order (location, time, by)."""
+    counted_at = counted_at or {}
     generated = utc_now_label()
     running_title = (
         f"Inventory session {inv_session['date_from']} to {inv_session['date_to']}"
@@ -78,6 +86,7 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
         rows.append({
             "name": str(asset["name"]) + (" (deleted)" if is_deleted else ""),
             "category": str(asset["category"] or "-"),
+            "counted_at": counted_at.get(str(asset["id"]), "Not found"),
             "expected": expected_qty,
             "counted": counted_qty,
             "diff": counted_qty - expected_qty,
@@ -128,7 +137,10 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
     details = [
         ("Responsible person", str(inv_session["responsible_person"])),
         ("Date window", f"{inv_session['date_from']} to {inv_session['date_to']}"),
-        ("Location", str(inv_session["location"] or "All locations")),
+        ("Locations used", "\n".join(
+            f"{entry['location']} from {entry['time']}" + (f" by {entry['by']}" if entry.get("by") else "")
+            for entry in location_history
+        ) or "-"),
         ("Status", str(inv_session["status"])),
         ("Created", by("created_at", "created_by_email")),
         ("Started", by("started_at", "started_by_email")),
@@ -156,9 +168,9 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
         pdf.set_text_color(*_INK)
         pdf.set_draw_color(*_LINE)
         headings = FontFace(emphasis="BOLD", color=_MUTED, fill_color=_HEAD_BG)
-        align = ("RIGHT", "LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
+        align = ("RIGHT", "LEFT", "LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
         with pdf.table(
-            col_widths=(8, 45, 27, 17, 20, 20, 21, 22),
+            col_widths=(7, 36, 22, 33, 15, 16, 16, 17, 18),
             text_align=align,
             headings_style=headings,
             borders_layout="HORIZONTAL_LINES",
@@ -166,13 +178,14 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
             padding=(1.2, 1.5),
         ) as table:
             head = table.row()
-            for text in ("#", "Asset", "Category", "Expected", "Counted", "Difference", "Unit value", "Line value"):
+            for text in ("#", "Asset", "Category", "Counted at", "Expected", "Counted", "Difference", "Unit value", "Line value"):
                 head.cell(text)
             for index, r in enumerate(rows, start=1):
                 row = table.row()
                 row.cell(str(index))
                 row.cell(r["name"])
                 row.cell(r["category"])
+                row.cell(r["counted_at"])
                 row.cell(str(r["expected"]))
                 row.cell(str(r["counted"]))
                 diff_color = _SUCCESS if r["diff"] > 0 else _DANGER if r["diff"] < 0 else _MUTED
@@ -181,7 +194,7 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
                 row.cell(_fmt_money(r["line"]))
             total_style = FontFace(emphasis="BOLD", fill_color=_HEAD_BG)
             total = table.row()
-            total.cell("Total", colspan=3, style=total_style, align="LEFT")
+            total.cell("Total", colspan=4, style=total_style, align="LEFT")
             total.cell(str(sum_expected), style=total_style)
             total.cell(str(sum_counted), style=total_style)
             total.cell(_fmt_diff(sum_counted - sum_expected), style=total_style)
@@ -194,6 +207,7 @@ def build_session_report(inv_session: Mapping[str, Any], linked_assets: Sequence
         pdf.multi_cell(
             0, 4,
             "Expected is the quantity on the fixed asset record when the session started. "
+            "Counted at lists where the asset was counted and how many at each location. "
             "Difference = counted - expected. Line value = unit value × counted.",
             new_x="LMARGIN", new_y="NEXT",
         )

@@ -1,239 +1,348 @@
-<style>
-    .count-page { max-width: 640px; margin: 0 auto; }
-    .count-scan { display: grid; gap: 10px; }
-    .count-scan-row { display: flex; gap: 8px; }
-    .count-scan-row input { flex: 1; min-width: 0; font-size: 1.1rem; padding: 12px; }
-    .count-scan-row button, .count-camera-button { min-height: 48px; padding: 0 18px; font-size: 1rem; }
-    .count-help { margin: 0; color: var(--muted); font-size: 0.85rem; }
-    .count-location { display: grid; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-    .count-location select { flex: 1; min-width: 0; font-size: 1rem; padding: 10px; }
-    .count-video-wrap { display: none; position: relative; border-radius: var(--radius); overflow: hidden; background: #000; }
-    .count-video-wrap.active { display: block; }
-    .count-video-wrap video { display: block; width: 100%; max-height: 50vh; object-fit: cover; }
-    .count-video-wrap button { position: absolute; right: 8px; bottom: 8px; }
-    .count-progress { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0 10px; color: var(--muted); font-size: 0.9rem; }
-    .count-list { display: grid; gap: 8px; }
-    .count-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); transition: background 0.4s; }
-    .count-row.flash { background: var(--accent-soft); }
-    .count-row.differs .count-numbers strong { color: var(--warning); }
-    .count-row.matches .count-numbers strong { color: var(--success, #14794f); }
-    .count-name { font-weight: 600; overflow-wrap: anywhere; }
-    .count-meta { color: var(--muted); font-size: 0.82rem; }
-    .count-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); font-size: 0.75rem; }
-    .count-controls { display: flex; align-items: center; gap: 6px; }
-    .count-controls form { margin: 0; }
-    .count-controls button { min-width: 48px; min-height: 48px; font-size: 1.3rem; padding: 0; }
-    .count-numbers { min-width: 84px; text-align: center; line-height: 1.1; }
-    .count-numbers strong { display: block; font-size: 1.4rem; }
-    .count-numbers span { color: var(--muted); font-size: 0.75rem; }
-    .count-toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 30; display: none; max-width: calc(100% - 32px); padding: 10px 14px; border-radius: var(--radius); background: var(--nav-bg); color: #fff; box-shadow: var(--shadow-md); font-size: 0.9rem; }
-    .count-toast.error { background: var(--danger, #c4352b); }
-    .count-toast.visible { display: block; }
-</style>
-
-<div class="stack count-page">
-    <section class="panel">
-        <div class="page-header">
-            <div>
-                <h2>Count inventory</h2>
-                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}</p>
-            </div>
-            <div class="page-actions">
-                <a href="/inventory-sessions/id/{{ inv_session.id }}/edit">&larr; Session</a>
-            </div>
+<div class="workspace" data-session-id="{{ inv_session.id }}">
+    <div class="page-header">
+        <div>
+            <a href="/inventory-sessions" class="workspace-back">&larr; Inventory sessions</a>
+            <h2>Inventory {{ inv_session.date_from }} – {{ inv_session.date_to }}</h2>
+            <p class="page-context">{{ inv_session.responsible_person }} · <strong class="workspace-active">Active</strong> · <span id="saved-indicator" aria-live="polite">Changes are saved as you count</span></p>
         </div>
+        <div class="page-actions">
+            <a class="primary" href="/inventory-sessions/id/{{ inv_session.id }}/finish">Finish counting</a>
+        </div>
+    </div>
 
-        <section class="section-card count-scan">
-            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/active-location" class="count-location">
-                <input type="hidden" name="back" value="count" />
-                <label for="count_location">Counting at</label>
-                <div class="count-scan-row">
-                    <select id="count_location" name="location_id">
-                        <option value="">No location</option>
-                        {% for location in locations %}
-                        <option value="{{ location.id }}" {% if location.id == inv_session.location_id %}selected{% endif %}>{{ location.name }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="workflow-neutral">Change</button>
+    <div class="workspace-layout">
+        <section class="section-card workspace-main">
+            <div class="workspace-top">
+                <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/active-location" class="workspace-location" id="location-form">
+                    <input type="hidden" name="back" value="count" />
+                    <label for="active-location">Counting at</label>
+                    <div class="workspace-location-row">
+                        <select id="active-location" name="location_id">
+                            <option value="">No location</option>
+                            {% for location in locations %}
+                            <option value="{{ location.id }}" {% if location.id == inv_session.location_id %}selected{% endif %}>{{ location.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <noscript><button type="submit">Change</button></noscript>
+                    </div>
+                </form>
+                <div class="workspace-progress">
+                    <div class="workspace-bar" role="img" id="progress-bar" aria-label="{{ summary.matched }} matched, {{ summary.differ }} differ, {{ summary.todo }} not counted yet, of {{ summary.total }}">
+                        <span class="workspace-bar-matched" style="width: {{ summary.percent.matched }}%;"></span>
+                        <span class="workspace-bar-differ" style="width: {{ summary.percent.differ }}%;"></span>
+                        <span class="workspace-bar-todo" style="width: {{ summary.percent.todo }}%;"></span>
+                    </div>
+                    <p class="workspace-legend">
+                        <span><span class="workspace-key workspace-bar-matched" aria-hidden="true"></span><strong data-summary="matched">{{ summary.matched }}</strong> matched</span>
+                        <span><span class="workspace-key workspace-bar-differ" aria-hidden="true"></span><strong data-summary="differ">{{ summary.differ }}</strong> differ</span>
+                        <span><span class="workspace-key workspace-bar-todo" aria-hidden="true"></span><strong data-summary="todo">{{ summary.todo }}</strong> not counted yet</span>
+                    </p>
                 </div>
-            </form>
-            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form" id="scan-form">
-                <label for="code">Scan a label or type its short id</label>
-                <div class="count-scan-row">
-                    <input id="code" name="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. 3f2a9c1b" autofocus required />
+            </div>
+
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="workspace-scan" id="scan-form" autocomplete="off">
+                <label for="scan-code">Scan a label, or search by name, short ID or category</label>
+                <div class="workspace-scan-row">
+                    <input id="scan-code" name="code" type="search" placeholder="e.g. chair or 3f2a9c1b" autofocus
+                           aria-controls="search-results" spellcheck="false" autocapitalize="off" />
+                    <button type="button" id="camera-start" class="workspace-camera" aria-label="Scan with camera" hidden>
+                        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"></path><path d="M8 12h8"></path></svg>
+                    </button>
                     <button type="submit">+1</button>
                 </div>
+                <ul class="workspace-results" id="search-results" hidden></ul>
+                <div class="workspace-video" id="camera-wrap">
+                    <video id="camera-video" playsinline muted></video>
+                    <button type="button" id="camera-stop" class="workflow-neutral">Stop camera</button>
+                </div>
             </form>
-            <button type="button" id="camera-start" class="count-camera-button workflow-neutral" hidden>Scan with camera</button>
-            <div class="count-video-wrap" id="camera-wrap">
-                <video id="camera-video" playsinline muted></video>
-                <button type="button" id="camera-stop" class="workflow-neutral">Stop camera</button>
+
+            <div class="workspace-toolbar">
+                <div class="segmented" role="tablist" aria-label="Show">
+                    {% for tab in tabs %}
+                    <button type="button" role="tab" data-tab="{{ tab.key }}" aria-selected="{{ 'true' if tab.key == selected_tab else 'false' }}"{% if tab.key == selected_tab %} class="selected"{% endif %}>{{ tab.label }} <span data-summary="{{ 'total' if tab.key == 'all' else tab.key }}">{{ tab.count }}</span></button>
+                    {% endfor %}
+                </div>
+                <span class="workspace-note">{% if inv_session.location %}Assets registered at {{ inv_session.location }} are listed first.{% else %}No active location: counts are recorded without a location.{% endif %}</span>
             </div>
-            <p class="count-help" id="camera-help">A handheld barcode scanner types into the box above. On a phone, you can also scan a label with the camera app: the asset page it opens has a +1 button for this session.</p>
+
+            <div class="workspace-rows" id="workspace-rows" data-tab="{{ selected_tab }}">
+                {% for r in rows %}{% include "inventory_count_row.html" %}{% endfor %}
+            </div>
+            <p class="dash-empty workspace-empty" id="rows-empty"{% if rows %} hidden{% endif %}>Nothing in this list. Scan or search above to add assets.</p>
         </section>
 
-        <div class="count-progress">
-            <span><strong id="matching-count">{{ matching }}</strong> of <strong id="row-count">{{ rows | length }}</strong> match the expected quantity</span>
-        </div>
+        <aside class="workspace-side">
+            <section class="section-card">
+                <h3>At {{ inv_session.location or "no location" }}</h3>
+                {% if inv_session.location %}
+                <p class="workspace-big"><strong data-summary="done_here">{{ summary.done_here }}</strong> <span>of <span data-summary="registered_here">{{ summary.registered_here }}</span> registered here counted</span></p>
+                <p class="workspace-side-note"><span data-summary="found_away">{{ summary.found_away }}</span> counted here are registered somewhere else.</p>
+                {% else %}
+                <p class="workspace-side-note">Choose a location to see its progress.</p>
+                {% endif %}
+            </section>
 
-        <div class="count-list" id="count-list">
-            {% for row in rows %}
-            <article class="count-row {% if row.counted == row.expected %}matches{% else %}differs{% endif %}{% if row.id == highlight_asset_id %} flash{% endif %}" data-asset-id="{{ row.id }}">
-                <div>
-                    <div class="count-name">{{ row.name }}{% if row.deleted %}<span class="count-tag">deleted</span>{% endif %}{% if row.other_location %}<span class="count-tag">other location</span>{% endif %}</div>
-                    <div class="count-meta">{{ row.category }}{% if row.location %} · {{ row.location }}{% endif %} · <span class="mono">{{ row.id[:8] }}</span></div>
-                </div>
-                <div class="count-controls">
-                    <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
-                        <input type="hidden" name="code" value="{{ row.id }}" />
-                        <input type="hidden" name="delta" value="-1" />
-                        <button type="submit" class="workflow-neutral" aria-label="One less {{ row.name }}">&minus;</button>
-                    </form>
-                    <div class="count-numbers">
-                        <strong data-role="here">{{ row.here }}</strong>
-                        <span>here · <span data-role="counted">{{ row.counted }}</span> of <span data-role="expected">{{ row.expected }}</span></span>
+            <section class="section-card">
+                <h3>Recent counts</h3>
+                {% if recent %}
+                <ul class="workspace-recent">
+                    {% for item in recent %}<li><span>{{ item.what }}</span><span class="workspace-side-note">{{ item.who }}</span></li>{% endfor %}
+                </ul>
+                {% else %}
+                <p class="workspace-side-note">Nothing counted yet.</p>
+                {% endif %}
+            </section>
+
+            <details class="section-card workspace-details"{% if details_open %} open{% endif %}>
+                <summary>Session details</summary>
+                <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/details" class="workspace-details-form">
+                    <div class="workspace-two">
+                        <div>
+                            <label for="date_from">Date from</label>
+                            <input id="date_from" name="date_from" type="date" value="{{ inv_session.date_from }}" required />
+                        </div>
+                        <div>
+                            <label for="date_to">Date to</label>
+                            <input id="date_to" name="date_to" type="date" value="{{ inv_session.date_to }}" required />
+                        </div>
                     </div>
-                    <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
-                        <input type="hidden" name="code" value="{{ row.id }}" />
-                        <button type="submit" aria-label="One more {{ row.name }}">+</button>
-                    </form>
-                </div>
-            </article>
-            {% else %}
-            <p id="count-empty" style="margin: 0; color: var(--muted);">No assets in this session yet. Scanning a label adds its asset.</p>
-            {% endfor %}
-        </div>
-    </section>
+                    <label for="responsible_person">Responsible person</label>
+                    <input id="responsible_person" name="responsible_person" type="text" maxlength="100" value="{{ inv_session.responsible_person }}" required />
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" name="notes" rows="3" maxlength="1500">{{ inv_session.notes or '' }}</textarea>
+                    <button type="submit" class="workflow-neutral">Save details</button>
+                </form>
+                {% if location_history %}
+                <h4>Locations used</h4>
+                <ol class="workspace-history">
+                    {% for entry in location_history %}<li><strong>{{ entry.location }}</strong> <span class="workspace-side-note">from {{ entry.time }}{% if entry.by %} · {{ entry.by }}{% endif %}</span></li>{% endfor %}
+                </ol>
+                {% endif %}
+                <h4>Cancel session</h4>
+                <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/cancel" class="workspace-details-form" onsubmit="return confirm('Cancel this session? Its counts are kept but it can no longer be counted.');">
+                    <label for="cancellation_reason">Reason</label>
+                    <input id="cancellation_reason" name="cancellation_reason" type="text" maxlength="500" required />
+                    <button type="submit" class="btn-danger">Cancel session</button>
+                </form>
+            </details>
+        </aside>
+    </div>
 </div>
 
-<div class="count-toast" id="count-toast" role="status" aria-live="polite"></div>
-
-<template id="count-row-template">
-    <article class="count-row" data-asset-id="">
-        <div>
-            <div class="count-name"><span data-role="name"></span><span class="count-tag" data-role="other" hidden>other location</span></div>
-            <div class="count-meta"><span data-role="meta"></span> · <span class="mono" data-role="short"></span></div>
-        </div>
-        <div class="count-controls">
-            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
-                <input type="hidden" name="code" value="" />
-                <input type="hidden" name="delta" value="-1" />
-                <button type="submit" class="workflow-neutral" aria-label="One less">&minus;</button>
-            </form>
-            <div class="count-numbers">
-                <strong data-role="here">0</strong>
-                <span>here · <span data-role="counted">0</span> of <span data-role="expected">0</span></span>
-            </div>
-            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count" class="count-form">
-                <input type="hidden" name="code" value="" />
-                <button type="submit" aria-label="One more">+</button>
-            </form>
-        </div>
-    </article>
-</template>
+<div class="count-toast" id="count-toast" role="status" aria-live="polite"><span id="count-toast-text"></span><button type="button" id="count-toast-undo" hidden>Undo</button></div>
 
 <script>
     (function () {
-        const list = document.getElementById("count-list");
+        const sessionId = document.querySelector(".workspace").dataset.sessionId;
+        const base = "/inventory-sessions/id/" + sessionId;
+        const rowsBox = document.getElementById("workspace-rows");
+        const emptyNote = document.getElementById("rows-empty");
         const toast = document.getElementById("count-toast");
-        const codeInput = document.getElementById("code");
-        const rowTemplate = document.getElementById("count-row-template");
+        const toastText = document.getElementById("count-toast-text");
+        const toastUndo = document.getElementById("count-toast-undo");
+        let pendingUndo = null;
+        const saved = document.getElementById("saved-indicator");
+        const scanForm = document.getElementById("scan-form");
+        const scanInput = document.getElementById("scan-code");
+        const results = document.getElementById("search-results");
         let toastTimer = null;
 
-        function showToast(message, kind) {
-            toast.textContent = message;
+        function showToast(message, kind, undo) {
+            if (!message) return;
+            toastText.textContent = message;
             toast.classList.toggle("error", kind === "error");
+            // A removal can be undone for a few seconds instead of asking first.
+            pendingUndo = undo || null;
+            toastUndo.hidden = !pendingUndo;
             toast.classList.add("visible");
             clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => toast.classList.remove("visible"), 3500);
+            toastTimer = setTimeout(() => { toast.classList.remove("visible"); pendingUndo = null; }, undo ? 8000 : 3500);
         }
 
-        function updateProgress() {
-            const rows = Array.from(list.querySelectorAll(".count-row"));
-            const matching = rows.filter((row) => row.classList.contains("matches")).length;
-            document.getElementById("matching-count").textContent = String(matching);
-            document.getElementById("row-count").textContent = String(rows.length);
+        function applyTab() {
+            const tab = rowsBox.dataset.tab || "all";
+            let visible = 0;
+            rowsBox.querySelectorAll(".count-row").forEach((row) => {
+                const show = tab === "all" || row.dataset.group === tab;
+                row.hidden = !show;
+                if (show) visible += 1;
+            });
+            emptyNote.hidden = visible > 0;
         }
 
-        function rowFor(data) {
-            let row = list.querySelector('.count-row[data-asset-id="' + CSS.escape(data.asset_id) + '"]');
-            if (row) return row;
-            const node = rowTemplate.content.firstElementChild.cloneNode(true);
-            node.dataset.assetId = data.asset_id;
-            node.querySelector('[data-role="name"]').textContent = data.name || "";
-            node.querySelector('[data-role="meta"]').textContent =
-                [data.category, data.asset_location].filter(Boolean).join(" · ");
-            node.querySelector('[data-role="short"]').textContent = data.asset_id.slice(0, 8);
-            node.querySelector('[data-role="other"]').hidden = !data.other_location;
-            node.querySelectorAll('input[name="code"]').forEach((input) => { input.value = data.asset_id; });
-            node.querySelectorAll("form.count-form").forEach(wireForm);
-            const empty = document.getElementById("count-empty");
-            if (empty) empty.remove();
-            list.prepend(node);
-            return node;
+        function applySummary(summary) {
+            if (!summary) return;
+            document.querySelectorAll("[data-summary]").forEach((el) => {
+                const key = el.dataset.summary;
+                if (key in summary) el.textContent = String(summary[key]);
+            });
+            for (const key of ["matched", "differ", "todo"]) {
+                const bar = document.querySelector("#progress-bar .workspace-bar-" + key);
+                if (bar) bar.style.width = summary.percent[key] + "%";
+            }
+            document.getElementById("progress-bar").setAttribute("aria-label",
+                `${summary.matched} matched, ${summary.differ} differ, ${summary.todo} not counted yet, of ${summary.total}`);
         }
 
-        function applyResult(data) {
-            if (data.result !== "counted" && data.result !== "added") return;
-            const row = rowFor(data);
-            row.querySelector('[data-role="here"]').textContent = String(data.here_quantity);
-            row.querySelector('[data-role="counted"]').textContent = String(data.quantity);
-            row.querySelector('[data-role="expected"]').textContent = String(data.expected_quantity);
-            const matches = data.quantity === data.expected_quantity;
-            row.classList.toggle("matches", matches);
-            row.classList.toggle("differs", !matches);
-            row.classList.remove("flash");
-            void row.offsetWidth;  // restart the highlight
+        function placeRow(assetId, html) {
+            const current = document.getElementById("asset-" + assetId);
+            const holder = document.createElement("div");
+            holder.innerHTML = html.trim();
+            const row = holder.firstElementChild;
+            if (current) current.replaceWith(row); else rowsBox.prepend(row);
             row.classList.add("flash");
             setTimeout(() => row.classList.remove("flash"), 900);
-            updateProgress();
+            return row;
         }
 
-        async function submitCount(form, code) {
-            const body = new FormData(form);
-            if (code !== undefined) body.set("code", code);
+        async function post(url, body) {
             let response;
             try {
-                response = await fetch(form.action, {
-                    method: "POST",
-                    body: body,
-                    headers: { "Accept": "application/json" },
-                    credentials: "same-origin",
-                });
+                response = await fetch(url, { method: "POST", body, headers: { "Accept": "application/json" }, credentials: "same-origin" });
             } catch (error) {
-                showToast("Could not reach the server. Check the connection and try again.", "error");
+                showToast("Could not reach the server. Check the connection and try again; nothing was lost.", "error");
                 return null;
             }
-            if (response.status === 401) {
-                window.location.reload();
-                return null;
-            }
+            if (response.status === 401) { window.location.reload(); return null; }
             const data = await response.json();
-            applyResult(data);
-            showToast(data.message, data.kind);
+            if (data.row_html && data.asset_id) placeRow(data.asset_id, data.row_html);
+            if (data.removed && data.asset_id) {
+                const row = document.getElementById("asset-" + data.asset_id);
+                if (row) row.remove();
+            }
+            applySummary(data.summary);
+            applyTab();
+            showToast(data.message, data.kind, data.undo);
+            if (data.kind !== "error") saved.textContent = "Saved " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
             return data;
         }
 
-        function wireForm(form) {
-            form.addEventListener("submit", async function (event) {
-                event.preventDefault();
-                await submitCount(form);
-                if (form.id === "scan-form") {
-                    codeInput.value = "";
-                    codeInput.focus();
+        // Counting forms in the rows (rows are replaced after each save, so listen on the container).
+        rowsBox.addEventListener("submit", function (event) {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement)) return;
+            event.preventDefault();
+            post(form.action, new FormData(form));
+        });
+        rowsBox.addEventListener("change", function (event) {
+            const input = event.target;
+            if (input.name === "quantity" && input.form) {
+                if (input.value === "" || Number(input.value) < 0) return;
+                post(input.form.action, new FormData(input.form));
+            }
+        });
+
+        toastUndo.addEventListener("click", function () {
+            const undo = pendingUndo;
+            if (!undo) return;
+            pendingUndo = null;
+            toast.classList.remove("visible");
+            const body = new FormData();
+            body.set("asset_id", undo.asset_id);
+            body.set("counts", JSON.stringify(undo.counts));
+            post(base + "/restore", body);
+        });
+
+        // Tabs filter the rows in place.
+        document.querySelectorAll("[data-tab]").forEach((button) => {
+            if (button === rowsBox) return;
+            button.addEventListener("click", function () {
+                rowsBox.dataset.tab = button.dataset.tab;
+                document.querySelectorAll("button[data-tab]").forEach((b) => {
+                    const selected = b === button;
+                    b.classList.toggle("selected", selected);
+                    b.setAttribute("aria-selected", selected ? "true" : "false");
+                });
+                applyTab();
+            });
+        });
+
+        // The active location switches as soon as another one is picked.
+        document.getElementById("active-location").addEventListener("change", function () {
+            document.getElementById("location-form").submit();
+        });
+
+        // Search the register; a scanned code or a picked result adds one here.
+        let searchTimer = null;
+        function closeResults() { results.hidden = true; results.innerHTML = ""; }
+        function countCode(code) {
+            const body = new FormData();
+            body.set("code", code);
+            body.set("delta", "1");
+            return post(base + "/count", body).then((data) => {
+                if (data && (data.result === "counted" || data.result === "added")) {
+                    scanInput.value = "";
+                    closeResults();
                 }
+                scanInput.focus();
+                return data;
             });
         }
+        scanInput.addEventListener("input", function () {
+            clearTimeout(searchTimer);
+            const query = scanInput.value.trim();
+            if (query.length < 2) { closeResults(); return; }
+            searchTimer = setTimeout(async function () {
+                const response = await fetch(base + "/search?q=" + encodeURIComponent(query), { headers: { "Accept": "application/json" } });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (scanInput.value.trim() !== query) return;
+                results.innerHTML = "";
+                data.results.forEach((item) => {
+                    const li = document.createElement("li");
+                    const text = document.createElement("div");
+                    const name = document.createElement("strong");
+                    name.textContent = item.name;
+                    const meta = document.createElement("span");
+                    meta.textContent = item.meta;
+                    text.append(name, meta);
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.textContent = item.in_session ? "+1 here" : "Add, +1 here";
+                    button.addEventListener("click", () => countCode(item.id));
+                    li.append(text, button);
+                    results.append(li);
+                });
+                if (!data.results.length) {
+                    const li = document.createElement("li");
+                    li.className = "workspace-results-empty";
+                    li.textContent = "No asset matches. Check the spelling, or scan the label.";
+                    results.append(li);
+                }
+                results.hidden = false;
+            }, 200);
+        });
+        scanForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            const code = scanInput.value.trim();
+            if (!code) return;
+            const buttons = results.querySelectorAll("button");
+            // A scanner types a whole code and presses Enter; one search hit can be counted the same way.
+            if (!results.hidden && buttons.length === 1) { buttons[0].click(); return; }
+            countCode(code);
+        });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !results.hidden) closeResults();
+        });
 
-        document.querySelectorAll("form.count-form").forEach(wireForm);
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("tab")) {
+            const button = document.querySelector(`button[data-tab="${params.get("tab")}"]`);
+            if (button) button.click();
+        }
+        applyTab();
+        if (window.location.hash.startsWith("#asset-")) {
+            const row = document.querySelector(window.location.hash);
+            if (row) { row.hidden = false; row.scrollIntoView({ block: "center" }); row.classList.add("flash"); }
+        }
 
         // Camera scanning, where the browser can read QR codes itself (for
-        // example Chrome on Android). Elsewhere the camera app works instead.
+        // example Chrome on Android). Elsewhere the phone's camera app works.
         const startButton = document.getElementById("camera-start");
         const stopButton = document.getElementById("camera-stop");
         const wrap = document.getElementById("camera-wrap");
         const video = document.getElementById("camera-video");
-        const scanForm = document.getElementById("scan-form");
         if (!("BarcodeDetector" in window) || !navigator.mediaDevices || !window.isSecureContext) return;
 
         let detector = null;
@@ -241,7 +350,6 @@
         let lastCode = "";
         let lastCodeAt = 0;
         let busy = false;
-
         BarcodeDetector.getSupportedFormats().then((formats) => {
             if (!formats.includes("qr_code")) return;
             detector = new BarcodeDetector({ formats: ["qr_code"] });
@@ -255,14 +363,13 @@
                     const codes = await detector.detect(video);
                     const value = codes.length ? codes[0].rawValue : "";
                     const now = Date.now();
-                    // The same label stays in view for many frames; count it once
-                    // unless it is scanned again after a pause.
+                    // A label stays in view for many frames: count it once until it has been away for a moment.
                     if (value && (value !== lastCode || now - lastCodeAt > 2500)) {
                         lastCode = value;
                         lastCodeAt = now;
                         busy = true;
                         if (navigator.vibrate) navigator.vibrate(60);
-                        await submitCount(scanForm, value);
+                        await countCode(value);
                         busy = false;
                     } else if (value) {
                         lastCodeAt = now;
@@ -273,13 +380,9 @@
             }
             setTimeout(scanFrame, 250);
         }
-
         startButton.addEventListener("click", async function () {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } },
-                    audio: false,
-                });
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
             } catch (error) {
                 showToast("The camera could not be opened. Allow camera access for this site and try again.", "error");
                 return;
@@ -290,7 +393,6 @@
             startButton.hidden = true;
             scanFrame();
         });
-
         function stopCamera() {
             if (stream) stream.getTracks().forEach((track) => track.stop());
             stream = null;
@@ -298,10 +400,7 @@
             wrap.classList.remove("active");
             startButton.hidden = false;
         }
-
         stopButton.addEventListener("click", stopCamera);
-        document.addEventListener("visibilitychange", function () {
-            if (document.hidden) stopCamera();
-        });
+        document.addEventListener("visibilitychange", function () { if (document.hidden) stopCamera(); });
     })();
 </script>

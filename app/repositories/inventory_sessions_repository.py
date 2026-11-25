@@ -17,6 +17,9 @@ from app.db import (
     list_session_counts,
     list_session_counts_at_location,
     list_session_location_history,
+    remove_asset_from_session,
+    restore_asset_to_session,
+    search_assets_for_session,
     set_active_location as set_inventory_session_active_location,
     update_inventory_session,
 )
@@ -70,7 +73,9 @@ def update_session(
     date_to: str,
     status: str,
     responsible_person: str,
-    linked_assets: list[tuple[str, int]] | tuple[tuple[str, int], ...] = (),
+    # None keeps the session's assets and counts (Start, Complete, Cancel, details);
+    # a list replaces them. An empty default here once removed every asset.
+    linked_assets: list[tuple[str, int]] | tuple[tuple[str, int], ...] | None = None,
     notes: str = "",
     completion_reason: str = "",
     cancellation_reason: str = "",
@@ -130,3 +135,19 @@ def counts(session_id: str) -> list[sqlite3.Row]:
 
 def counts_at_active_location(session_id: str) -> list[sqlite3.Row]:
     return list_session_counts_at_location(session_id)
+
+
+def set_count(session_id: str, fixed_asset_id: str, quantity: int, *, not_found: bool = False) -> dict[str, object]:
+    return adjust_inventory_count(session_id, fixed_asset_id, None, quantity=quantity, keep_zero=not_found)
+
+
+def remove_asset(session_id: str, fixed_asset_id: str) -> dict[str, object]:
+    return remove_asset_from_session(session_id, fixed_asset_id)
+
+
+def restore_asset(session_id: str, fixed_asset_id: str, counts: list[list[object]]) -> str:
+    return restore_asset_to_session(session_id, fixed_asset_id, counts)
+
+
+def search_assets(session_id: str, query: str, limit: int = 8) -> list[sqlite3.Row]:
+    return search_assets_for_session(session_id, query, limit)

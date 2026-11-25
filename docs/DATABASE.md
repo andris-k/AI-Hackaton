@@ -270,7 +270,7 @@ What was counted of an asset at one location in a session.
 | `quantity` | INTEGER | Must be ≥ 0 |
 | `updated_at` | TEXT | Last change |
 
-One row per asset and location: `ux_inventory_session_counts_location` covers rows with a location and `ux_inventory_session_counts_no_location` the ones without, because SQLite treats NULLs as distinct in a unique index. A count of 0 is only stored when an existing count is set to 0; a missing row means nothing was counted there. The session page and the PDF report list the counts as "Counted at", for example `Room A: 3 · Room B: 2`, next to the asset's location in the register.
+One row per asset and location: `ux_inventory_session_counts_location` covers rows with a location and `ux_inventory_session_counts_no_location` the ones without, because SQLite treats NULLs as distinct in a unique index. A missing row means nothing was counted there. A row with 0 means the asset was counted and not found there: "Not found here" in the counting workspace stores it on purpose (`keep_zero`), and setting an existing count to 0 keeps its row. So an asset with no rows at all is "not counted yet", and one whose rows add up to 0 is "not found". Typing 0 where there was no count stores nothing. The session page and the PDF report list the counts as "Counted at", for example `Room A: 3 · Room B: 2`, next to the asset's location in the register.
 
 ### `inventory_session_locations`
 

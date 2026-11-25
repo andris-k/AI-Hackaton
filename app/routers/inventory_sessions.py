@@ -14,13 +14,16 @@ from app.repositories import inventory_sessions_repository as repo
 from app.repositories import locations_repository as locations_repo
 from app.logging_config import audit
 from app.services import auth_service
+from app.services import counting_workspace_service as workspace
 from app.services import fixed_assets_service as assets_service
 from app.services import inventory_sessions_service as svc
 from app.services import inventory_report_service as report_svc
 from app.views.pages import (
     render_add_inventory_session_page,
     render_edit_inventory_session_page,
+    render_count_row,
     render_inventory_session_count_page,
+    render_inventory_session_finish_page,
     render_inventory_session_details_page,
     render_inventory_sessions_page,
     render_login_page,
@@ -474,10 +477,7 @@ def inventory_session_details_page(
     if inv_session is None:
         return render_login_page("Inventory session not found.")
     if str(inv_session["status"]) == "Active":
-        return RedirectResponse(
-            url=f"/inventory-sessions/id/{session_id}/edit",
-            status_code=303,
-        )
+        return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count", status_code=303)
     linked_assets = repo.list_linked_assets(session_id)
     return render_inventory_session_details_page(
         inv_session=inv_session,
@@ -568,6 +568,8 @@ def count_inventory_session_page(
     session_token: str | None = Cookie(default=None),
     asset: str = Query(default=""),
     result: str = Query(default=""),
+    tab: str = Query(default="all"),
+    notice: str = Query(default=""),
 ) -> HTMLResponse:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -585,16 +587,32 @@ def count_inventory_session_page(
     message, message_kind = (None, "info")
     if result:
         message, message_kind = svc.count_message(_count_outcome(session_id, asset, result))
+    elif notice in _NOTICES:
+        message, message_kind = _NOTICES[notice], "success"
     return render_inventory_session_count_page(
         current_email=str(user["email"]),
         inv_session=inv_session,
-        linked_assets=repo.list_linked_assets(session_id),
-        counts_here={str(row["fixed_asset_id"]): int(row["here"]) for row in repo.counts_at_active_location(session_id)},
         locations=_location_choices(inv_session["location_id"], inv_session["location"]),
-        highlight_asset_id=asset,
+        selected_tab=tab,
         message=message,
         message_kind=message_kind,
     )
+
+
+_NOTICES = {"details": "Session details saved.", "removed": "Asset removed from the session."}
+
+
+def _workspace_payload(session_id: str, asset_id: str | None) -> dict[str, object]:
+    """The updated row (as HTML, drawn by the same template as the page) and summary."""
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return {}
+    rows = workspace.build_rows(inv_session)
+    row = next((r for r in rows if r["id"] == asset_id), None)
+    return {
+        "row_html": render_count_row(row, session_id) if row else None,
+        "summary": workspace.summary(rows),
+    }
 
 
 @router.post("/inventory-sessions/id/{session_id}/count")
@@ -604,11 +622,15 @@ def count_inventory_session(
     session_token: str | None = Cookie(default=None),
     code: str = Form(default=""),
     delta: int = Form(default=1),
+    quantity: str = Form(default=""),
+    not_found: str = Form(default=""),
     back: str = Form(default="count"),
 ) -> Response:
-    """Add one (or ``delta``) to an asset's count. Used by the counting page (form
-    posts, and fetch from the camera scanner, which asks for JSON) and by the
-    Count button on an asset's page (``back=asset``)."""
+    """Change an asset's count at the active location: add ``delta`` (default 1),
+    or set it to ``quantity``; ``not_found`` records a 0 on purpose. Used by the
+    counting workspace (form posts, or fetch asking for JSON, which gets the
+    updated row back), by the review page (``back=finish``) and by the Count
+    button on an asset's page (``back=asset``)."""
     wants_json = "application/json" in request.headers.get("accept", "")
     user = auth_service.current_user(session_token)
     if user is None:
@@ -617,25 +639,42 @@ def count_inventory_session(
         return render_login_page("Please log in to count inventory sessions.")
 
     delta = max(-1000, min(delta, 1000))
+    set_to: int | None = None
+    if quantity.strip():
+        try:
+            set_to = max(0, min(int(quantity), 1_000_000))
+        except ValueError:
+            set_to = None
+    marked_not_found = not_found in {"1", "true", "on", "yes"}
+    if marked_not_found:
+        set_to = 0
     asset_id, error_result = _resolve_asset_code(code)
     outcome: dict[str, object]
     if asset_id is None:
         outcome = {"result": error_result}
     else:
-        outcome = repo.adjust_count(session_id, asset_id, delta)
+        if set_to is not None:
+            outcome = repo.set_count(session_id, asset_id, set_to, not_found=marked_not_found)
+        else:
+            outcome = repo.adjust_count(session_id, asset_id, delta)
         if outcome.get("result") in {"counted", "added"}:
+            change = {"set_to": set_to} if set_to is not None else {"delta": delta}
             audit(
                 "inventory_session.count_changed",
                 session_id=session_id,
                 asset_id=asset_id,
                 name=outcome.get("name"),
-                delta=delta,
+                **change,
+                **({"not_found": True} if marked_not_found else {}),
                 location=outcome.get("location"),
                 quantity=outcome.get("quantity"),
                 added_to_session=outcome.get("result") == "added",
             )
 
     message, kind = svc.count_message(outcome)
+    if marked_not_found and outcome.get("result") == "counted":
+        where = f" at {outcome['location']}" if outcome.get("location") else ""
+        message = f"{outcome.get('name')}: marked not found{where}."
     if wants_json:
         payload = {
             key: outcome.get(key)
@@ -648,14 +687,194 @@ def count_inventory_session(
             asset = assets_repo.get_asset_by_id(asset_id)
             payload["category"] = asset["category"] if asset else ""
             payload["asset_location"] = (asset["location"] or "") if asset else ""
+        if asset_id and outcome.get("result") in {"counted", "added"}:
+            payload.update(_workspace_payload(session_id, asset_id))
         return JSONResponse({**payload, "message": message, "kind": kind})
 
     result = str(outcome.get("result") or "asset_not_found")
+    if back == "finish":
+        return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/finish", status_code=303)
     if back == "asset" and asset_id:
         query = urlencode({"count_session": session_id, "count_result": result})
         return RedirectResponse(url=f"/fixed-assets/id/{asset_id}?{query}", status_code=303)
     query = urlencode({"asset": asset_id or "", "result": result})
     return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count?{query}", status_code=303)
+
+
+@router.post("/inventory-sessions/id/{session_id}/remove")
+def remove_asset_from_session(
+    request: Request,
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    asset_id: str = Form(default=""),
+) -> Response:
+    """Take an asset out of the session, with all its counts."""
+    wants_json = "application/json" in request.headers.get("accept", "")
+    user = auth_service.current_user(session_token)
+    if user is None:
+        if wants_json:
+            return JSONResponse({"result": "login_required", "message": "Please log in again."}, status_code=401)
+        return render_login_page("Please log in to count inventory sessions.")
+    asset = assets_repo.get_asset_by_id(asset_id) if asset_id else None
+    outcome = repo.remove_asset(session_id, asset_id) if asset else {"result": "not_linked"}
+    result = str(outcome["result"])
+    if result == "removed":
+        audit("inventory_session.asset_removed", session_id=session_id, asset_id=asset_id, name=asset["name"],
+              counts=outcome["counts"])
+        message, kind = f"{asset['name']} was removed from the session.", "success"
+    elif result == "closed":
+        message, kind = "Assets can only be removed while the session is New or Active.", "error"
+    else:
+        message, kind = "That asset is not in this session.", "error"
+    if wants_json:
+        payload = _workspace_payload(session_id, None)
+        return JSONResponse({
+            "result": result, "removed": result == "removed", "asset_id": asset_id,
+            # What Undo sends back to /restore.
+            "undo": {"asset_id": asset_id, "counts": outcome["counts"]} if result == "removed" else None,
+            "summary": payload.get("summary"), "message": message, "kind": kind,
+        })
+    notice = "&notice=removed" if result == "removed" else ""
+    return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count?tab=all{notice}", status_code=303)
+
+
+@router.post("/inventory-sessions/id/{session_id}/restore")
+def restore_asset_to_session(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    asset_id: str = Form(default=""),
+    counts: str = Form(default="[]"),
+) -> Response:
+    """Undo a removal: put the asset back with the counts it had ([location id, quantity] pairs, as JSON)."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return JSONResponse({"result": "login_required", "message": "Please log in again."}, status_code=401)
+    try:
+        pairs = [
+            [location_id if isinstance(location_id, str) else None, int(quantity)]
+            for location_id, quantity in json.loads(counts)
+        ][:100]
+    except (ValueError, TypeError):
+        pairs = []
+    result = repo.restore_asset(session_id, asset_id, pairs)
+    asset = assets_repo.get_asset_by_id(asset_id) if asset_id else None
+    if result == "restored" and asset is not None:
+        audit("inventory_session.asset_restored", session_id=session_id, asset_id=asset_id, name=asset["name"])
+        message, kind = f"{asset['name']} is back in the session with its counts.", "success"
+    elif result == "already_in_session":
+        message, kind = "That asset is already in the session again.", "info"
+    else:
+        message, kind = "The asset could not be put back.", "error"
+    return JSONResponse({
+        "result": result, "asset_id": asset_id, "message": message, "kind": kind,
+        **(_workspace_payload(session_id, asset_id) if result == "restored" else {}),
+    })
+
+
+@router.get("/inventory-sessions/id/{session_id}/search")
+def search_assets(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    q: str = Query(default=""),
+) -> Response:
+    """Assets in the register for the workspace's search box."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return JSONResponse({"results": []}, status_code=401)
+    return JSONResponse({
+        "results": [
+            {
+                "id": str(row["id"]),
+                "name": str(row["name"]),
+                "meta": " · ".join(
+                    part for part in (
+                        str(row["category"] or ""),
+                        f"registered at {row['location']}" if row["location"] else "no location",
+                        str(row["id"])[:8],
+                        "in this session" if row["in_session"] else "",
+                    ) if part
+                ),
+                "in_session": bool(row["in_session"]),
+            }
+            for row in repo.search_assets(session_id, q[:100])
+        ]
+    })
+
+
+@router.post("/inventory-sessions/id/{session_id}/details", response_class=HTMLResponse)
+def save_session_details(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    date_from: str = Form(...),
+    date_to: str = Form(...),
+    responsible_person: str = Form(...),
+    notes: str = Form(default=""),
+) -> Response:
+    """Dates, responsible person and notes, from the workspace's Session details panel."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to edit inventory sessions.")
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return render_login_page("Inventory session not found.")
+    status = str(inv_session["status"])
+    if svc.is_terminal_status(status):
+        return _render_details_with_message(
+            user_email=str(user["email"]), session_id=session_id, message="Terminal sessions are read-only."
+        )
+    error = svc.validate_session_form(
+        date_from=date_from, date_to=date_to, status=status, responsible_person=responsible_person
+    )
+    if error:
+        return render_inventory_session_count_page(
+            current_email=str(user["email"]),
+            inv_session=inv_session,
+            locations=_location_choices(inv_session["location_id"], inv_session["location"]),
+            details_open=True,
+            message=error,
+            message_kind="error",
+        )
+    repo.update_session(
+        session_id=session_id,
+        date_from=date_from,
+        date_to=date_to,
+        status=status,
+        responsible_person=responsible_person,
+        notes=notes,
+        completion_reason=str(inv_session["completion_reason"] or ""),
+        cancellation_reason=str(inv_session["cancellation_reason"] or ""),
+        actor_user_id=int(user["id"]),
+    )
+    audit(
+        "inventory_session.updated",
+        session_id=session_id,
+        changes={
+            key: [inv_session[key], value]
+            for key, value in (("date_from", date_from), ("date_to", date_to),
+                               ("responsible_person", responsible_person.strip()), ("notes", notes.strip()))
+            if (inv_session[key] or "") != value
+        },
+    )
+    target = "count" if status == "Active" else "edit"
+    suffix = "?notice=details" if target == "count" else ""
+    return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/{target}{suffix}", status_code=303)
+
+
+@router.get("/inventory-sessions/id/{session_id}/finish", response_class=HTMLResponse)
+def finish_counting_page(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+) -> HTMLResponse:
+    """Review before completing: not counted yet, differences, locations used."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to complete inventory sessions.")
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return render_login_page("Inventory session not found.")
+    if str(inv_session["status"]) != "Active":
+        return RedirectResponse(url=f"/inventory-sessions/id/{session_id}", status_code=303)
+    return render_inventory_session_finish_page(str(user["email"]), inv_session)
 
 
 @router.post("/inventory-sessions/id/{session_id}/active-location", response_class=HTMLResponse)
@@ -708,6 +927,10 @@ def edit_inventory_session_page(
     inv_session = repo.get_session_by_id(session_id)
     if inv_session is None:
         return render_login_page("Inventory session not found.")
+    if str(inv_session["status"]) == "Active":
+        # Counting happens in the workspace; this page plans New sessions and
+        # lets administrators reopen closed ones.
+        return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count", status_code=303)
     is_admin_user = svc.is_admin_email(str(user["email"]))
     return _render_edit_page(
         user_email=str(user["email"]),
@@ -905,6 +1128,7 @@ def complete_inventory_session(
     session_id: str,
     session_token: str | None = Cookie(default=None),
     completion_reason: str = Form(default=""),
+    back: str = Form(default=""),
 ) -> HTMLResponse:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -919,6 +1143,11 @@ def complete_inventory_session(
     if not completion_reason.strip():
         transition_error = transition_error or "Completion reason is required when completing a session."
     if transition_error:
+        if back == "finish" and current_status == "Active":
+            return render_inventory_session_finish_page(
+                str(user["email"]), inv_session, completion_reason=completion_reason,
+                message=transition_error, message_kind="error",
+            )
         return _render_details_with_message(
             user_email=str(user["email"]),
             session_id=session_id,

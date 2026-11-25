@@ -460,11 +460,14 @@ def _set_count(
     *,
     quantity: int | None = None,
     delta: int | None = None,
+    keep_zero: bool = False,
 ) -> None:
     """Set (``quantity``) or change (``delta``) one asset's count at one location.
 
     The UPDATE comes first, so it takes the write lock before a missing row is
     inserted, and a second writer waits instead of inserting a duplicate.
+    ``keep_zero`` stores a count of 0 even where there was none: "not found
+    here" on purpose, as opposed to not counted yet.
     """
     now = _utc_now_text()
     if quantity is not None:
@@ -485,9 +488,9 @@ def _set_count(
             (delta, now, session_id, fixed_asset_id, location_id),
         )
         new_quantity = max(0, int(delta or 0))
-    # A missing count is the same as 0; adding a 0 row would only list an
-    # empty location against the asset.
-    if cursor.rowcount == 0 and new_quantity > 0:
+    # Without keep_zero a missing count is the same as 0: a 0 row would only
+    # list an empty location against the asset.
+    if cursor.rowcount == 0 and (new_quantity > 0 or keep_zero):
         connection.execute(
             """
             INSERT INTO inventory_session_counts (inventory_session_id, fixed_asset_id, location_id, quantity, updated_at)
@@ -1785,7 +1788,14 @@ def list_fixed_assets_for_inventory_session(session_id: str) -> list[sqlite3.Row
         return cursor.fetchall()
 
 
-def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> dict[str, Any]:
+def adjust_inventory_count(
+    session_id: str,
+    fixed_asset_id: str,
+    delta: int | None = 1,
+    *,
+    quantity: int | None = None,
+    keep_zero: bool = False,
+) -> dict[str, Any]:
     """Add ``delta`` (may be negative) to one asset's counted quantity in an Active session.
 
     Used for counting by scanning labels. An asset that is not in the session yet
@@ -1797,6 +1807,10 @@ def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> 
     The count changes at the session's active location (or with no location);
     ``quantity`` is the asset's total over all locations and ``here_quantity``
     its count at the active one.
+
+    With ``quantity`` the count at the active location is set to that number
+    instead (typed in on the counting page); ``keep_zero`` records a 0 on
+    purpose ("Not found here"), so the asset no longer shows as not counted.
 
     Returns a dict whose ``result`` is one of ``counted``, ``added``,
     ``session_not_found``, ``not_active``, ``asset_not_found``, ``asset_deleted``,
@@ -1830,11 +1844,12 @@ def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> 
         base = {"name": asset["name"], "asset_id": asset["id"]}
         if not was_linked and asset["deleted_at"] is not None:
             return {**base, "result": "asset_deleted"}
-        if not was_linked and delta <= 0:
+        increase = (quantity if quantity is not None else delta or 0) > 0
+        if not was_linked and not increase:
             return {**base, "result": "not_linked"}
 
         location_id = session["location_id"]
-        if delta < 0:
+        if quantity is None and (delta or 0) < 0:
             counted_here = connection.execute(
                 """
                 SELECT quantity FROM inventory_session_counts
@@ -1856,7 +1871,10 @@ def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> 
             """,
             (session_id, fixed_asset_id, asset["quantity"]),
         )
-        _set_count(connection, session_id, fixed_asset_id, location_id, delta=delta)
+        if quantity is not None:
+            _set_count(connection, session_id, fixed_asset_id, location_id, quantity=max(0, quantity), keep_zero=keep_zero)
+        else:
+            _set_count(connection, session_id, fixed_asset_id, location_id, delta=delta)
         _update_count_totals(connection, session_id)
         connection.execute(
             "UPDATE inventory_sessions SET updated_at = ? WHERE id = ?",
@@ -1889,6 +1907,129 @@ def adjust_inventory_count(session_id: str, fixed_asset_id: str, delta: int) -> 
             # Found somewhere else than the location it is registered at.
             "other_location": location_id is not None and asset["location_id"] != location_id,
         }
+
+
+def _open_session_status(connection: sqlite3.Connection, session_id: str) -> str | None:
+    """None when the session can be changed (New or Active), else the reason."""
+    session = connection.execute("SELECT status FROM inventory_sessions WHERE id = ?", (session_id,)).fetchone()
+    if session is None:
+        return "session_not_found"
+    if session["status"] not in ("New", "Active"):
+        return "closed"
+    return None
+
+
+def remove_asset_from_session(session_id: str, fixed_asset_id: str) -> dict[str, Any]:
+    """Take an asset out of a New or Active session, with all its counts.
+
+    ``result`` is ``removed``, ``not_linked``, ``session_not_found`` or
+    ``closed``. A removal also returns ``counts``, [location id, quantity]
+    pairs, so ``restore_asset_to_session`` can undo it.
+    """
+    with db_session() as connection:
+        problem = _open_session_status(connection, session_id)
+        if problem:
+            return {"result": problem}
+        counts = [
+            [row["location_id"], int(row["quantity"])]
+            for row in connection.execute(
+                """
+                SELECT location_id, quantity FROM inventory_session_counts
+                WHERE inventory_session_id = ? AND fixed_asset_id = ?
+                ORDER BY id
+                """,
+                (session_id, fixed_asset_id),
+            ).fetchall()
+        ]
+        cursor = connection.execute(
+            "DELETE FROM inventory_session_fixed_assets WHERE inventory_session_id = ? AND fixed_asset_id = ?",
+            (session_id, fixed_asset_id),
+        )
+        if cursor.rowcount == 0:
+            return {"result": "not_linked"}
+        connection.execute(
+            "UPDATE inventory_sessions SET updated_at = ? WHERE id = ?", (_utc_now_text(), session_id)
+        )
+        return {"result": "removed", "counts": counts}
+
+
+def restore_asset_to_session(
+    session_id: str, fixed_asset_id: str, counts: Sequence[Sequence[Any]]
+) -> str:
+    """Put a removed asset back with its counts ([location id, quantity] pairs).
+
+    The expected quantity is taken from the asset again, as for any asset added
+    to a started session, rather than from the caller. Returns ``restored``,
+    ``already_in_session``, ``asset_not_found``, ``session_not_found`` or ``closed``.
+    """
+    with db_session() as connection:
+        problem = _open_session_status(connection, session_id)
+        if problem:
+            return problem
+        asset = connection.execute(
+            "SELECT 1 FROM fixed_assets WHERE id = ?", (fixed_asset_id,)
+        ).fetchone()
+        if asset is None:
+            return "asset_not_found"
+        cursor = connection.execute(
+            """
+            INSERT OR IGNORE INTO inventory_session_fixed_assets (inventory_session_id, fixed_asset_id, quantity)
+            VALUES (?, ?, 0)
+            """,
+            (session_id, fixed_asset_id),
+        )
+        if cursor.rowcount == 0:
+            return "already_in_session"
+        known_locations = {row["id"] for row in connection.execute("SELECT id FROM locations").fetchall()}
+        for location_id, quantity in counts:
+            if location_id is not None and location_id not in known_locations:
+                continue
+            _set_count(connection, session_id, fixed_asset_id, location_id,
+                       quantity=max(0, int(quantity)), keep_zero=True)
+        _update_count_totals(connection, session_id)
+        status = connection.execute(
+            "SELECT status FROM inventory_sessions WHERE id = ?", (session_id,)
+        ).fetchone()["status"]
+        _save_expected_quantities(connection, session_id, save_expected=status != "New")
+        connection.execute(
+            "UPDATE inventory_sessions SET updated_at = ? WHERE id = ?", (_utc_now_text(), session_id)
+        )
+        return "restored"
+
+
+def search_assets_for_session(session_id: str, query: str, limit: int = 8) -> list[sqlite3.Row]:
+    """Assets in the register (not deleted) whose name or category contains
+    ``query`` or whose id starts with it, ``in_session`` marking those already
+    in the session. Names that start with the query come first."""
+    text = query.strip().lower()
+    if not text:
+        return []
+    like = f"%{text}%"
+    with db_session() as connection:
+        return connection.execute(
+            """
+            SELECT
+                fixed_assets.id,
+                fixed_assets.name,
+                COALESCE(fixed_asset_categories.name, fixed_assets.category) AS category,
+                locations.name AS location,
+                links.fixed_asset_id IS NOT NULL AS in_session
+            FROM fixed_assets
+            LEFT JOIN fixed_asset_categories ON fixed_asset_categories.id = fixed_assets.category_id
+            LEFT JOIN locations ON locations.id = fixed_assets.location_id
+            LEFT JOIN inventory_session_fixed_assets AS links
+                ON links.fixed_asset_id = fixed_assets.id AND links.inventory_session_id = ?
+            WHERE fixed_assets.deleted_at IS NULL
+              AND (
+                lower(fixed_assets.name) LIKE ?
+                OR lower(COALESCE(fixed_asset_categories.name, fixed_assets.category)) LIKE ?
+                OR substr(fixed_assets.id, 1, ?) = ?
+              )
+            ORDER BY lower(fixed_assets.name) NOT LIKE ?, lower(fixed_assets.name)
+            LIMIT ?
+            """,
+            (session_id, like, like, len(text), text, f"{text}%", limit),
+        ).fetchall()
 
 
 def list_fixed_asset_names() -> list[str]:

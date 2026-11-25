@@ -1,0 +1,102 @@
+<div class="stack workspace-review">
+    <div class="page-header">
+        <div>
+            <a href="/inventory-sessions/id/{{ inv_session.id }}/count" class="workspace-back">&larr; Back to counting</a>
+            <h2>Finish counting</h2>
+            <p class="page-context">Inventory {{ inv_session.date_from }} – {{ inv_session.date_to }} · {{ inv_session.responsible_person }}. Check the results before you complete the session; after that only an administrator can reopen it.</p>
+        </div>
+    </div>
+
+    <section class="dash-tiles" aria-label="Results">
+        <div class="dash-tile"><span class="dash-tile-label">Assets in session</span><strong class="dash-tile-value">{{ summary.total }}</strong></div>
+        <div class="dash-tile dash-tile-accent"><span class="dash-tile-label">Matched</span><strong class="dash-tile-value">{{ summary.matched }}</strong></div>
+        <div class="dash-tile{% if summary.differ %} dash-tile-warning{% endif %}"><span class="dash-tile-label">Differences</span><strong class="dash-tile-value">{{ summary.differ }}</strong></div>
+        <div class="dash-tile{% if summary.todo %} dash-tile-warning{% endif %}"><span class="dash-tile-label">Not counted yet</span><strong class="dash-tile-value">{{ summary.todo }}</strong></div>
+    </section>
+
+    {% if not_counted %}
+    <section class="section-card review-warning">
+        <h3>{{ not_counted | length }} {{ "asset has" if not_counted | length == 1 else "assets have" }} not been counted yet</h3>
+        <p>If you complete now, they count as not found. Count them, or mark them not found on purpose.</p>
+        <ul class="review-list">
+            {% for r in not_counted %}
+            <li>
+                <div>
+                    <strong>{{ r.name }}</strong>
+                    <span>{{ r.category }} · registered at {{ r.register_location or "no location" }} · expected {{ r.expected }}</span>
+                </div>
+                <a href="/inventory-sessions/id/{{ inv_session.id }}/count?tab=todo#asset-{{ r.id }}">Count it</a>
+                <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/count">
+                    <input type="hidden" name="code" value="{{ r.id }}" />
+                    <input type="hidden" name="quantity" value="0" />
+                    <input type="hidden" name="not_found" value="1" />
+                    <input type="hidden" name="back" value="finish" />
+                    <button type="submit">Mark not found{% if inv_session.location %} at {{ inv_session.location }}{% endif %}</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <section class="section-card">
+        <h3>Differences ({{ differences | length }})</h3>
+        {% if differences %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Registered at</th>
+                        <th>Counted at</th>
+                        <th class="numeric-cell">Expected</th>
+                        <th class="numeric-cell">Counted</th>
+                        <th class="numeric-cell">Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in differences %}
+                    {% set diff = r.total - r.expected %}
+                    <tr>
+                        <td><a href="/inventory-sessions/id/{{ inv_session.id }}/count?tab=differ#asset-{{ r.id }}">{{ r.name }}</a></td>
+                        <td>{{ r.register_location or "—" }}</td>
+                        <td>{{ r.counted_at }}</td>
+                        <td class="numeric-cell">{{ r.expected }}</td>
+                        <td class="numeric-cell">{{ r.total }}</td>
+                        <td class="numeric-cell"><span class="diff-value {% if diff > 0 %}diff-positive{% else %}diff-negative{% endif %}">{% if diff > 0 %}+{% endif %}{{ diff }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="dash-empty">Every counted asset matches the expected quantity.</p>
+        {% endif %}
+    </section>
+
+    <div class="review-bottom">
+        <section class="section-card">
+            <h3>Locations used</h3>
+            {% if location_history %}
+            <ol class="workspace-history">
+                {% for entry in location_history %}<li><strong>{{ entry.location }}</strong> <span class="workspace-side-note">from {{ entry.time }}{% if entry.by %} · {{ entry.by }}{% endif %}</span></li>{% endfor %}
+            </ol>
+            {% else %}
+            <p class="dash-empty">Counted without a location.</p>
+            {% endif %}
+        </section>
+
+        <section class="section-card">
+            <h3>Complete the session</h3>
+            <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/complete" class="workspace-details-form">
+                <input type="hidden" name="back" value="finish" />
+                <label for="completion_reason">Completion reason</label>
+                <textarea id="completion_reason" name="completion_reason" rows="3" maxlength="500" required placeholder="For example: yearly count finished; differences explained in the notes.">{{ completion_reason or '' }}</textarea>
+                <div class="button-row">
+                    <a href="/inventory-sessions/id/{{ inv_session.id }}/count">Back to counting</a>
+                    <button type="submit" class="primary">Complete session</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>

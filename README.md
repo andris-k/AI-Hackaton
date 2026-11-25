@@ -128,6 +128,7 @@ Submitted credentials are checked against the SQLite database, and successful lo
 * `/fixed-assets/labels.pdf` - QR labels for the assets matching the list filters (A4, 3 × 7 labels of 63.5 × 38.1 mm)
 * `/fixed-assets/id/{fixed_asset_id}/label.pdf` - QR label for one asset
 * `/inventory-sessions/id/{session_id}/count` - phone-friendly counting page for an Active session
+* `/inventory-sessions/id/{session_id}/active-location` (POST) - change the location where counts are recorded; each change is kept in the session's location history
 * `/locations` - location management page
 * `/locations/{location_id}/edit` - location edit page
 * `/logout` - clear the active session

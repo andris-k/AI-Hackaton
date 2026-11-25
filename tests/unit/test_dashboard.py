@@ -73,7 +73,7 @@ def test_session_progress_compares_with_expected_quantity(temp_database):
     assert row["id"] == session_id
     assert (progress["matched"], progress["total"], progress["differences"], progress["percent"]) == (1, 2, 1, 50)
     assert progress["label"] == "1 of 2 assets match the expected quantity"
-    assert progress["title"] == "2026-11-01 – 2026-11-30 · All locations"
+    assert progress["title"] == "2026-11-01 – 2026-11-30"
 
 
 def test_totals_by_category_and_location(temp_database):

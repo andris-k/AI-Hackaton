@@ -3,7 +3,7 @@
         <div class="page-header">
             <div>
                 <h2>Inventory session</h2>
-                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}{% if inv_session.location %} · {{ inv_session.location }}{% endif %}</p>
+                <p class="page-context">{{ inv_session.date_from }} to {{ inv_session.date_to }} · {{ inv_session.responsible_person }}</p>
             </div>
             <div class="page-actions">
                 <a href="/inventory-sessions">← Back to sessions</a>
@@ -47,8 +47,19 @@
             <section class="detail-card">
                 <h3>Session history</h3>
                 <dl class="detail-grid">
-                    <dt>Location</dt>
-                    <dd>{{ inv_session.location or "All locations" }}</dd>
+                    <dt>Active location</dt>
+                    <dd>{{ inv_session.location or "No location" }}</dd>
+
+                    <dt>Locations used</dt>
+                    <dd>
+                        {% if location_history %}
+                        <ol style="margin: 0; padding-left: 18px;">
+                            {% for entry in location_history %}
+                            <li>{{ entry.location }} <span style="color: var(--muted);">from {{ entry.time }}{% if entry.by %} · {{ entry.by }}{% endif %}</span></li>
+                            {% endfor %}
+                        </ol>
+                        {% else %}-{% endif %}
+                    </dd>
 
                     <dt>Created</dt>
                     <dd>{{ inv_session.created_at or '-' }} {% if inv_session.created_by_email %}by {{ inv_session.created_by_email }}{% endif %}</dd>
@@ -95,6 +106,8 @@
                             <tr>
                                 <th>Asset</th>
                                 <th>Category</th>
+                                <th title="Where the asset is in the asset register">Register location</th>
+                                <th title="Where it was counted in this session">Counted at</th>
                                 <th class="numeric-cell" title="Quantity on the fixed asset record when the session started">Expected</th>
                                 <th class="numeric-cell" title="Quantity counted in this inventory session">Counted</th>
                                 <th class="numeric-cell" title="Counted minus expected">Difference</th>
@@ -109,6 +122,8 @@
                                     {% if asset.deleted_at %}<span class="badge badge-deleted" title="Deleted {{ asset.deleted_at }}">Deleted</span>{% endif %}
                                 </td>
                                 <td>{{ asset.category }}</td>
+                                <td>{{ asset.location or "—" }}</td>
+                                <td>{{ counted_at.get(asset.id, "Not found") }}</td>
                                 <td class="numeric-cell">{{ asset.expected_quantity }}</td>
                                 <td class="numeric-cell">{{ asset.quantity }}</td>
                                 <td class="numeric-cell">

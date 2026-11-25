@@ -12,6 +12,7 @@ from app.repositories import audit_repository
 from app.repositories import auth_repository
 from app.services import audit_view_service as audit_view
 from app.repositories import fixed_assets_repository as assets_repo
+from app.repositories import inventory_sessions_repository as sessions_repository
 from app.repositories import locations_repository
 from app.db import NO_LOCATION_FILTER
 
@@ -510,7 +511,7 @@ def render_fixed_asset_details_page(
             {
                 "id": str(row["id"]),
                 "label": f"{row['date_from']} – {row['date_to']} · {row['responsible_person']}",
-                "location": str(row["location"] or "All locations"),
+                "location": f"Counting at {row['location']}" if row["location"] else "No active location",
                 "quantity": row["quantity"],
             }
             for row in (count_sessions or [])
@@ -817,6 +818,32 @@ def render_edit_location_page(
 # Inventory Sessions
 # ---------------------------------------------------------------------------
 
+def _short_time(value: object) -> str:
+    """'2026-11-25T09:15:00.123+00:00' -> '2026-11-25 09:15'."""
+    text = str(value or "")
+    return text[:16].replace("T", " ") if len(text) >= 16 else text
+
+
+def session_locations(session_id: str) -> dict[str, object]:
+    """Where each asset was counted, and the session's location history."""
+    counted_at: dict[str, list[str]] = {}
+    for row in sessions_repository.counts(session_id):
+        if int(row["quantity"]) > 0:
+            counted_at.setdefault(str(row["fixed_asset_id"]), []).append(
+                f"{row['location'] or 'No location'}: {row['quantity']}"
+            )
+    return {
+        "counted_at": {asset_id: " · ".join(parts) for asset_id, parts in counted_at.items()},
+        "location_history": [
+            {
+                "time": _short_time(row["activated_at"]),
+                "location": row["location"] or "No location",
+                "by": row["activated_by_email"] or "",
+            }
+            for row in sessions_repository.location_history(session_id)
+        ],
+    }
+
 def render_inventory_sessions_page(
     current_email: str,
     sessions: list[object],
@@ -890,6 +917,7 @@ def render_inventory_session_details_page(
     content = _render_template(
         "inventory_session_details_page.html",
         **_history(current_email, "inventory_session", str(inv_session["id"])),
+        **session_locations(str(inv_session["id"])),
         current_email=current_email,
         inv_session=inv_session,
         linked_assets=linked_assets,
@@ -912,10 +940,13 @@ def render_inventory_session_count_page(
     inv_session: object,
     linked_assets: list[object],
     *,
+    counts_here: dict[str, int] | None = None,
+    locations: list[dict[str, str]] | None = None,
     highlight_asset_id: str = "",
     message: str | None = None,
     message_kind: str = "info",
 ) -> HTMLResponse:
+    counts_here = counts_here or {}
     rows = [
         {
             "id": str(asset["id"]),
@@ -925,6 +956,7 @@ def render_inventory_session_count_page(
             "other_location": bool(inv_session["location_id"]) and asset["location_id"] != inv_session["location_id"],
             "expected": int(asset["expected_quantity"]),
             "counted": int(asset["quantity"]),
+            "here": counts_here.get(str(asset["id"]), 0),
             "deleted": bool(asset["deleted_at"]),
         }
         for asset in linked_assets
@@ -932,6 +964,7 @@ def render_inventory_session_count_page(
     content = _render_template(
         "inventory_session_count_page.html",
         inv_session=inv_session,
+        locations=locations or [],
         rows=rows,
         highlight_asset_id=highlight_asset_id,
         matching=sum(1 for row in rows if row["counted"] == row["expected"]),
@@ -965,6 +998,7 @@ def render_edit_inventory_session_page(
     content = _render_template(
         "inventory_session_edit_page.html",
         locations=locations or [],
+        location_history=session_locations(str(inv_session["id"]))["location_history"],
         **_history(current_email, "inventory_session", str(inv_session["id"])),
         current_email=current_email,
         inv_session=inv_session,

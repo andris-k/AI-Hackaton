@@ -35,14 +35,14 @@
                                value="{{ prefill.responsible_person if prefill else '' }}" required />
                     </div>
                     <div>
-                        <label for="location_id">Location (optional)</label>
+                        <label for="location_id">Starting location (optional)</label>
                         <select id="location_id" name="location_id">
-                            <option value="">All locations</option>
+                            <option value="">No location</option>
                             {% for location in locations %}
                             <option value="{{ location.id }}" {% if prefill and prefill.location_id == location.id %}selected{% endif %}>{{ location.name }}</option>
                             {% endfor %}
                         </select>
-                        <p style="margin: 5px 0 0; color: var(--muted); font-size: 0.8rem;">With a location, only assets at it can be added to the session.</p>
+                        <p style="margin: 5px 0 0; color: var(--muted); font-size: 0.8rem;">Counts are recorded at the active location. You can change it as often as you need while counting.</p>
                     </div>
                     <div>
                         <label for="notes">Notes (optional)</label>

@@ -24,6 +24,7 @@ from app.views.pages import (
     render_inventory_session_details_page,
     render_inventory_sessions_page,
     render_login_page,
+    session_locations,
 )
 
 router = APIRouter()
@@ -34,15 +35,13 @@ _STATUS_EVENTS = {
 }
 
 
-def _asset_options_for_session(session_id: str, location_id: str | None) -> list[dict[str, object]]:
-    """Assets for the pickers on the session edit page.
-
-    ``selectable`` assets can be added: those that are not deleted and, when the
-    session has a location, are at it. Assets already linked to the session are
-    always included, so saving the form keeps those links, but they are marked
-    when they are deleted or at another location.
-    Linked assets show the expected quantity saved for this session; the others
-    show their current quantity, which is what would be saved for them.
+def _asset_options_for_session(session_id: str, active_location_id: str | None) -> list[dict[str, object]]:
+    """Assets for the pickers on the session edit page: every asset in the
+    register that is not deleted, plus deleted ones already in this session (so
+    saving keeps them, marked as deleted). ``at_location`` marks the assets
+    registered at the active location, for "Add all assets at ...".
+    Assets in the session show the expected quantity saved for it; the others
+    their current quantity, which is what would be saved for them.
     """
     options: dict[str, dict[str, object]] = {
         str(asset["id"]): {
@@ -52,9 +51,10 @@ def _asset_options_for_session(session_id: str, location_id: str | None) -> list
             "expected_quantity": int(asset["quantity"]),
             "initial_value": float(asset["initial_value"]),
             "selectable": True,
+            "at_location": bool(active_location_id) and asset["location_id"] == active_location_id,
             "note": "",
         }
-        for asset in assets_repo.list_assets(filters={"location_id": location_id} if location_id else None)
+        for asset in assets_repo.list_assets()
     }
     for asset in repo.list_linked_assets(session_id):
         asset_id = str(asset["id"])
@@ -68,9 +68,28 @@ def _asset_options_for_session(session_id: str, location_id: str | None) -> list
             "expected_quantity": int(asset["expected_quantity"]),
             "initial_value": float(asset["initial_value"]),
             "selectable": False,
-            "note": "deleted" if asset["deleted_at"] else "other location",
+            "at_location": False,
+            "note": "deleted",
         }
     return list(options.values())
+
+
+def _edit_rows(session_id: str, form_rows: list[tuple[str, str]] | None = None) -> list[dict[str, str]]:
+    """Rows for the edit page: the count at the active location, which the page
+    edits, and what is counted at other locations (shown, not edited).
+    ``form_rows`` re-shows what was posted, after a validation error."""
+    counts = {str(row["fixed_asset_id"]): row for row in repo.counts_at_active_location(session_id)}
+
+    def elsewhere(asset_id: str) -> int:
+        row = counts.get(asset_id)
+        return int(row["total"]) - int(row["here"]) if row else 0
+
+    if form_rows is None:
+        form_rows = [(asset_id, str(int(row["here"]))) for asset_id, row in counts.items()]
+    return [
+        {"fixed_asset_id": asset_id, "quantity": quantity, "elsewhere": str(elsewhere(asset_id))}
+        for asset_id, quantity in form_rows
+    ]
 
 
 def _location_choices(current_id: object = None, current_name: object = None) -> list[dict[str, str]]:
@@ -96,10 +115,7 @@ def _render_edit_page(
         inv_session=inv_session,
         current_email=user_email,
         statuses=statuses,
-        fixed_assets=_asset_options_for_session(
-            str(inv_session["id"]),
-            (prefill or {}).get("location_id", inv_session["location_id"]) or None,
-        ),
+        fixed_assets=_asset_options_for_session(str(inv_session["id"]), inv_session["location_id"]),
         locations=_location_choices(inv_session["location_id"], inv_session["location"]),
         linked_asset_rows=linked_asset_rows,
         is_read_only=svc.is_terminal_status(current_status) and not is_admin_user,
@@ -486,7 +502,13 @@ def inventory_session_pdf_report(
         return RedirectResponse(url=f"/inventory-sessions/id/{session_id}", status_code=303)
 
     audit("inventory_session.report_downloaded", session_id=session_id)
-    pdf_bytes = report_svc.build_session_report(inv_session, repo.list_linked_assets(session_id))
+    locations_context = session_locations(session_id)
+    pdf_bytes = report_svc.build_session_report(
+        inv_session,
+        repo.list_linked_assets(session_id),
+        counted_at=locations_context["counted_at"],
+        location_history=locations_context["location_history"],
+    )
     filename = report_svc.report_filename(inv_session)
     return Response(
         content=pdf_bytes,
@@ -500,6 +522,7 @@ def inventory_session_pdf_report(
 
 _COUNT_RESULTS = {
     "counted", "added", "not_active", "asset_not_found", "asset_deleted", "not_linked", "ambiguous",
+    "not_counted_here",
 }
 
 
@@ -520,12 +543,15 @@ def _count_outcome(session_id: str, asset_id: str, result: str) -> dict[str, obj
     """Rebuild a count result after a redirect, from the current data."""
     outcome: dict[str, object] = {"result": result if result in _COUNT_RESULTS else "asset_not_found"}
     inv_session = repo.get_session_by_id(session_id)
+    here = {str(row["fixed_asset_id"]): int(row["here"]) for row in repo.counts_at_active_location(session_id)}
     for asset in repo.list_linked_assets(session_id):
         if str(asset["id"]) == asset_id:
             outcome.update(
                 name=asset["name"],
                 quantity=int(asset["quantity"]),
+                here_quantity=here.get(asset_id, 0),
                 expected_quantity=int(asset["expected_quantity"]),
+                location=inv_session["location"] if inv_session else None,
                 other_location=bool(inv_session and inv_session["location_id"])
                 and asset["location_id"] != inv_session["location_id"],
             )
@@ -563,6 +589,8 @@ def count_inventory_session_page(
         current_email=str(user["email"]),
         inv_session=inv_session,
         linked_assets=repo.list_linked_assets(session_id),
+        counts_here={str(row["fixed_asset_id"]): int(row["here"]) for row in repo.counts_at_active_location(session_id)},
+        locations=_location_choices(inv_session["location_id"], inv_session["location"]),
         highlight_asset_id=asset,
         message=message,
         message_kind=message_kind,
@@ -602,6 +630,7 @@ def count_inventory_session(
                 asset_id=asset_id,
                 name=outcome.get("name"),
                 delta=delta,
+                location=outcome.get("location"),
                 quantity=outcome.get("quantity"),
                 added_to_session=outcome.get("result") == "added",
             )
@@ -610,12 +639,15 @@ def count_inventory_session(
     if wants_json:
         payload = {
             key: outcome.get(key)
-            for key in ("result", "asset_id", "name", "quantity", "expected_quantity", "other_location")
+            for key in (
+                "result", "asset_id", "name", "quantity", "here_quantity", "expected_quantity",
+                "other_location", "location",
+            )
         }
         if outcome.get("result") == "added" and asset_id:
             asset = assets_repo.get_asset_by_id(asset_id)
             payload["category"] = asset["category"] if asset else ""
-            payload["location"] = (asset["location"] or "") if asset else ""
+            payload["asset_location"] = (asset["location"] or "") if asset else ""
         return JSONResponse({**payload, "message": message, "kind": kind})
 
     result = str(outcome.get("result") or "asset_not_found")
@@ -624,6 +656,45 @@ def count_inventory_session(
         return RedirectResponse(url=f"/fixed-assets/id/{asset_id}?{query}", status_code=303)
     query = urlencode({"asset": asset_id or "", "result": result})
     return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count?{query}", status_code=303)
+
+
+@router.post("/inventory-sessions/id/{session_id}/active-location", response_class=HTMLResponse)
+def set_active_location(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    location_id: str = Form(default=""),
+    back: str = Form(default="edit"),
+) -> Response:
+    """Make another location active. Counts from then on are recorded there,
+    and the change is added to the session's location history."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to edit inventory sessions.")
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return render_login_page("Inventory session not found.")
+
+    new_location_id = assets_service.optional_id(location_id)
+    try:
+        result = repo.set_active_location(session_id, new_location_id, int(user["id"]))
+    except ValueError:
+        result = "location_not_found"
+    if result == "changed":
+        new_location = locations_repo.get_by_id(new_location_id) if new_location_id else None
+        audit(
+            "inventory_session.location_changed",
+            session_id=session_id,
+            changes={"location": [inv_session["location"], new_location["name"] if new_location else None]},
+        )
+    elif result != "unchanged":
+        message = {
+            "closed": "The active location can only be changed while the session is New or Active.",
+            "location_not_found": "Selected location does not exist.",
+        }.get(result, "Inventory session not found.")
+        return _render_details_with_message(user_email=str(user["email"]), session_id=session_id, message=message)
+
+    target = "count" if back == "count" else "edit"
+    return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/{target}", status_code=303)
 
 
 @router.get("/inventory-sessions/id/{session_id}/edit", response_class=HTMLResponse)
@@ -638,17 +709,10 @@ def edit_inventory_session_page(
     if inv_session is None:
         return render_login_page("Inventory session not found.")
     is_admin_user = svc.is_admin_email(str(user["email"]))
-    linked_assets = repo.list_linked_assets_with_quantity(session_id)
-    linked_asset_rows = [
-        {"fixed_asset_id": fixed_asset_id, "quantity": str(quantity)}
-        for fixed_asset_id, quantity in linked_assets
-    ]
-    if not linked_asset_rows:
-        linked_asset_rows = []
     return _render_edit_page(
         user_email=str(user["email"]),
         inv_session=inv_session,
-        linked_asset_rows=linked_asset_rows,
+        linked_asset_rows=_edit_rows(session_id),
         is_admin_user=is_admin_user,
     )
 
@@ -664,7 +728,6 @@ def edit_inventory_session(
     notes: str = Form(default=""),
     completion_reason: str = Form(default=""),
     cancellation_reason: str = Form(default=""),
-    location_id: str = Form(default=""),
     loaded_updated_at: str = Form(default=""),
     admin_override: str = Form(default=""),
     fixed_asset_ids: list[str] = Form(default=[]),
@@ -682,17 +745,10 @@ def edit_inventory_session(
     is_admin_user = svc.is_admin_email(str(user["email"]))
     admin_override_requested = admin_override in {"1", "true", "on", "yes"}
     if svc.is_terminal_status(current_status) and not is_admin_user:
-        linked_assets = repo.list_linked_assets_with_quantity(session_id)
-        linked_asset_rows = [
-            {"fixed_asset_id": fixed_asset_id, "quantity": str(quantity)}
-            for fixed_asset_id, quantity in linked_assets
-        ]
-        if not linked_asset_rows:
-            linked_asset_rows = []
         return _render_edit_page(
             user_email=str(user["email"]),
             inv_session=inv_session,
-            linked_asset_rows=linked_asset_rows,
+            linked_asset_rows=_edit_rows(session_id),
             is_admin_user=is_admin_user,
             error="Terminal sessions are read-only.",
         )
@@ -703,13 +759,11 @@ def edit_inventory_session(
         return _render_edit_page(
             user_email=str(user["email"]),
             inv_session=inv_session,
-            linked_asset_rows=[
-                {"fixed_asset_id": fixed_asset_id, "quantity": str(quantity)}
-                for fixed_asset_id, quantity in repo.list_linked_assets_with_quantity(session_id)
-            ],
+            linked_asset_rows=_edit_rows(session_id),
             is_admin_user=is_admin_user,
             error=(
-                "This session was changed after you opened this page, for example by counting on a phone. "
+                "This session was changed after you opened this page, for example by counting on a phone "
+                "or changing the active location. "
                 "Your changes were not saved. The latest counts are shown below; make your changes again."
             ),
         )
@@ -735,25 +789,9 @@ def edit_inventory_session(
     if current_status != target_status and target_status == "Cancelled" and not cancellation_reason.strip():
         terminal_reason_error = "Cancellation reason is required when cancelling a session."
 
-    session_location_id = assets_service.optional_id(location_id)
-    location_error: str | None = None
-    if (
-        session_location_id
-        and session_location_id != inv_session["location_id"]
-        and locations_repo.get_by_id(session_location_id) is None
-    ):
-        location_error = "Selected location does not exist."
-
-    combined_error = (
-        error or linked_assets_error or status_transition_error or terminal_reason_error or location_error
-    )
+    combined_error = error or linked_assets_error or status_transition_error or terminal_reason_error
     if combined_error:
-        linked_asset_rows = [
-            {"fixed_asset_id": fixed_asset_ids[index], "quantity": fixed_asset_quantities[index]}
-            for index in range(min(len(fixed_asset_ids), len(fixed_asset_quantities)))
-        ]
-        if not linked_asset_rows:
-            linked_asset_rows = []
+        linked_asset_rows = _edit_rows(session_id, list(zip(fixed_asset_ids, fixed_asset_quantities)))
         return _render_edit_page(
             user_email=str(user["email"]),
             inv_session=inv_session,
@@ -766,7 +804,6 @@ def edit_inventory_session(
                 "notes": notes,
                 "completion_reason": completion_reason,
                 "cancellation_reason": cancellation_reason,
-                "location_id": location_id,
                 "admin_override": "1" if admin_override_requested else "",
             },
             linked_asset_rows=linked_asset_rows,
@@ -784,7 +821,6 @@ def edit_inventory_session(
         completion_reason=completion_reason,
         cancellation_reason=cancellation_reason,
         actor_user_id=int(user["id"]),
-        location_id=session_location_id,
     )
     if updated is None:
         return render_login_page("Inventory session not found.")
@@ -799,19 +835,13 @@ def edit_inventory_session(
                                 and svc.transition_error(current_status, target_status)),
             reason=completion_reason.strip() or cancellation_reason.strip() or None,
         )
-    location_changes = {}
-    if session_location_id != inv_session["location_id"]:
-        new_location = locations_repo.get_by_id(session_location_id) if session_location_id else None
-        location_changes = {
-            "location": [inv_session["location"], new_location["name"] if new_location else None]
-        }
     audit(
         "inventory_session.updated",
         session_id=session_id,
         status=target_status,
-        **({"changes": location_changes} if location_changes else {}),
+        location=inv_session["location"],
         linked_assets=len(linked_assets),
-        total_quantity=sum(quantity for _, quantity in linked_assets),
+        counted_here=sum(quantity for _, quantity in linked_assets),
     )
     return RedirectResponse(
         url=f"/inventory-sessions/id/{session_id}",
@@ -844,14 +874,12 @@ def start_inventory_session(
             message=transition_error,
         )
 
-    linked_assets = repo.list_linked_assets_with_quantity(session_id)
     repo.update_session(
         session_id=session_id,
         date_from=str(inv_session["date_from"]),
         date_to=str(inv_session["date_to"]),
         status="Active",
         responsible_person=str(inv_session["responsible_person"]),
-        linked_assets=linked_assets,
         notes=str(inv_session["notes"] or ""),
         completion_reason=str(inv_session["completion_reason"] or ""),
         cancellation_reason=str(inv_session["cancellation_reason"] or ""),
@@ -897,14 +925,12 @@ def complete_inventory_session(
             message=transition_error,
         )
 
-    linked_assets = repo.list_linked_assets_with_quantity(session_id)
     repo.update_session(
         session_id=session_id,
         date_from=str(inv_session["date_from"]),
         date_to=str(inv_session["date_to"]),
         status="Completed",
         responsible_person=str(inv_session["responsible_person"]),
-        linked_assets=linked_assets,
         notes=str(inv_session["notes"] or ""),
         completion_reason=completion_reason,
         cancellation_reason=str(inv_session["cancellation_reason"] or ""),
@@ -951,14 +977,12 @@ def cancel_inventory_session(
             message=transition_error,
         )
 
-    linked_assets = repo.list_linked_assets_with_quantity(session_id)
     repo.update_session(
         session_id=session_id,
         date_from=str(inv_session["date_from"]),
         date_to=str(inv_session["date_to"]),
         status="Cancelled",
         responsible_person=str(inv_session["responsible_person"]),
-        linked_assets=linked_assets,
         notes=str(inv_session["notes"] or ""),
         completion_reason=str(inv_session["completion_reason"] or ""),
         cancellation_reason=cancellation_reason,

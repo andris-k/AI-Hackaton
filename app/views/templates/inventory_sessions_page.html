@@ -58,7 +58,7 @@
                        value="{{ filters.responsible_person }}" placeholder="Search…" />
             </div>
             <div>
-                <label for="location_id">Location</label>
+                <label for="location_id" title="Sessions that have counted at this location">Location used</label>
                 <select id="location_id" name="location_id">
                     <option value="">All locations</option>
                     {% for location in locations %}
@@ -91,7 +91,7 @@
                             <th>Date to</th>
                             <th>Status</th>
                             <th>Responsible person</th>
-                            <th>Location</th>
+                            <th>Active location</th>
                             <th class="numeric-cell">Linked assets</th>
                             <th class="numeric-cell">Total quantity</th>
                             <th class="action-cell"><span class="visually-hidden">Actions</span></th>
@@ -104,7 +104,7 @@
                             <td class="col-date">{{ s.date_to }}</td>
                             <td><span class="badge badge-{{ s.status | lower }}">{{ s.status }}</span></td>
                             <td>{{ s.responsible_person }}</td>
-                            <td>{% if s.location %}{{ s.location }}{% else %}<span style="color: var(--muted);">All</span>{% endif %}</td>
+                            <td>{% if s.location %}{{ s.location }}{% else %}<span style="color: var(--muted);">—</span>{% endif %}</td>
                             <td class="numeric-cell">{{ s.linked_assets_count }}</td>
                             <td class="numeric-cell">{{ s.linked_assets_quantity_total }}</td>
                             <td class="action-cell"><a href="/inventory-sessions/id/{{ s.id }}">View</a></td>

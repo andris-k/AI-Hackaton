@@ -33,7 +33,9 @@ def _plural(count: int, one: str, many: str) -> str:
 
 
 def session_title(row: Mapping[str, Any]) -> str:
-    return f"{row['date_from']} – {row['date_to']} · {row['location'] or 'All locations'}"
+    """Dates, plus the active location while there is one."""
+    title = f"{row['date_from']} – {row['date_to']}"
+    return f"{title} · {row['location']}" if row["location"] else title
 
 
 def session_progress(row: Mapping[str, Any]) -> dict[str, Any]:

@@ -57,7 +57,7 @@ _HEAD = """
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
             <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-            <link rel="stylesheet" href="/static/app.css?v=9" />
+            <link rel="stylesheet" href="/static/app.css?v=10" />
 """
 
 _BRAND = """
@@ -928,6 +928,38 @@ def render_inventory_session_details_page(
         "View inventory session details.",
         content,
         width="760px",
+        message=message,
+        message_kind=message_kind,
+        current_email=current_email,
+        active_nav="inventory",
+    )
+
+
+def render_inventory_session_results_page(
+    current_email: str,
+    inv_session: object,
+    *,
+    message: str | None = None,
+    message_kind: str = "info",
+) -> HTMLResponse:
+    """Results of a Completed or Cancelled session."""
+    from app.services import session_results_service as results
+
+    ended = inv_session["completed_at"] if inv_session["status"] == "Completed" else inv_session["cancelled_at"]
+    content = _render_template(
+        "inventory_session_results_page.html",
+        **_history(current_email, "inventory_session", str(inv_session["id"])),
+        **results.build_results(inv_session),
+        inv_session=inv_session,
+        ended_at=_short_time(ended),
+        is_admin=audit_view.is_admin(current_email),
+    )
+    return render_page(
+        "AI Hackaton Inventory Results",
+        "Inventory results",
+        "Results of an inventory session.",
+        content,
+        width="1200px",
         message=message,
         message_kind=message_kind,
         current_email=current_email,

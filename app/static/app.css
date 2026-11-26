@@ -1330,3 +1330,57 @@ button.show-password:hover { background: var(--accent-soft); }
     .count-step { width: 52px; height: 48px; }
     .review-bottom { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ------------------------------------------------------------------ */
+/* Results of a closed inventory session                              */
+/* ------------------------------------------------------------------ */
+
+.results-heading { min-width: 0; }
+.results-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
+.results-title h2 { margin: 0; }
+.results-reason { margin: 4px 0 0; color: var(--muted); font-style: italic; }
+.results-reopen summary { cursor: pointer; font-weight: 600; }
+.results-reopen form { max-width: 520px; }
+
+.results-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.results-of { font-size: 0.9rem; font-weight: 500; color: var(--muted); }
+.results-tile-danger .dash-tile-value { color: var(--danger); }
+
+.results-table-card { display: grid; gap: 12px; }
+.results-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.results-filters input[type="search"] { width: 260px; max-width: 100%; }
+.results-group { display: flex; align-items: center; gap: 6px; font-size: 0.84rem; color: var(--ink-soft); }
+.results-table td { vertical-align: top; }
+.results-sub { display: block; font-size: 0.78rem; color: var(--muted); }
+.results-table tr[hidden] { display: none; }
+.results-group-row td { padding-top: 14px; font-weight: 700; background: var(--surface-alt); }
+.results-notes { margin: 0; white-space: pre-line; }
+
+.results-bottom { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.results-timeline { list-style: none; margin: 0; padding: 0; display: grid; }
+.results-timeline li { display: grid; grid-template-columns: 120px 14px minmax(0, 1fr); gap: 10px; align-items: start; padding-bottom: 12px; }
+.results-timeline-when { color: var(--muted); font-size: 0.8rem; text-align: right; padding-top: 1px; }
+.results-timeline-dot { width: 12px; height: 12px; margin-top: 3px; border-radius: 999px; box-sizing: border-box; border: 2px solid var(--accent); background: var(--surface); }
+.results-timeline-start .results-timeline-dot { border-color: var(--muted); }
+.results-timeline-active .results-timeline-dot { background: var(--accent); }
+.results-timeline-reopen .results-timeline-dot { border-color: var(--warning); }
+.results-timeline-end .results-timeline-dot { border-color: var(--success); background: var(--success); }
+.results-timeline-cancel .results-timeline-dot { border-color: var(--danger); background: var(--danger); }
+
+.results-people { list-style: none; margin: 0; padding: 0; }
+.results-people li { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
+.results-people li:first-child { border-top: 0; }
+.results-person { display: flex; justify-content: space-between; gap: 8px; }
+.results-person span { color: var(--ink-soft); white-space: nowrap; }
+/* One series: a single hue on a lighter step of the same ramp. */
+.results-person-bar { height: 8px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
+.results-person-bar span { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
+
+@media (max-width: 1100px) {
+    .results-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+    .results-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .results-bottom { grid-template-columns: minmax(0, 1fr); }
+    .results-timeline li { grid-template-columns: 96px 14px minmax(0, 1fr); }
+}

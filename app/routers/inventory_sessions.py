@@ -15,6 +15,7 @@ from app.repositories import locations_repository as locations_repo
 from app.logging_config import audit
 from app.services import auth_service
 from app.services import counting_workspace_service as workspace
+from app.services import session_results_service as results_svc
 from app.services import fixed_assets_service as assets_service
 from app.services import inventory_sessions_service as svc
 from app.services import inventory_report_service as report_svc
@@ -24,6 +25,7 @@ from app.views.pages import (
     render_count_row,
     render_inventory_session_count_page,
     render_inventory_session_finish_page,
+    render_inventory_session_results_page,
     render_inventory_session_details_page,
     render_inventory_sessions_page,
     render_login_page,
@@ -478,6 +480,8 @@ def inventory_session_details_page(
         return render_login_page("Inventory session not found.")
     if str(inv_session["status"]) == "Active":
         return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count", status_code=303)
+    if svc.is_terminal_status(str(inv_session["status"])):
+        return render_inventory_session_results_page(str(user["email"]), inv_session)
     linked_assets = repo.list_linked_assets(session_id)
     return render_inventory_session_details_page(
         inv_session=inv_session,
@@ -490,6 +494,7 @@ def inventory_session_details_page(
 def inventory_session_pdf_report(
     session_id: str,
     session_token: str | None = Cookie(default=None),
+    only: str = Query(default=""),
 ) -> Response:
     user = auth_service.current_user(session_token)
     if user is None:
@@ -501,15 +506,20 @@ def inventory_session_pdf_report(
         # Reports are only for completed sessions; send the user back to the session page.
         return RedirectResponse(url=f"/inventory-sessions/id/{session_id}", status_code=303)
 
-    audit("inventory_session.report_downloaded", session_id=session_id)
+    only_differences = only == "differences"
+    audit("inventory_session.report_downloaded", session_id=session_id,
+          **({"differences_only": True} if only_differences else {}))
     locations_context = session_locations(session_id)
     pdf_bytes = report_svc.build_session_report(
         inv_session,
         repo.list_linked_assets(session_id),
         counted_at=locations_context["counted_at"],
         location_history=locations_context["location_history"],
+        only_differences=only_differences,
     )
     filename = report_svc.report_filename(inv_session)
+    if only_differences:
+        filename = filename.replace(".pdf", "-differences.pdf")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -518,6 +528,80 @@ def inventory_session_pdf_report(
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get("/inventory-sessions/id/{session_id}/results.csv")
+def inventory_session_results_csv(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+) -> Response:
+    """One row per asset with its status, counts, difference and the value of it."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return Response(content="Please log in to export inventory results.", status_code=401)
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return Response("Inventory session not found.", status_code=404, media_type="text/plain")
+    audit("inventory_session.results_exported", session_id=session_id)
+    return Response(
+        # The byte order mark lets Excel read the file as UTF-8.
+        content=results_svc.results_csv(inv_session).encode("utf-8-sig"),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{results_svc.results_filename(inv_session)}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post("/inventory-sessions/id/{session_id}/reopen", response_class=HTMLResponse)
+def reopen_inventory_session(
+    session_id: str,
+    session_token: str | None = Cookie(default=None),
+    reason: str = Form(default=""),
+) -> Response:
+    """Administrators can make a Completed or Cancelled session Active again, with a reason."""
+    user = auth_service.current_user(session_token)
+    if user is None:
+        return render_login_page("Please log in to reopen inventory sessions.")
+    inv_session = repo.get_session_by_id(session_id)
+    if inv_session is None:
+        return render_login_page("Inventory session not found.")
+    status = str(inv_session["status"])
+    error = None
+    if not svc.is_admin_email(str(user["email"])):
+        error = "Only administrators can reopen sessions."
+    elif not svc.is_terminal_status(status):
+        error = "Only completed or cancelled sessions can be reopened."
+    elif not reason.strip():
+        error = "Give a reason for reopening the session."
+    if error:
+        if svc.is_terminal_status(status):
+            return render_inventory_session_results_page(
+                str(user["email"]), inv_session, message=error, message_kind="error"
+            )
+        return _render_details_with_message(user_email=str(user["email"]), session_id=session_id, message=error)
+
+    repo.update_session(
+        session_id=session_id,
+        date_from=str(inv_session["date_from"]),
+        date_to=str(inv_session["date_to"]),
+        status="Active",
+        responsible_person=str(inv_session["responsible_person"]),
+        notes=str(inv_session["notes"] or ""),
+        completion_reason=str(inv_session["completion_reason"] or ""),
+        cancellation_reason=str(inv_session["cancellation_reason"] or ""),
+        actor_user_id=int(user["id"]),
+    )
+    audit(
+        "inventory_session.reopened",
+        session_id=session_id,
+        from_status=status,
+        to_status="Active",
+        admin_override=True,
+        reason=reason.strip(),
+    )
+    return RedirectResponse(url=f"/inventory-sessions/id/{session_id}/count", status_code=303)
 
 
 _COUNT_RESULTS = {

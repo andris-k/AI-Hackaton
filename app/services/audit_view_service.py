@@ -46,6 +46,7 @@ EVENT_LABELS: dict[str, str] = {
     "inventory_session.reopened": "Session reopened",
     "inventory_session.deleted": "Session deleted",
     "inventory_session.report_downloaded": "PDF report downloaded",
+    "inventory_session.results_exported": "Results exported as CSV",
     "inventory_session.count_changed": "Count changed",
     "inventory_session.asset_removed": "Asset removed from session",
     "inventory_session.asset_restored": "Asset put back in session",

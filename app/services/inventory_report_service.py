@@ -50,9 +50,11 @@ def build_session_report(
     linked_assets: Sequence[Mapping[str, Any]],
     counted_at: Mapping[str, str] | None = None,
     location_history: Sequence[Mapping[str, str]] = (),
+    only_differences: bool = False,
 ) -> bytes:
     """``counted_at``: asset id -> "Room A: 3 · Room B: 2"; ``location_history``:
-    the session's active locations in order (location, time, by)."""
+    the session's active locations in order (location, time, by).
+    ``only_differences`` lists only assets whose count differs from the expected one."""
     counted_at = counted_at or {}
     generated = utc_now_label()
     running_title = (
@@ -65,7 +67,10 @@ def build_session_report(
     # --- Title ---------------------------------------------------------------
     pdf.set_font(_FONT, "B", 18)
     pdf.set_text_color(*_INK)
-    pdf.cell(0, 9, "Inventory session report", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0, 9, "Inventory session report" + (": differences" if only_differences else ""),
+        new_x="LMARGIN", new_y="NEXT",
+    )
     pdf.set_font(_FONT, "", 10)
     pdf.set_text_color(*_MUTED)
     pdf.cell(
@@ -81,6 +86,8 @@ def build_session_report(
     for asset in linked_assets:
         expected_qty = int(asset["expected_quantity"] or 0)
         counted_qty = int(asset["quantity"] or 0)
+        if only_differences and counted_qty == expected_qty:
+            continue
         unit_value = float(asset["initial_value"] or 0)
         is_deleted = "deleted_at" in asset.keys() and bool(asset["deleted_at"])
         rows.append({
@@ -162,7 +169,11 @@ def build_session_report(
     if not rows:
         pdf.set_font(_FONT, "", 9)
         pdf.set_text_color(*_MUTED)
-        pdf.cell(0, 6, "No fixed assets were linked to this session.", new_x="LMARGIN", new_y="NEXT")
+        empty_text = (
+            "Every asset matched the expected quantity." if only_differences
+            else "No fixed assets were linked to this session."
+        )
+        pdf.cell(0, 6, empty_text, new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.set_font(_FONT, "", 8.5)
         pdf.set_text_color(*_INK)

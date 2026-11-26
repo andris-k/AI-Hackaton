@@ -71,6 +71,10 @@ def build_rows(inv_session: Mapping[str, Any]) -> list[dict[str, Any]]:
             "name": str(asset["name"]),
             "category": str(asset["category"] or ""),
             "register_location": str(asset["location"] or ""),
+            "register_location_id": asset["location_id"],
+            "unit_value": float(asset["initial_value"] or 0),
+            # [(location id, location name, quantity)], for results per location.
+            "counts": [(c["location_id"], c["location"], int(c["quantity"])) for c in asset_counts],
             "expected": expected,
             "here": here,
             "total": total,

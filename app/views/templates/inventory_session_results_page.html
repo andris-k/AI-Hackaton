@@ -1,0 +1,252 @@
+{% set completed = inv_session.status == "Completed" %}
+<div class="stack results-page">
+    <div class="page-header">
+        <div class="results-heading">
+            <a href="/inventory-sessions" class="workspace-back">&larr; Inventory sessions</a>
+            <div class="results-title">
+                <h2>Inventory {{ inv_session.date_from }} – {{ inv_session.date_to }}</h2>
+                <span class="badge badge-{{ inv_session.status | lower }}">{{ inv_session.status }}</span>
+            </div>
+            {% if completed %}
+            <p class="page-context">Completed {{ ended_at }}{% if inv_session.completed_by_email %} by {{ inv_session.completed_by_email }}{% endif %} · {{ inv_session.responsible_person }} responsible</p>
+            {% if inv_session.completion_reason %}<p class="results-reason">“{{ inv_session.completion_reason }}”</p>{% endif %}
+            {% else %}
+            <p class="page-context">Cancelled {{ ended_at }}{% if inv_session.cancelled_by_email %} by {{ inv_session.cancelled_by_email }}{% endif %} · {{ inv_session.responsible_person }} responsible</p>
+            {% if inv_session.cancellation_reason %}<p class="results-reason">“{{ inv_session.cancellation_reason }}”</p>{% endif %}
+            {% endif %}
+        </div>
+        <div class="page-actions">
+            {% if completed %}
+            <a class="primary" href="/inventory-sessions/id/{{ inv_session.id }}/report.pdf">Download PDF</a>
+            <a href="/inventory-sessions/id/{{ inv_session.id }}/report.pdf?only=differences">PDF of differences</a>
+            {% endif %}
+            <a href="/inventory-sessions/id/{{ inv_session.id }}/results.csv">Export CSV</a>
+        </div>
+    </div>
+
+    {% if is_admin %}
+    <details class="section-card results-reopen">
+        <summary>Reopen session</summary>
+        <form method="post" action="/inventory-sessions/id/{{ inv_session.id }}/reopen" class="workspace-details-form">
+            <p class="workspace-side-note">Reopening makes the session Active again so it can be counted and completed once more. The reason is kept in the audit log.</p>
+            <label for="reopen_reason">Reason</label>
+            <input id="reopen_reason" name="reason" type="text" maxlength="500" required />
+            <button type="submit" class="workflow-neutral">Reopen session</button>
+        </form>
+    </details>
+    {% endif %}
+
+    <section class="results-tiles" aria-label="Results">
+        <div class="dash-tile dash-tile-accent">
+            <span class="dash-tile-label">Matched</span>
+            <strong class="dash-tile-value">{{ tiles.matched }} <span class="results-of">of {{ tiles.total }}</span></strong>
+            <span class="dash-tile-sub">{{ tiles.matched_percent }}% of assets</span>
+        </div>
+        <div class="dash-tile{% if tiles.missing %} dash-tile-warning{% endif %}">
+            <span class="dash-tile-label">Missing</span>
+            <strong class="dash-tile-value">{{ tiles.missing }}</strong>
+            <span class="dash-tile-sub">{{ tiles.missing_items }} {{ "item" if tiles.missing_items == 1 else "items" }} fewer than expected</span>
+        </div>
+        <div class="dash-tile{% if tiles.extra %} dash-tile-warning{% endif %}">
+            <span class="dash-tile-label">Extra</span>
+            <strong class="dash-tile-value">{{ tiles.extra }}</strong>
+            <span class="dash-tile-sub">{{ tiles.extra_items }} {{ "item" if tiles.extra_items == 1 else "items" }} more than expected</span>
+        </div>
+        <div class="dash-tile{% if tiles.not_found %} results-tile-danger{% endif %}">
+            <span class="dash-tile-label">Not found</span>
+            <strong class="dash-tile-value">{{ tiles.not_found }}</strong>
+            <span class="dash-tile-sub">{% if tiles.not_counted %}{{ tiles.not_counted }} never counted{% else %}counted 0 on purpose{% endif %}</span>
+        </div>
+        <div class="dash-tile">
+            <span class="dash-tile-label">Value of missing items</span>
+            <strong class="dash-tile-value">{{ tiles.missing_value }}</strong>
+            <span class="dash-tile-sub">at initial value; extra items {{ tiles.extra_value }}</span>
+        </div>
+    </section>
+
+    <section class="section-card results-table-card">
+        <div class="workspace-toolbar">
+            <div class="segmented" role="tablist" aria-label="Show">
+                <button type="button" role="tab" data-tab="differ" aria-selected="{{ 'true' if tiles.differences else 'false' }}"{% if tiles.differences %} class="selected"{% endif %}>Differences <span>{{ tiles.differences }}</span></button>
+                <button type="button" role="tab" data-tab="matched" aria-selected="false">Matched <span>{{ tiles.matched }}</span></button>
+                <button type="button" role="tab" data-tab="all" aria-selected="{{ 'false' if tiles.differences else 'true' }}"{% if not tiles.differences %} class="selected"{% endif %}>All <span>{{ tiles.total }}</span></button>
+            </div>
+            <div class="results-filters">
+                <label class="results-group"><input type="checkbox" id="group-by-location" /> Group by registered location</label>
+                <label for="results-search" class="visually-hidden">Search results</label>
+                <input id="results-search" type="search" placeholder="Search asset, category or location" />
+            </div>
+        </div>
+        {% if rows %}
+        <div class="table-wrap">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Status</th>
+                        <th>Registered at</th>
+                        <th>Counted at</th>
+                        <th class="numeric-cell">Expected</th>
+                        <th class="numeric-cell">Counted</th>
+                        <th class="numeric-cell">Difference</th>
+                        <th class="numeric-cell" title="Unit initial value × difference">Value of difference</th>
+                    </tr>
+                </thead>
+                <tbody id="results-rows" data-tab="{{ 'differ' if tiles.differences else 'all' }}">
+                    {% for r in rows %}
+                    <tr data-group="{{ r.group }}" data-place="{{ r.register_location or 'No location' }}"
+                        data-search="{{ (r.name ~ ' ' ~ r.category ~ ' ' ~ r.register_location ~ ' ' ~ r.counted_at) | lower }}">
+                        <td><a href="/fixed-assets/id/{{ r.id }}">{{ r.name }}</a>{% if r.deleted %} <span class="status-chip status-chip-notfound">Deleted</span>{% endif %}<span class="results-sub">{{ r.category }}</span></td>
+                        <td><span class="status-chip status-chip-{{ 'notfound' if r.status_key == 'notcounted' else r.status_key }}">{{ r.status_label }}</span></td>
+                        <td>{{ r.register_location or "—" }}</td>
+                        <td>{{ r.counted_at }}</td>
+                        <td class="numeric-cell">{{ r.expected }}</td>
+                        <td class="numeric-cell">{{ r.total }}</td>
+                        <td class="numeric-cell"><strong>{{ r.difference_label }}</strong></td>
+                        <td class="numeric-cell">{{ r.difference_value_label }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="dash-empty" id="results-empty" hidden>No assets match.</p>
+        <p class="workspace-side-note">Largest differences by value first. Asset names open the asset in the register, for whoever keeps it up to date; the session does not change the register.</p>
+        {% else %}
+        <p class="dash-empty">No fixed assets were in this session.</p>
+        {% endif %}
+    </section>
+
+    {% if inv_session.notes %}
+    <section class="section-card">
+        <h3>Notes</h3>
+        <p class="results-notes">{{ inv_session.notes }}</p>
+    </section>
+    {% endif %}
+
+    {% if per_location %}
+    <section class="section-card">
+        <h3>Results per location</h3>
+        <p class="workspace-side-note">Each location this session used or its assets are registered at. "Found here, registered elsewhere" points at assets that have moved.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Location</th>
+                        <th class="numeric-cell">Registered here</th>
+                        <th class="numeric-cell">Counted here</th>
+                        <th class="numeric-cell">Matched</th>
+                        <th class="numeric-cell">Missing or not found</th>
+                        <th class="numeric-cell">Found here, registered elsewhere</th>
+                        <th>Counted on</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in per_location %}
+                    <tr>
+                        <td><strong>{{ l.name }}</strong></td>
+                        <td class="numeric-cell">{{ l.registered }}</td>
+                        <td class="numeric-cell">{{ l.counted }}</td>
+                        <td class="numeric-cell">{{ l.matched }}</td>
+                        <td class="numeric-cell"><strong>{{ l.missing }}</strong></td>
+                        <td class="numeric-cell">{{ l.found_away }}</td>
+                        <td>{{ l.when }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="results-bottom">
+        <section class="section-card">
+            <h3>How the count went</h3>
+            <ol class="results-timeline">
+                {% for t in timeline %}
+                <li class="results-timeline-{{ t.kind }}">
+                    <span class="results-timeline-when">{{ t.when }}</span>
+                    <span class="results-timeline-dot" aria-hidden="true"></span>
+                    <div><strong>{{ t.what }}</strong>{% if t.detail %}<span class="results-sub">{{ t.detail }}</span>{% endif %}</div>
+                </li>
+                {% endfor %}
+            </ol>
+        </section>
+
+        <section class="section-card">
+            <h3>Counted by</h3>
+            {% if counted_by %}
+            <p class="workspace-side-note">Different assets each person counted, from the audit log.</p>
+            <ul class="results-people">
+                {% for p in counted_by %}
+                <li>
+                    <div class="results-person"><strong>{{ p.name }}</strong><span>{{ p.assets }} {{ "asset" if p.assets == 1 else "assets" }}</span></div>
+                    <div class="results-person-bar" role="img" aria-label="{{ p.assets }} assets counted"><span style="width: {{ p.percent }}%;"></span></div>
+                    <span class="results-sub">{{ p.where }} · {{ p.dates }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="workspace-side-note">No counts in the audit log for this session. They were made before counts were logged, or the log was cleared by the retention setting.</p>
+            {% endif %}
+        </section>
+    </div>
+
+    {% include "audit_history_section.html" %}
+</div>
+
+<script>
+    (function () {
+        const body = document.getElementById("results-rows");
+        if (!body) return;
+        const rows = Array.from(body.querySelectorAll("tr"));
+        const search = document.getElementById("results-search");
+        const groupToggle = document.getElementById("group-by-location");
+        const empty = document.getElementById("results-empty");
+
+        function render() {
+            const tab = body.dataset.tab;
+            const query = search.value.trim().toLowerCase();
+            body.querySelectorAll("tr.results-group-row").forEach((row) => row.remove());
+            const shown = rows.filter((row) => {
+                const visible = (tab === "all" || row.dataset.group === tab) && (!query || row.dataset.search.includes(query));
+                row.hidden = !visible;
+                return visible;
+            });
+            // Rows keep their order (largest differences first); grouping sorts them by place.
+            const ordered = groupToggle.checked
+                ? [...rows].sort((a, b) => a.dataset.place.localeCompare(b.dataset.place) || rows.indexOf(a) - rows.indexOf(b))
+                : rows;
+            ordered.forEach((row) => body.appendChild(row));
+            if (groupToggle.checked) {
+                let place = null;
+                ordered.filter((row) => !row.hidden).forEach((row) => {
+                    if (row.dataset.place === place) return;
+                    place = row.dataset.place;
+                    const header = document.createElement("tr");
+                    header.className = "results-group-row";
+                    const cell = document.createElement("td");
+                    cell.colSpan = 8;
+                    const count = shown.filter((r) => r.dataset.place === place).length;
+                    cell.textContent = `Registered at ${place} · ${count}`;
+                    header.appendChild(cell);
+                    body.insertBefore(header, row);
+                });
+            }
+            empty.hidden = shown.length > 0;
+        }
+
+        document.querySelectorAll("button[data-tab]").forEach((button) => {
+            button.addEventListener("click", function () {
+                body.dataset.tab = button.dataset.tab;
+                document.querySelectorAll("button[data-tab]").forEach((b) => {
+                    b.classList.toggle("selected", b === button);
+                    b.setAttribute("aria-selected", b === button ? "true" : "false");
+                });
+                render();
+            });
+        });
+        search.addEventListener("input", render);
+        groupToggle.addEventListener("change", render);
+        render();
+    })();
+</script>
